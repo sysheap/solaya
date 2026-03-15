@@ -159,7 +159,6 @@
               mkdir -p $out/lib
               ln -s ${pkgs.glibc}/lib/* $out/lib/
               ln -s ${pkgs.stdenv.cc.cc.lib}/lib/libstdc++.so* $out/lib/
-              ln -s ${pkgs.stdenv.cc.cc.lib}/lib/libstdc++.so* $out/lib64/
             '';
           in
           pkgs.dockerTools.buildLayeredImage {
@@ -179,6 +178,7 @@
                 "DOOM1_WAD=/opt/doom1.wad"
                 "DASH_SRC=/opt/dash-src"
                 "SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
+                "LD_LIBRARY_PATH=/lib"
               ];
               Cmd = [ "${pkgs.bash}/bin/bash" ];
             };
