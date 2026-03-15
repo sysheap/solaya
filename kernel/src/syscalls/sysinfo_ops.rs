@@ -34,7 +34,6 @@ impl LinuxSyscallHandler {
         Ok(0)
     }
 
-    #[allow(clippy::cast_possible_truncation)]
     pub(super) fn do_sysinfo(&self, info: LinuxUserspaceArg<*mut u8>) -> Result<isize, Errno> {
         let time = timer::current_time();
         let total_pages = memory::total_heap_pages();
@@ -83,7 +82,6 @@ impl LinuxSyscallHandler {
 
 static PRNG_STATE: AtomicU64 = AtomicU64::new(0);
 
-#[allow(clippy::cast_possible_truncation)]
 fn xorshift_fill(buf: &mut [u8]) {
     let mut state = PRNG_STATE.load(Ordering::Relaxed);
     if state == 0 {
