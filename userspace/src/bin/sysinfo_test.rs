@@ -1,90 +1,19 @@
-use std::arch::asm;
-
-const SYS_UNAME: usize = 160;
-const SYS_SYSINFO: usize = 179;
-const SYS_GETRUSAGE: usize = 165;
-const SYS_GETRANDOM: usize = 278;
-
-unsafe fn syscall1(nr: usize, arg0: usize) -> isize {
-    let ret: isize;
-    unsafe {
-        asm!(
-            "ecall",
-            in("a7") nr,
-            in("a0") arg0,
-            lateout("a0") ret,
-        );
-    }
-    ret
+unsafe extern "C" {
+    fn uname(buf: *mut headers::sysinfo_types::utsname) -> i32;
+    fn sysinfo(info: *mut headers::sysinfo_types::sysinfo) -> i32;
+    fn getrusage(who: i32, usage: *mut headers::sysinfo_types::rusage) -> i32;
+    fn getrandom(buf: *mut u8, buflen: usize, flags: u32) -> isize;
 }
 
-unsafe fn syscall3(nr: usize, arg0: usize, arg1: usize, arg2: usize) -> isize {
-    let ret: isize;
-    unsafe {
-        asm!(
-            "ecall",
-            in("a7") nr,
-            in("a0") arg0,
-            in("a1") arg1,
-            in("a2") arg2,
-            lateout("a0") ret,
-        );
-    }
-    ret
-}
-
-unsafe fn syscall2(nr: usize, arg0: usize, arg1: usize) -> isize {
-    let ret: isize;
-    unsafe {
-        asm!(
-            "ecall",
-            in("a7") nr,
-            in("a0") arg0,
-            in("a1") arg1,
-            lateout("a0") ret,
-        );
-    }
-    ret
-}
-
-#[repr(C)]
-struct Utsname {
-    sysname: [u8; 65],
-    nodename: [u8; 65],
-    release: [u8; 65],
-    version: [u8; 65],
-    machine: [u8; 65],
-    domainname: [u8; 65],
-}
-
-#[repr(C)]
-struct Sysinfo {
-    uptime: u64,
-    loads: [u64; 3],
-    totalram: u64,
-    freeram: u64,
-    sharedram: u64,
-    bufferram: u64,
-    totalswap: u64,
-    freeswap: u64,
-    procs: u16,
-    pad: u16,
-    _pad2: u32,
-    totalhigh: u64,
-    freehigh: u64,
-    mem_unit: u32,
-    _reserved: [u8; 256],
-}
-
-fn cstr(buf: &[u8]) -> &str {
-    let len = buf.iter().position(|&b| b == 0).unwrap_or(buf.len());
-    core::str::from_utf8(&buf[..len]).unwrap_or("???")
+fn cstr(buf: &[core::ffi::c_char]) -> &str {
+    unsafe { std::ffi::CStr::from_ptr(buf.as_ptr()) }
+        .to_str()
+        .unwrap_or("???")
 }
 
 fn main() {
-    // SAFETY: These are C-style structs that are valid when zero-initialized.
-    let mut uts: Utsname = unsafe { core::mem::zeroed() };
-    let ret = unsafe { syscall1(SYS_UNAME, &mut uts as *mut Utsname as usize) };
+    let mut uts = headers::sysinfo_types::utsname::default();
+    let ret = unsafe { uname(&mut uts) };
     assert!(ret == 0, "uname failed");
     println!(
         "uname: {} {} {} {}",
@@ -95,8 +24,8 @@ fn main() {
     );
     println!("OK uname");
 
-    let mut si: Sysinfo = unsafe { core::mem::zeroed() };
-    let ret = unsafe { syscall1(SYS_SYSINFO, &mut si as *mut Sysinfo as usize) };
+    let mut si = headers::sysinfo_types::sysinfo::default();
+    let ret = unsafe { sysinfo(&mut si) };
     assert!(ret == 0, "sysinfo failed");
     println!(
         "sysinfo: totalram={} freeram={} procs={}",
@@ -109,9 +38,9 @@ fn main() {
 
     let mut buf1 = [0u8; 16];
     let mut buf2 = [0u8; 16];
-    let ret = unsafe { syscall3(SYS_GETRANDOM, buf1.as_mut_ptr() as usize, buf1.len(), 0) };
+    let ret = unsafe { getrandom(buf1.as_mut_ptr(), buf1.len(), 0) };
     assert!(ret == 16, "getrandom failed");
-    let ret = unsafe { syscall3(SYS_GETRANDOM, buf2.as_mut_ptr() as usize, buf2.len(), 0) };
+    let ret = unsafe { getrandom(buf2.as_mut_ptr(), buf2.len(), 0) };
     assert!(ret == 16, "getrandom failed");
     print!("random1:");
     for b in &buf1 {
@@ -126,8 +55,8 @@ fn main() {
     assert!(buf1 != buf2, "two getrandom calls should differ");
     println!("OK getrandom");
 
-    let mut ru = [0u8; 512];
-    let ret = unsafe { syscall2(SYS_GETRUSAGE, 0, ru.as_mut_ptr() as usize) };
+    let mut ru = headers::sysinfo_types::rusage::default();
+    let ret = unsafe { getrusage(0, &mut ru) };
     assert!(ret == 0, "getrusage failed");
     println!("OK getrusage");
 }
