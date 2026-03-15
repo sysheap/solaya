@@ -28,6 +28,10 @@ pub fn is_empty() -> bool {
     LIVE_THREAD_COUNT.load(Ordering::Relaxed) == 0
 }
 
+pub fn live_thread_count() -> usize {
+    LIVE_THREAD_COUNT.load(Ordering::Relaxed)
+}
+
 pub static THE: RuntimeInitializedData<Spinlock<ProcessTable>> = RuntimeInitializedData::new();
 
 pub fn init() {

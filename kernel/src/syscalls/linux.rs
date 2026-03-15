@@ -21,6 +21,9 @@ impl ByteInterpretable for sockaddr_in {}
 impl ByteInterpretable for headers::fs::stat {}
 impl ByteInterpretable for headers::fs::statx {}
 impl ByteInterpretable for headers::syscall_types::termios {}
+impl ByteInterpretable for headers::sysinfo_types::utsname {}
+impl ByteInterpretable for headers::sysinfo_types::sysinfo {}
+impl ByteInterpretable for headers::sysinfo_types::rusage {}
 
 linux_syscalls! {
     SYSCALL_NR_BIND => bind(fd: c_int, addr: *const u8, addrlen: c_uint);
@@ -40,10 +43,12 @@ linux_syscalls! {
     SYSCALL_NR_GETCWD => getcwd(buf: *mut u8, size: usize);
     SYSCALL_NR_GETDENTS64 => getdents64(fd: c_int, dirp: *mut u8, count: usize);
     SYSCALL_NR_GETEGID => getegid();
+    SYSCALL_NR_GETRANDOM => getrandom(buf: *mut u8, buflen: usize, flags: c_uint);
     SYSCALL_NR_GETEUID => geteuid();
     SYSCALL_NR_GETGID => getgid();
     SYSCALL_NR_GETPGID => getpgid(pid: c_int);
     SYSCALL_NR_GETPID => getpid();
+    SYSCALL_NR_GETRUSAGE => getrusage(who: c_int, usage: *mut u8);
     SYSCALL_NR_GETPPID => getppid();
     SYSCALL_NR_GETSID => getsid(pid: c_int);
     SYSCALL_NR_GETTID => gettid();
@@ -87,10 +92,12 @@ linux_syscalls! {
     SYSCALL_NR_SHUTDOWN => shutdown(fd: c_int, how: c_int);
     SYSCALL_NR_SOCKET => socket(domain: c_int, typ: c_int, protocol: c_int);
     SYSCALL_NR_STATX => statx(dirfd: c_int, pathname: *const u8, flags: c_int, mask: c_uint, statxbuf: *mut u8);
+    SYSCALL_NR_SYSINFO => sysinfo(info: *mut u8);
     SYSCALL_NR_KILL => kill(pid: c_int, sig: c_int);
     SYSCALL_NR_TGKILL => tgkill(tgid: c_int, tid: c_int, sig: c_int);
     SYSCALL_NR_TKILL => tkill(tid: c_int, sig: c_int);
     SYSCALL_NR_UMASK => umask(mask: c_uint);
+    SYSCALL_NR_UNAME => uname(buf: *mut u8);
     SYSCALL_NR_UNLINKAT => unlinkat(dirfd: c_int, pathname: *const u8, flags: c_int);
     SYSCALL_NR_UTIMENSAT => utimensat(dirfd: c_int, pathname: *const u8, times: usize, flags: c_int);
     SYSCALL_NR_WAIT4 => wait4(pid: c_int, status: Option<*mut c_int>, options: c_int, rusage: usize);
@@ -614,6 +621,33 @@ impl LinuxSyscalls for LinuxSyscallHandler {
         _val3: c_uint,
     ) -> Result<isize, Errno> {
         self.do_futex(uaddr, op, val).await
+    }
+
+    // --- System info (sysinfo_ops.rs) ---
+
+    async fn uname(&mut self, buf: LinuxUserspaceArg<*mut u8>) -> Result<isize, Errno> {
+        self.do_uname(buf)
+    }
+
+    async fn sysinfo(&mut self, info: LinuxUserspaceArg<*mut u8>) -> Result<isize, Errno> {
+        self.do_sysinfo(info)
+    }
+
+    async fn getrusage(
+        &mut self,
+        who: c_int,
+        usage: LinuxUserspaceArg<*mut u8>,
+    ) -> Result<isize, Errno> {
+        self.do_getrusage(who, usage)
+    }
+
+    async fn getrandom(
+        &mut self,
+        buf: LinuxUserspaceArg<*mut u8>,
+        buflen: usize,
+        _flags: c_uint,
+    ) -> Result<isize, Errno> {
+        self.do_getrandom(buf, buflen)
     }
 
     // --- Stubs ---

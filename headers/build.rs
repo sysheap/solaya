@@ -66,6 +66,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     generate_error_types(&out_path)?;
     generate_socket_types(&out_path)?;
     generate_fs_types(&out_path)?;
+    generate_sysinfo_types(&out_path)?;
     Ok(())
 }
 
@@ -285,6 +286,26 @@ fn generate_fs_types(out_path: &Path) -> Result<(), Box<dyn std::error::Error>> 
     drop(fs_file);
     format_file(fs_path)?;
 
+    Ok(())
+}
+
+fn generate_sysinfo_types(out_path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    let bindings = bindgen::Builder::default()
+        .clang_arg("-Imusl_headers")
+        .clang_arg("-D_GNU_SOURCE")
+        .header("musl_headers/sys/utsname.h")
+        .header("musl_headers/sys/sysinfo.h")
+        .header("musl_headers/sys/resource.h")
+        .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
+        .use_core()
+        .allowlist_type("utsname")
+        .allowlist_type("sysinfo")
+        .allowlist_type("rusage")
+        .derive_copy(true)
+        .derive_default(true)
+        .generate()?;
+    let sysinfo_path = out_path.join("sysinfo_types.rs");
+    bindings.write_to_file(sysinfo_path)?;
     Ok(())
 }
 
