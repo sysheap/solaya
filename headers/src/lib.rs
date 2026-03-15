@@ -20,3 +20,7 @@ pub mod socket {
 pub mod fs {
     include!(concat!(env!("OUT_DIR"), "/fs_types.rs"));
 }
+
+pub mod sysinfo_types {
+    include!(concat!(env!("OUT_DIR"), "/sysinfo_types.rs"));
+}

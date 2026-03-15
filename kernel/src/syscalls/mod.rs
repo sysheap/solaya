@@ -11,6 +11,7 @@ mod mm_ops;
 mod net_ops;
 mod process_ops;
 mod signal_ops;
+mod sysinfo_ops;
 mod time_ops;
 pub mod trace_config;
 pub mod tracer;
