@@ -158,6 +158,7 @@
               mkdir -p $out/lib
               ln -s ${pkgs.glibc}/lib/* $out/lib/
               ln -s ${pkgs.stdenv.cc.cc.lib}/lib/libstdc++.so* $out/lib/
+              ln -s ${pkgs.stdenv.cc.cc.lib}/lib/libstdc++.so* $out/lib64/
             '';
           in
           pkgs.dockerTools.buildLayeredImage {
