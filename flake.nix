@@ -133,6 +133,7 @@
                 pkgs.gnutar
                 pkgs.gzip
                 pkgs.gnumake
+                pkgs.gcc
                 pkgs.qemu
                 pkgs.cargo-nextest
                 pkgs.just
