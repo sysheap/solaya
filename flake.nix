@@ -151,6 +151,13 @@
               cp ${doom1-wad} $out/opt/doom1.wad
               ln -s ${dash-src} $out/opt/dash-src
             '';
+            # GitHub Actions mounts its own Node.js binary which needs glibc's dynamic linker
+            glibcLinker = pkgs.runCommand "glibc-linker" { } ''
+              mkdir -p $out/lib64
+              ln -s ${pkgs.glibc}/lib/ld-linux-x86-64.so.2 $out/lib64/ld-linux-x86-64.so.2
+              mkdir -p $out/lib
+              ln -s ${pkgs.glibc}/lib/* $out/lib/
+            '';
           in
           pkgs.dockerTools.buildLayeredImage {
             name = "ghcr.io/sysheap/solaya-ci";
@@ -158,6 +165,7 @@
             contents = [
               tools
               sources
+              glibcLinker
             ];
             config = {
               Env = [
