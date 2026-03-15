@@ -110,6 +110,7 @@
               pkgs.dtc
               pkgs.e2fsprogs
               pkgs.gnumake
+              pkgs.skopeo
             ]
             ++ basePackages;
             shellHook = hook;
