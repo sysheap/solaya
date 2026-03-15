@@ -228,6 +228,8 @@ Solaya is licensed under **MIT**. To keep it that way:
 
 **Syscall organization.** New syscalls: add the trait method in `linux.rs` (≤5 lines, delegates to `do_*` helper), implement in the appropriate `*_ops.rs` file grouped by concern. Trivial stubs stay inline.
 
+**Userspace programs must use musl libc.** Never use raw `ecall` assembly in userspace binaries. Declare `extern "C"` functions to bind to musl libc (e.g., `extern "C" { fn fork() -> i32; }`), or use Rust std library functions that call libc internally.
+
 **Commit automatically.** After completing a task, commit without waiting for user intervention. Before committing:
 - Remove any dead or unused code introduced by your changes
 - The pre-commit hook runs `cargo fmt` and `cargo clippy --fix` automatically; it will block the commit if clippy finds unfixable warnings.

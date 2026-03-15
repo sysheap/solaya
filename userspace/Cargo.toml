@@ -12,3 +12,4 @@ forced-target = "riscv64gc-unknown-linux-musl"
 
 [dependencies]
 common = { path = "../common" }
+headers = { path = "../headers" }

@@ -15,21 +15,21 @@ use crate::{
 
 use super::linux::LinuxSyscallHandler;
 
-fn copy_str_to_field(field: &mut [core::ffi::c_char], s: &str) {
-    for (i, &b) in s.as_bytes().iter().enumerate().take(field.len() - 1) {
-        field[i] = b as core::ffi::c_char;
+fn write_cstr(field: &mut [core::ffi::c_char], src: &core::ffi::CStr) {
+    for (dst, &b) in field.iter_mut().zip(src.to_bytes_with_nul()) {
+        *dst = b as core::ffi::c_char;
     }
 }
 
 impl LinuxSyscallHandler {
     pub(super) fn do_uname(&self, buf: LinuxUserspaceArg<*mut u8>) -> Result<isize, Errno> {
         let mut uts = headers::sysinfo_types::utsname::default();
-        copy_str_to_field(&mut uts.sysname, "Linux");
-        copy_str_to_field(&mut uts.nodename, "solaya");
-        copy_str_to_field(&mut uts.release, "6.1.0");
-        copy_str_to_field(&mut uts.version, "#1");
-        copy_str_to_field(&mut uts.machine, "riscv64");
-        copy_str_to_field(&mut uts.domainname, "");
+        write_cstr(&mut uts.sysname, c"Linux");
+        write_cstr(&mut uts.nodename, c"solaya");
+        write_cstr(&mut uts.release, c"6.1.0");
+        write_cstr(&mut uts.version, c"#1");
+        write_cstr(&mut uts.machine, c"riscv64");
+        write_cstr(&mut uts.domainname, c"");
         buf.write_slice(uts.as_slice())?;
         Ok(0)
     }
