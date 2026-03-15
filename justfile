@@ -15,14 +15,12 @@ build-cargo: build-userspace build-dash build-doom
 
 docker-build:
     nix build .#ci-image
-    docker load < result
 
 docker-push: docker-build
     #!/usr/bin/env bash
     HASH=$(sha256sum flake.nix flake.lock rust-toolchain nix/kani.nix | sha256sum | cut -c1-12)
     IMAGE="ghcr.io/sysheap/solaya-ci"
-    docker tag ${IMAGE}:latest ${IMAGE}:${HASH}
-    docker push ${IMAGE}:${HASH}
+    skopeo copy docker-archive:result docker://${IMAGE}:${HASH}
     echo "Pushed ${IMAGE}:${HASH}"
 
 COREUTILS_FEATURES := "cat,echo,false,ls,mkdir,pwd,rm,touch,true"
