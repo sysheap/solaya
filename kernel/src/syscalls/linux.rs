@@ -113,8 +113,6 @@ pub struct LinuxSyscallHandler {
 }
 
 impl LinuxSyscalls for LinuxSyscallHandler {
-    // --- I/O (io_ops.rs) ---
-
     async fn read(
         &mut self,
         fd: c_int,
@@ -182,13 +180,9 @@ impl LinuxSyscalls for LinuxSyscallHandler {
         Ok(file.lock().seek(offset, whence)? as isize)
     }
 
-    // --- Device control (ioctl_ops.rs) ---
-
     async fn ioctl(&mut self, fd: c_int, op: c_uint, arg: usize) -> Result<isize, Errno> {
         self.do_ioctl(fd, op, arg)
     }
-
-    // --- Filesystem (fs_ops.rs) ---
 
     async fn openat(
         &mut self,
@@ -292,8 +286,6 @@ impl LinuxSyscalls for LinuxSyscallHandler {
         Ok(old as isize)
     }
 
-    // --- Memory management (mm_ops.rs) ---
-
     async fn brk(&mut self, brk: c_ulong) -> Result<isize, Errno> {
         self.current_process
             .with_lock(|mut p| Ok(p.brk(VirtAddr::new(brk.as_usize())).as_usize() as isize))
@@ -323,8 +315,6 @@ impl LinuxSyscalls for LinuxSyscallHandler {
             .with_lock(|mut p| p.munmap_pages(VirtAddr::new(addr), length))?;
         Ok(0)
     }
-
-    // --- Process lifecycle (process_ops.rs) ---
 
     async fn exit(&mut self, status: c_int) -> Result<isize, Errno> {
         let exit_status = crate::processes::signal::ExitStatus::Exited(status.to_le_bytes()[0]);
@@ -372,8 +362,6 @@ impl LinuxSyscalls for LinuxSyscallHandler {
     async fn execve(&mut self, filename: usize, argv: usize, envp: usize) -> Result<isize, Errno> {
         self.do_execve(filename, argv, envp)
     }
-
-    // --- Signals (signal_ops.rs) ---
 
     async fn rt_sigaction(
         &mut self,
@@ -427,8 +415,6 @@ impl LinuxSyscalls for LinuxSyscallHandler {
     async fn tkill(&mut self, tid: c_int, sig: c_int) -> Result<isize, Errno> {
         self.tgkill(0, tid, sig).await
     }
-
-    // --- Networking (net_ops.rs) ---
 
     async fn socket(&mut self, domain: c_int, typ: c_int, protocol: c_int) -> Result<isize, Errno> {
         self.do_socket(domain, typ, protocol)
@@ -524,8 +510,6 @@ impl LinuxSyscalls for LinuxSyscallHandler {
         self.do_shutdown(fd)
     }
 
-    // --- Time & polling (time_ops.rs) ---
-
     async fn nanosleep(
         &mut self,
         duration: LinuxUserspaceArg<*const timespec>,
@@ -562,8 +546,6 @@ impl LinuxSyscalls for LinuxSyscallHandler {
     ) -> Result<isize, Errno> {
         self.do_ppoll(fds, n, to, mask)
     }
-
-    // --- Identity (id_ops.rs) ---
 
     async fn getpid(&mut self) -> Result<isize, Errno> {
         Ok(self.current_process.with_lock(|p| p.main_tid()).as_isize())
@@ -623,8 +605,6 @@ impl LinuxSyscalls for LinuxSyscallHandler {
         self.do_futex(uaddr, op, val).await
     }
 
-    // --- System info (sysinfo_ops.rs) ---
-
     async fn uname(&mut self, buf: LinuxUserspaceArg<*mut u8>) -> Result<isize, Errno> {
         self.do_uname(buf)
     }
@@ -649,8 +629,6 @@ impl LinuxSyscalls for LinuxSyscallHandler {
     ) -> Result<isize, Errno> {
         self.do_getrandom(buf, buflen)
     }
-
-    // --- Stubs ---
 
     fn get_process(&self) -> ProcessRef {
         self.current_process.clone()
