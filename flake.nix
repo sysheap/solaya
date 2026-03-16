@@ -121,6 +121,7 @@
           riscv-toolchain.buildPackages.gcc
           riscv-toolchain.buildPackages.binutils
           kani
+          pkgs.e2fsprogs
         ];
 
         basePackages = ciPackages ++ [
@@ -161,7 +162,6 @@
               pwndbg.packages.${system}.default
               pkgs.typos-lsp
               pkgs.dtc
-              pkgs.e2fsprogs
             ]
             ++ basePackages;
             shellHook = hook;
