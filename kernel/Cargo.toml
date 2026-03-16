@@ -10,6 +10,16 @@ default-target = "riscv64gc-unknown-none-elf"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+default = ["net", "tcp", "udp", "virtio-net", "virtio-blk", "smp", "ext2"]
+net = []
+tcp = ["net"]
+udp = ["net"]
+virtio-net = ["net"]
+virtio-blk = []
+smp = []
+ext2 = ["virtio-blk"]
+
 [dependencies]
 sys = { path = "../sys" }
 common = { path = "../common" }

@@ -13,12 +13,13 @@ use crate::{
         tty_device::{ReadTty, TtyDevice},
         uart::QEMU_UART,
     },
-    net::{
-        sockets::SharedAssignedSocket,
-        tcp_connection::{SharedTcpConnection, SharedTcpListener},
-    },
     processes::process::ProcessRef,
 };
+
+#[cfg(feature = "udp")]
+use crate::net::sockets::SharedAssignedSocket;
+#[cfg(feature = "tcp")]
+use crate::net::tcp_connection::{SharedTcpConnection, SharedTcpListener};
 
 pub type RawFd = i32;
 
@@ -45,10 +46,15 @@ impl FdFlags {
 
 pub enum FileDescriptor {
     Tty(TtyDevice),
+    #[cfg(feature = "udp")]
     UnboundUdpSocket,
+    #[cfg(feature = "udp")]
     UdpSocket(SharedAssignedSocket),
+    #[cfg(feature = "tcp")]
     UnboundTcpSocket,
+    #[cfg(feature = "tcp")]
     TcpStream(SharedTcpConnection),
+    #[cfg(feature = "tcp")]
     TcpListener(SharedTcpListener),
     PipeRead(PipeReader),
     PipeWrite(PipeWriter),
@@ -61,10 +67,15 @@ impl Clone for FileDescriptor {
             Self::Tty(dev) => Self::Tty(dev.clone()),
             Self::PipeRead(r) => Self::PipeRead(r.clone()),
             Self::PipeWrite(w) => Self::PipeWrite(w.clone()),
+            #[cfg(feature = "udp")]
             Self::UnboundUdpSocket => Self::UnboundUdpSocket,
+            #[cfg(feature = "udp")]
             Self::UdpSocket(s) => Self::UdpSocket(s.clone()),
+            #[cfg(feature = "tcp")]
             Self::UnboundTcpSocket => Self::UnboundTcpSocket,
+            #[cfg(feature = "tcp")]
             Self::TcpStream(s) => Self::TcpStream(s.clone()),
+            #[cfg(feature = "tcp")]
             Self::TcpListener(l) => Self::TcpListener(l.clone()),
             Self::VfsFile(f) => Self::VfsFile(f.clone()),
         }
@@ -75,10 +86,15 @@ impl fmt::Debug for FileDescriptor {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             FileDescriptor::Tty(_) => write!(f, "Tty"),
+            #[cfg(feature = "udp")]
             FileDescriptor::UnboundUdpSocket => write!(f, "UnboundUdpSocket"),
+            #[cfg(feature = "udp")]
             FileDescriptor::UdpSocket(_) => write!(f, "UdpSocket(..)"),
+            #[cfg(feature = "tcp")]
             FileDescriptor::UnboundTcpSocket => write!(f, "UnboundTcpSocket"),
+            #[cfg(feature = "tcp")]
             FileDescriptor::TcpStream(_) => write!(f, "TcpStream(..)"),
+            #[cfg(feature = "tcp")]
             FileDescriptor::TcpListener(_) => write!(f, "TcpListener(..)"),
             FileDescriptor::PipeRead(_) => write!(f, "PipeRead(..)"),
             FileDescriptor::PipeWrite(_) => write!(f, "PipeWrite(..)"),
@@ -97,30 +113,33 @@ impl FileDescriptor {
         match self {
             FileDescriptor::Tty(dev) => ReadTty::new(dev.clone(), count, process, tid).await,
             FileDescriptor::PipeRead(buf) => Ok(ReadPipe::new(buf.shared_buffer(), count).await),
+            #[cfg(feature = "tcp")]
             FileDescriptor::TcpStream(conn) => {
                 use crate::net::tcp_connection::wait_for_recv_data;
                 Ok(wait_for_recv_data(conn, count).await)
             }
             FileDescriptor::VfsFile(file) => {
-                let block_info = {
-                    let inner = file.lock();
-                    inner
-                        .node()
-                        .block_device_index()
-                        .map(|idx| (idx, inner.offset()))
-                };
-                if let Some((idx, offset)) = block_info {
-                    let mut tmp = alloc::vec![0u8; count];
-                    let n = crate::drivers::virtio::block::read(idx, offset, &mut tmp).await?;
-                    file.lock().advance_offset(n);
-                    tmp.truncate(n);
-                    Ok(tmp)
-                } else {
-                    let mut tmp = alloc::vec![0u8; count];
-                    let n = file.lock().read(&mut tmp)?;
-                    tmp.truncate(n);
-                    Ok(tmp)
+                #[cfg(feature = "virtio-blk")]
+                {
+                    let block_info = {
+                        let inner = file.lock();
+                        inner
+                            .node()
+                            .block_device_index()
+                            .map(|idx| (idx, inner.offset()))
+                    };
+                    if let Some((idx, offset)) = block_info {
+                        let mut tmp = alloc::vec![0u8; count];
+                        let n = crate::drivers::virtio::block::read(idx, offset, &mut tmp).await?;
+                        file.lock().advance_offset(n);
+                        tmp.truncate(n);
+                        return Ok(tmp);
+                    }
                 }
+                let mut tmp = alloc::vec![0u8; count];
+                let n = file.lock().read(&mut tmp)?;
+                tmp.truncate(n);
+                Ok(tmp)
             }
             _ => Err(Errno::EBADF),
         }
@@ -138,6 +157,7 @@ impl FileDescriptor {
                 }
             }
             FileDescriptor::PipeRead(buf) => buf.shared_buffer().lock().try_read(count),
+            #[cfg(feature = "tcp")]
             FileDescriptor::TcpStream(conn) => {
                 let mut c = conn.lock();
                 if c.has_recv_data() {
@@ -167,6 +187,7 @@ impl FileDescriptor {
                 Ok(data.len())
             }
             FileDescriptor::PipeWrite(buf) => buf.shared_buffer().lock().write(data),
+            #[cfg(feature = "tcp")]
             FileDescriptor::TcpStream(conn) => {
                 let waker = conn.lock().queue_send_data(data);
                 if let Some(w) = waker {
@@ -175,20 +196,22 @@ impl FileDescriptor {
                 Ok(data.len())
             }
             FileDescriptor::VfsFile(file) => {
-                let block_info = {
-                    let mut inner = file.lock();
-                    inner
-                        .node()
-                        .block_device_index()
-                        .map(|idx| (idx, inner.effective_write_offset()))
-                };
-                if let Some((idx, offset)) = block_info {
-                    let n = crate::drivers::virtio::block::write(idx, offset, data).await?;
-                    file.lock().advance_offset(n);
-                    Ok(n)
-                } else {
-                    file.lock().write(data)
+                #[cfg(feature = "virtio-blk")]
+                {
+                    let block_info = {
+                        let mut inner = file.lock();
+                        inner
+                            .node()
+                            .block_device_index()
+                            .map(|idx| (idx, inner.effective_write_offset()))
+                    };
+                    if let Some((idx, offset)) = block_info {
+                        let n = crate::drivers::virtio::block::write(idx, offset, data).await?;
+                        file.lock().advance_offset(n);
+                        return Ok(n);
+                    }
                 }
+                file.lock().write(data)
             }
             _ => Err(Errno::EBADF),
         }

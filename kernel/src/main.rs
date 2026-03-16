@@ -69,6 +69,7 @@ mod io;
 mod klibc;
 mod logging;
 mod memory;
+#[cfg(feature = "net")]
 mod net;
 #[cfg(all(target_arch = "riscv64", not(miri)))]
 mod panic;
@@ -173,34 +174,41 @@ extern "C" fn kernel_init(hart_id: usize, device_tree_pointer: *const ()) -> ! {
 
     let mut pci_devices = enumerate_devices(&pci_information);
 
-    let virtio_net = pci_devices
-        .iter()
-        .position(drivers::virtio::net::NetworkDevice::is_virtio_net);
-    if let Some(index) = virtio_net {
-        let device = pci_devices.swap_remove(index);
-        let plic_irq = device.plic_interrupt_id();
-        let init = drivers::virtio::net::NetworkDevice::initialize(device)
-            .expect("Initialization must work.");
-        net::assign_network_device(init.device);
-        net::init_isr_status(init.interrupt_status);
-        plic::init_virtio_net_interrupt(plic_irq);
-        processes::kernel_tasks::spawn(net::network_rx_task());
-    }
-
-    while let Some(i) = pci_devices
-        .iter()
-        .position(drivers::virtio::block::BlockDevice::is_virtio_block)
+    #[cfg(feature = "virtio-net")]
     {
-        let device = pci_devices.swap_remove(i);
-        let plic_irq = device.plic_interrupt_id();
-        let init = drivers::virtio::block::BlockDevice::initialize(device)
-            .expect("Block device initialization must work.");
-        drivers::virtio::block::register_isr_status(init.interrupt_status);
-        let idx = drivers::virtio::block::assign_block_device(init.device);
-        fs::devfs::register_block_device(idx);
-        plic::init_virtio_block_interrupt(plic_irq);
+        let virtio_net = pci_devices
+            .iter()
+            .position(drivers::virtio::net::NetworkDevice::is_virtio_net);
+        if let Some(index) = virtio_net {
+            let device = pci_devices.swap_remove(index);
+            let plic_irq = device.plic_interrupt_id();
+            let init = drivers::virtio::net::NetworkDevice::initialize(device)
+                .expect("Initialization must work.");
+            net::assign_network_device(init.device);
+            net::init_isr_status(init.interrupt_status);
+            plic::init_virtio_net_interrupt(plic_irq);
+            processes::kernel_tasks::spawn(net::network_rx_task());
+        }
     }
 
+    #[cfg(feature = "virtio-blk")]
+    {
+        while let Some(i) = pci_devices
+            .iter()
+            .position(drivers::virtio::block::BlockDevice::is_virtio_block)
+        {
+            let device = pci_devices.swap_remove(i);
+            let plic_irq = device.plic_interrupt_id();
+            let init = drivers::virtio::block::BlockDevice::initialize(device)
+                .expect("Block device initialization must work.");
+            drivers::virtio::block::register_isr_status(init.interrupt_status);
+            let idx = drivers::virtio::block::assign_block_device(init.device);
+            fs::devfs::register_block_device(idx);
+            plic::init_virtio_block_interrupt(plic_irq);
+        }
+    }
+
+    #[cfg(feature = "ext2")]
     if drivers::virtio::block::device_count() > 0 {
         processes::kernel_tasks::spawn(fs::ext2::mount_ext2(0));
     }
@@ -243,6 +251,7 @@ extern "C" fn kernel_init(hart_id: usize, device_tree_pointer: *const ()) -> ! {
 
     info!("kernel_init done! Starting other harts");
 
+    #[cfg(feature = "smp")]
     start_other_harts(hart_id, num_cpus);
 
     prepare_for_scheduling();
@@ -265,7 +274,7 @@ pub extern "C" fn prepare_for_scheduling() -> ! {
     wfi_loop();
 }
 
-#[cfg(target_arch = "riscv64")]
+#[cfg(all(target_arch = "riscv64", feature = "smp"))]
 #[allow(unsafe_code)]
 fn start_other_harts(current_hart_id: usize, number_of_cpus: usize) {
     // SAFETY: start_hart is defined in boot.S; it initializes the hart and

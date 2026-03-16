@@ -107,11 +107,13 @@ fn handle_external_interrupt() {
                 });
             }
         }
+        #[cfg(feature = "virtio-net")]
         InterruptSource::VirtioNet => {
             plic.complete_interrupt(plic_interrupt);
             drop(plic);
             crate::net::on_network_interrupt();
         }
+        #[cfg(feature = "virtio-blk")]
         InterruptSource::VirtioBlock(_) => {
             plic.complete_interrupt(plic_interrupt);
             drop(plic);

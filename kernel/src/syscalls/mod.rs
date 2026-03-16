@@ -8,7 +8,10 @@ pub mod linux;
 pub mod linux_validator;
 mod macros;
 mod mm_ops;
+#[cfg(feature = "net")]
 mod net_ops;
+#[cfg(not(feature = "net"))]
+mod net_stubs;
 mod process_ops;
 mod signal_ops;
 mod sysinfo_ops;

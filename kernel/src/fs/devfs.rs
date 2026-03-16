@@ -2,10 +2,12 @@
 use alloc::{collections::BTreeMap, string::String, sync::Arc, vec::Vec};
 use headers::errno::Errno;
 
+#[cfg(feature = "virtio-blk")]
+use crate::drivers::virtio::block;
 use crate::{
     drivers::{
         bochs_display,
-        virtio::{block, input, rng},
+        virtio::{input, rng},
     },
     io::tty_device::{TtyDevice, console_tty},
     klibc::{Spinlock, mmio},
@@ -74,11 +76,13 @@ impl VfsNode for DevZero {
     }
 }
 
+#[cfg(feature = "virtio-blk")]
 struct DevBlock {
     ino: u64,
     index: usize,
 }
 
+#[cfg(feature = "virtio-blk")]
 impl VfsNode for DevBlock {
     fn node_type(&self) -> NodeType {
         NodeType::File
@@ -310,6 +314,7 @@ pub fn register_framebuffer_device() {
     dir.entries.lock().insert(String::from("fb0"), node);
 }
 
+#[cfg(feature = "virtio-blk")]
 pub fn register_block_device(index: usize) {
     assert!(index < 26, "block device index must be < 26 (a-z)");
     let suffix = (b'a' + index as u8) as char;

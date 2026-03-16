@@ -8,9 +8,10 @@ use core::{
 
 use alloc::vec::Vec;
 
+#[cfg(feature = "virtio-net")]
+use crate::drivers::virtio::net::NetworkDevice;
 use crate::{
     debug,
-    drivers::virtio::net::NetworkDevice,
     klibc::{MMIO, Spinlock, runtime_initialized::RuntimeInitializedData},
     net::{ipv4::IpV4Header, udp::UdpHeader},
 };
@@ -30,28 +31,46 @@ pub mod tcp;
 pub mod tcp_connection;
 pub mod udp;
 
+#[cfg(feature = "virtio-net")]
 struct NetworkStack {
     device: Spinlock<Option<NetworkDevice>>,
     ip_addr: Spinlock<Ipv4Addr>,
     open_sockets: Spinlock<LazyCell<OpenSockets>>,
 }
 
+#[cfg(not(feature = "virtio-net"))]
+struct NetworkStack {
+    ip_addr: Spinlock<Ipv4Addr>,
+    open_sockets: Spinlock<LazyCell<OpenSockets>>,
+}
+
+#[cfg(feature = "virtio-net")]
 static NETWORK_STACK: NetworkStack = NetworkStack {
     device: Spinlock::new(None),
     ip_addr: Spinlock::new(Ipv4Addr::new(0, 0, 0, 0)),
     open_sockets: Spinlock::new(LazyCell::new(OpenSockets::new)),
 };
 
+#[cfg(not(feature = "virtio-net"))]
+static NETWORK_STACK: NetworkStack = NetworkStack {
+    ip_addr: Spinlock::new(Ipv4Addr::new(0, 0, 0, 0)),
+    open_sockets: Spinlock::new(LazyCell::new(OpenSockets::new)),
+};
+
+#[cfg(feature = "virtio-net")]
 static ISR_STATUS: RuntimeInitializedData<MMIO<u32>> = RuntimeInitializedData::new();
+#[cfg(feature = "virtio-net")]
 static NETWORK_INTERRUPT_COUNTER: AtomicU64 = AtomicU64::new(0);
+#[cfg(feature = "virtio-net")]
 static NETWORK_INTERRUPT_WAKERS: Spinlock<Vec<Waker>> = Spinlock::new(Vec::new());
 
+#[cfg(feature = "virtio-net")]
 pub fn init_isr_status(isr: MMIO<u32>) {
     ISR_STATUS.initialize(isr);
 }
 
+#[cfg(feature = "virtio-net")]
 pub fn on_network_interrupt() {
-    // Reading ISR status acknowledges the interrupt on the device side
     let _isr = ISR_STATUS.read();
     NETWORK_INTERRUPT_COUNTER.fetch_add(1, Ordering::SeqCst);
     let wakers: Vec<Waker> = NETWORK_INTERRUPT_WAKERS.lock().drain(..).collect();
@@ -60,11 +79,13 @@ pub fn on_network_interrupt() {
     }
 }
 
+#[cfg(feature = "virtio-net")]
 struct NetworkInterruptWait {
     seen_counter: u64,
     registered: bool,
 }
 
+#[cfg(feature = "virtio-net")]
 impl NetworkInterruptWait {
     fn new(seen_counter: u64) -> Self {
         Self {
@@ -74,6 +95,7 @@ impl NetworkInterruptWait {
     }
 }
 
+#[cfg(feature = "virtio-net")]
 impl Future for NetworkInterruptWait {
     type Output = ();
 
@@ -95,6 +117,7 @@ impl Future for NetworkInterruptWait {
     }
 }
 
+#[cfg(feature = "virtio-net")]
 pub async fn network_rx_task() {
     loop {
         let seen = NETWORK_INTERRUPT_COUNTER.load(Ordering::SeqCst);
@@ -114,18 +137,26 @@ pub fn set_ip_addr(addr: Ipv4Addr) {
     *NETWORK_STACK.ip_addr.lock() = addr;
 }
 
+#[cfg(feature = "virtio-net")]
 pub fn has_network_device() -> bool {
     NETWORK_STACK.device.lock().is_some()
+}
+
+#[cfg(not(feature = "virtio-net"))]
+pub fn has_network_device() -> bool {
+    false
 }
 
 pub fn open_sockets() -> &'static Spinlock<LazyCell<OpenSockets>> {
     &NETWORK_STACK.open_sockets
 }
 
+#[cfg(feature = "virtio-net")]
 pub fn assign_network_device(device: NetworkDevice) {
     *NETWORK_STACK.device.lock() = Some(device);
 }
 
+#[cfg(feature = "virtio-net")]
 fn receive_and_process_packets() -> usize {
     let packets = NETWORK_STACK
         .device
@@ -141,6 +172,7 @@ fn receive_and_process_packets() -> usize {
     count
 }
 
+#[cfg(feature = "virtio-net")]
 pub fn send_packet(packet: Vec<u8>) {
     NETWORK_STACK
         .device
@@ -151,6 +183,7 @@ pub fn send_packet(packet: Vec<u8>) {
         .expect("Packet must be sendable");
 }
 
+#[cfg(feature = "virtio-net")]
 pub fn current_mac_address() -> MacAddress {
     NETWORK_STACK
         .device
@@ -160,6 +193,7 @@ pub fn current_mac_address() -> MacAddress {
         .get_mac_address()
 }
 
+#[cfg(feature = "virtio-net")]
 fn process_packet(packet: Vec<u8>) {
     let (ethernet_header, rest) = match EthernetHeader::try_parse(&packet) {
         Ok(p) => p,
@@ -179,6 +213,7 @@ fn process_packet(packet: Vec<u8>) {
     }
 }
 
+#[cfg(feature = "virtio-net")]
 fn process_ipv4_packet(data: &[u8], source_mac: MacAddress) {
     let (ipv4_header, rest) = IpV4Header::process(data).expect("IPv4 packet must be processed.");
     arp::cache_insert(ipv4_header.source_ip, source_mac);
