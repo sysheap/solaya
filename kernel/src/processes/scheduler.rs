@@ -264,7 +264,7 @@ impl CpuScheduler {
         let should_requeue = old.with_lock(|mut t| {
             if t.get_state() == (ThreadState::Running { cpu_id }) {
                 t.set_state(ThreadState::Runnable);
-                t.set_program_counter(VirtAddr::new(arch::cpu::read_sepc()));
+                t.set_program_counter(VirtAddr::new(sys::cpu::read_sepc()));
                 t.set_register_state(Cpu::read_trap_frame());
                 debug!("Saved thread {} back", *t);
                 true
@@ -356,8 +356,8 @@ impl CpuScheduler {
                 );
                 let pc = t.get_program_counter();
                 Cpu::write_trap_frame(t.get_register_state().clone());
-                arch::cpu::write_sepc(pc.as_usize());
-                arch::cpu::set_ret_to_kernel_mode(t.get_in_kernel_mode());
+                sys::cpu::write_sepc(pc.as_usize());
+                sys::cpu::set_ret_to_kernel_mode(t.get_in_kernel_mode());
                 PrepareResult::Mode(ProcessMode::Userspace)
             });
             match result {
@@ -394,8 +394,8 @@ impl CpuScheduler {
 
             let pc = t.get_program_counter();
             Cpu::write_trap_frame(t.get_register_state().clone());
-            arch::cpu::write_sepc(pc.as_usize());
-            arch::cpu::set_ret_to_kernel_mode(t.get_in_kernel_mode());
+            sys::cpu::write_sepc(pc.as_usize());
+            sys::cpu::set_ret_to_kernel_mode(t.get_in_kernel_mode());
             true
         })
     }

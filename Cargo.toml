@@ -1,6 +1,6 @@
 [workspace]
 members = [
-    "arch",
+    "sys",
     "common", "headers",
     "kernel",
     "userspace",

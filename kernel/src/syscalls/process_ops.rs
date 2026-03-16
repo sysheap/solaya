@@ -24,7 +24,7 @@ use super::linux::LinuxSyscallHandler;
 impl LinuxSyscallHandler {
     pub(super) async fn clone_fork(&mut self, stack: usize) -> Result<isize, Errno> {
         let parent_regs = Cpu::read_trap_frame();
-        let parent_pc = arch::cpu::read_sepc();
+        let parent_pc = sys::cpu::read_sepc();
 
         let parent_process = self.current_process.clone();
         let (parent_main_tid, child_name, parent_pgid, parent_sid) =
@@ -94,7 +94,7 @@ impl LinuxSyscallHandler {
         ctid: LinuxUserspaceArg<Option<*mut c_int>>,
     ) -> Result<isize, Errno> {
         let parent_regs = Cpu::read_trap_frame();
-        let parent_pc = arch::cpu::read_sepc();
+        let parent_pc = sys::cpu::read_sepc();
 
         let parent_process = self.current_process.clone();
         let (parent_main_tid, child_name) =

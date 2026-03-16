@@ -33,9 +33,9 @@ pub fn exit_reset() -> ! {
 pub fn wait_for_the_end() -> ! {
     // SAFETY: We are shutting down — disabling interrupts prevents further preemption.
     unsafe {
-        arch::cpu::disable_global_interrupts();
+        sys::cpu::disable_global_interrupts();
     }
     loop {
-        arch::cpu::wait_for_interrupt();
+        sys::cpu::wait_for_interrupt();
     }
 }

@@ -5,7 +5,7 @@ use crate::{
     info,
     klibc::{MMIO, Spinlock, runtime_initialized::RuntimeInitializedData},
 };
-use arch::CpuId;
+use sys::CpuId;
 
 pub const PLIC_BASE: usize = 0x0c00_0000;
 pub const PLIC_SIZE: usize = 0x1000_0000;
