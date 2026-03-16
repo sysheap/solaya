@@ -19,23 +19,25 @@ jobs:
 
       - uses: DeterminateSystems/magic-nix-cache-action@main
 
+      - uses: nicknovitski/nix-develop@v1
+
       - name: Build
-        run: nix develop --command just build
+        run: just build
 
       - name: Format check
-        run: nix develop --command cargo fmt --check
+        run: cargo fmt --check
 
       - name: Clippy
-        run: nix develop --command just clippy
+        run: just clippy
 
       - name: Unit tests
-        run: nix develop --command just unit-test
+        run: just unit-test
 
       - name: Miri
-        run: nix develop --command just miri
+        run: just miri
 
       - name: System tests
-        run: nix develop --command just system-test
+        run: just system-test
 
       - name: Kani
-        run: nix develop --command just kani
+        run: just kani
