@@ -19,7 +19,7 @@ build-coreutils:
         --root ./target-coreutils \
         --target-dir ./target-coreutils/build
     mkdir -p ./kernel/compiled_userspace
-    cp ./target-coreutils/bin/coreutils ./kernel/compiled_userspace/coreutils
+    cmp -s ./target-coreutils/bin/coreutils ./kernel/compiled_userspace/coreutils || cp ./target-coreutils/bin/coreutils ./kernel/compiled_userspace/coreutils
     cd kernel/compiled_userspace && echo "{{COREUTILS_FEATURES}}" | tr ',' '\n' | xargs -I{} ln -sf coreutils {}
 
 build-userspace: build-coreutils
