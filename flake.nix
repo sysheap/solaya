@@ -113,18 +113,21 @@
           '';
         };
 
-        basePackages = [
+        ciPackages = [
           pkgs.qemu
           pkgs.cargo-nextest
           pkgs.just
-          (pkgs.python3.withPackages (ps: [
-            ps.pygdbmi
-            ps.mcp
-          ]))
           rustToolchain
           riscv-toolchain.buildPackages.gcc
           riscv-toolchain.buildPackages.binutils
           kani
+        ];
+
+        basePackages = ciPackages ++ [
+          (pkgs.python3.withPackages (ps: [
+            ps.pygdbmi
+            ps.mcp
+          ]))
         ];
 
         commonEnv = {
@@ -161,6 +164,14 @@
               pkgs.e2fsprogs
             ]
             ++ basePackages;
+            shellHook = hook;
+          }
+        );
+
+        devShells.ci = pkgs.mkShell (
+          commonEnv
+          // {
+            nativeBuildInputs = ciPackages;
             shellHook = hook;
           }
         );
