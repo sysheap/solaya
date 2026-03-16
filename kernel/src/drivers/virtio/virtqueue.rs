@@ -171,17 +171,17 @@ impl<const QUEUE_SIZE: usize> VirtQueue<QUEUE_SIZE> {
         // Only head goes into the available ring
         self.driver_area.ring[self.driver_area.idx as usize % QUEUE_SIZE] = head;
 
-        arch::cpu::memory_fence();
+        sys::cpu::memory_fence();
 
         self.driver_area.idx = self.driver_area.idx.wrapping_add(1);
 
-        arch::cpu::memory_fence();
+        sys::cpu::memory_fence();
 
         Ok(head)
     }
 
     pub fn receive_buffer(&mut self) -> Vec<UsedBuffer> {
-        arch::cpu::memory_fence();
+        sys::cpu::memory_fence();
         let current_device_index = self.device_area.idx;
         if self.last_used_ring_index == current_device_index {
             return Vec::new();
@@ -265,7 +265,7 @@ impl<const QUEUE_SIZE: usize> VirtQueue<QUEUE_SIZE> {
 
     pub fn enable_interrupts(&mut self) {
         self.driver_area.flags = 0;
-        arch::cpu::memory_fence();
+        sys::cpu::memory_fence();
     }
 
     pub fn notify(&mut self) {

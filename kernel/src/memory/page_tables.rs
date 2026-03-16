@@ -153,7 +153,7 @@ impl RootPageTableHolder {
     }
 
     fn is_active(&self) -> bool {
-        let satp = arch::cpu::read_satp();
+        let satp = sys::cpu::read_satp();
         let ppn = satp & 0xfffffffffff;
         let page_table_address = ppn << 12;
 
@@ -612,7 +612,7 @@ impl RootPageTableHolder {
         // SAFETY: satp_val encodes a valid page table that identity-maps all
         // kernel memory, so execution can continue after the switch.
         unsafe {
-            arch::cpu::write_satp_and_fence(satp_val);
+            sys::cpu::write_satp_and_fence(satp_val);
         };
     }
 

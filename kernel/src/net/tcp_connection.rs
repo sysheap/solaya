@@ -36,7 +36,7 @@ pub fn allocate_ephemeral_port() -> u16 {
 }
 
 fn generate_iss() -> u32 {
-    arch::timer::get_current_clocks() as u32
+    sys::timer::get_current_clocks() as u32
 }
 
 fn len_as_seq(len: usize) -> u32 {

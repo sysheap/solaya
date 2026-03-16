@@ -95,7 +95,7 @@ extern "C" fn kernel_worker_entry() -> ! {
         poll_ready_tasks();
         if READY_IDS.lock().is_empty() {
             WORKER_SLEEP_REQUESTED.store(true, Ordering::Release);
-            arch::cpu::trigger_supervisor_software_interrupt();
+            sys::cpu::trigger_supervisor_software_interrupt();
         }
     }
 }

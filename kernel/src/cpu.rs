@@ -2,7 +2,7 @@ use alloc::{boxed::Box, sync::Arc};
 use common::syscalls::trap_frame::TrapFrame;
 use core::{mem::offset_of, ptr::addr_of};
 
-pub use arch::CpuId;
+pub use sys::CpuId;
 
 use crate::{
     klibc::{Spinlock, SpinlockGuard, runtime_initialized::RuntimeInitializedData, sizes::KiB},
@@ -13,7 +13,7 @@ use crate::{
         thread::{ThreadRef, ThreadWeakRef},
     },
 };
-use arch::sbi::extensions::ipi_extension::sbi_send_ipi;
+use sys::sbi::extensions::ipi_extension::sbi_send_ipi;
 
 pub(crate) const KERNEL_STACK_SIZE: usize = KiB(512);
 
@@ -79,7 +79,7 @@ impl Cpu {
     }
 
     fn cpu_ptr() -> *mut Cpu {
-        let ptr = arch::cpu::read_sscratch() as *mut Self;
+        let ptr = sys::cpu::read_sscratch() as *mut Self;
         assert!(!ptr.is_null() && ptr.is_aligned());
         ptr
     }
@@ -128,7 +128,7 @@ impl Cpu {
     }
 
     pub fn maybe_kernel_page_tables() -> Option<&'static RootPageTableHolder> {
-        let ptr = arch::cpu::read_sscratch() as *mut Self;
+        let ptr = sys::cpu::read_sscratch() as *mut Self;
         if ptr.is_null() || !ptr.is_aligned() {
             return None;
         }
@@ -138,7 +138,7 @@ impl Cpu {
     }
 
     pub fn cpu_id() -> CpuId {
-        let ptr = arch::cpu::read_sscratch() as *mut Self;
+        let ptr = sys::cpu::read_sscratch() as *mut Self;
         if ptr.is_null() {
             return *STARTING_CPU_ID;
         }

@@ -19,7 +19,7 @@ fn panic(info: &PanicInfo) -> ! {
 
     // SAFETY: We are panicking; no further interrupt handling is expected.
     unsafe {
-        arch::cpu::disable_global_interrupts();
+        sys::cpu::disable_global_interrupts();
     }
 
     let cpu_id = Cpu::cpu_id().as_usize() as isize;

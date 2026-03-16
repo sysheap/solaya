@@ -156,7 +156,7 @@ pub fn log_unimplemented_and_kill(trap_frame: &TrapFrame) {
         trap_frame[Register::a4],
         trap_frame[Register::a5],
     ];
-    let pc = arch::cpu::read_sepc();
+    let pc = sys::cpu::read_sepc();
 
     let name = headers::syscalls::SYSCALL_NAMES
         .iter()
@@ -198,7 +198,7 @@ fn print_userspace_backtrace(trap_frame: &TrapFrame, process_name: &str) {
 
     let elf = elf_data.and_then(|data| ElfFile::parse(data).ok());
 
-    let pc = arch::cpu::read_sepc();
+    let pc = sys::cpu::read_sepc();
 
     println!("[BACKTRACE] userspace backtrace for {process_name}:");
     print_frame(0, pc, &elf);

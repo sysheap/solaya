@@ -291,7 +291,7 @@ impl VfsNode for DevFramebuffer {
         unsafe {
             core::ptr::copy_nonoverlapping(data.as_ptr(), dst, len);
         }
-        arch::cpu::memory_fence();
+        sys::cpu::memory_fence();
         Ok(len)
     }
 

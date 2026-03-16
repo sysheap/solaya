@@ -93,7 +93,7 @@ static PRNG_STATE: AtomicU64 = AtomicU64::new(0);
 fn xorshift_fill(buf: &mut [u8]) {
     let mut state = PRNG_STATE.load(Ordering::Relaxed);
     if state == 0 {
-        state = arch::timer::get_current_clocks() | 1;
+        state = sys::timer::get_current_clocks() | 1;
     }
     for byte in buf.iter_mut() {
         state ^= state << 13;
