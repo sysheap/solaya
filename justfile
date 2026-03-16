@@ -12,7 +12,7 @@ COREUTILS_FEATURES := "cat,echo,false,ls,mkdir,pwd,rm,touch,true"
 build-coreutils:
     CARGO_TARGET_RISCV64GC_UNKNOWN_LINUX_MUSL_LINKER=riscv64-unknown-linux-musl-gcc \
     CARGO_TARGET_RISCV64GC_UNKNOWN_LINUX_MUSL_RUSTFLAGS="-C target-feature=+crt-static" \
-    cargo install coreutils@0.6.0 \
+    cargo install coreutils@0.7.0 \
         --target riscv64gc-unknown-linux-musl \
         --no-default-features \
         --features "{{COREUTILS_FEATURES}}" \
