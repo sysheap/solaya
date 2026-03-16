@@ -1,3 +1,4 @@
+#![allow(unsafe_code)]
 use alloc::{boxed::Box, sync::Arc};
 use common::syscalls::trap_frame::TrapFrame;
 use core::{mem::offset_of, ptr::addr_of};

@@ -1,3 +1,4 @@
+#![allow(unsafe_code)]
 use common::pointer::Pointer;
 use headers::errno::Errno;
 

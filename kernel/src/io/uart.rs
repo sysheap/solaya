@@ -1,3 +1,4 @@
+#![allow(unsafe_code)]
 use core::fmt::Write;
 
 use crate::{

@@ -1,3 +1,4 @@
+#![allow(unsafe_code)]
 use crate::processes::{process::ProcessRef, userspace_ptr::UserspacePtr};
 use alloc::vec::Vec;
 use common::pointer::Pointer;

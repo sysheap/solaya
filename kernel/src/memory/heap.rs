@@ -1,3 +1,4 @@
+#![allow(unsafe_code)]
 use core::{
     alloc::{GlobalAlloc, Layout},
     marker::PhantomData,

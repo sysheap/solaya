@@ -1,3 +1,4 @@
+#![allow(unsafe_code)]
 use crate::klibc::util::copy_slice;
 use alloc::boxed::Box;
 use core::ops::{Add, Deref, DerefMut};

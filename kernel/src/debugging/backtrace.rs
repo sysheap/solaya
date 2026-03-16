@@ -1,3 +1,4 @@
+#![allow(unsafe_code)]
 use super::eh_frame_parser;
 use crate::{
     assert::static_assert_size,

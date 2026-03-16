@@ -1,3 +1,4 @@
+#![allow(unsafe_code)]
 use alloc::{
     collections::{BTreeMap, VecDeque},
     vec::Vec,

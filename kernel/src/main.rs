@@ -16,6 +16,7 @@
 #![deny(clippy::manual_assert)]
 #![deny(clippy::large_stack_arrays)]
 #![deny(clippy::cast_sign_loss)]
+#![deny(unsafe_code)]
 #![feature(nonzero_ops)]
 #![feature(custom_test_frameworks)]
 #![feature(map_try_insert)]
@@ -85,6 +86,7 @@ extern crate alloc;
 #[cfg(target_arch = "riscv64")]
 // SAFETY: Called from boot.S as the kernel entry point; must use C ABI and
 // fixed symbol name. boot.S passes hart_id and device_tree_pointer.
+#[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 extern "C" fn kernel_init(hart_id: usize, device_tree_pointer: *const ()) -> ! {
     let boot_cpu_id = cpu::CpuId::from_hart_id(hart_id);
@@ -249,6 +251,7 @@ extern "C" fn kernel_init(hart_id: usize, device_tree_pointer: *const ()) -> ! {
 #[cfg(target_arch = "riscv64")]
 // SAFETY: Called from boot.S for secondary harts; must use C ABI and fixed
 // symbol name.
+#[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub extern "C" fn prepare_for_scheduling() -> ! {
     // Enable all interrupts
@@ -263,6 +266,7 @@ pub extern "C" fn prepare_for_scheduling() -> ! {
 }
 
 #[cfg(target_arch = "riscv64")]
+#[allow(unsafe_code)]
 fn start_other_harts(current_hart_id: usize, number_of_cpus: usize) {
     // SAFETY: start_hart is defined in boot.S; it initializes the hart and
     // jumps to prepare_for_scheduling.
