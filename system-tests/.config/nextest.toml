@@ -2,8 +2,8 @@
 slow-timeout = { period = "10s", terminate-after = 2 }
 
 [[profile.default.overrides]]
-filter = "test(stress)"
-slow-timeout = { period = "30s", terminate-after = 2 }
+filter = "test(doom_starts)"
+slow-timeout = { period = "20s", terminate-after = 1 }
 
 [profile.deadlock-hunt]
 slow-timeout = { period = "3600s", terminate-after = 1 }
