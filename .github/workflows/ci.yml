@@ -6,75 +6,36 @@ on:
   pull_request:
 
 concurrency:
-  group: ci
-  cancel-in-progress: false
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build:
-    runs-on: [self-hosted, nix]
+  ci:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-        with:
-          clean: false
-      - uses: ./.github/actions/setup
-      - run: just build
 
-  fmt:
-    needs: build
-    runs-on: [self-hosted, nix]
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          clean: false
-      - uses: ./.github/actions/setup
-      - run: cargo fmt --check
+      - uses: DeterminateSystems/nix-installer-action@main
 
-  clippy:
-    needs: build
-    runs-on: [self-hosted, nix]
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          clean: false
-      - uses: ./.github/actions/setup
-      - run: just clippy
+      - uses: DeterminateSystems/magic-nix-cache-action@main
 
-  unit-test:
-    needs: build
-    runs-on: [self-hosted, nix]
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          clean: false
-      - uses: ./.github/actions/setup
-      - run: just unit-test
+      - name: Build
+        run: nix develop --command just build
 
-  miri:
-    needs: build
-    runs-on: [self-hosted, nix]
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          clean: false
-      - uses: ./.github/actions/setup
-      - run: just miri
+      - name: Format check
+        run: nix develop --command cargo fmt --check
 
-  system-test:
-    needs: build
-    runs-on: [self-hosted, nix]
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          clean: false
-      - uses: ./.github/actions/setup
-      - run: just system-test
+      - name: Clippy
+        run: nix develop --command just clippy
 
-  kani:
-    needs: build
-    runs-on: [self-hosted, nix]
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          clean: false
-      - uses: ./.github/actions/setup
-      - run: just kani
+      - name: Unit tests
+        run: nix develop --command just unit-test
+
+      - name: Miri
+        run: nix develop --command just miri
+
+      - name: System tests
+        run: nix develop --command just system-test
+
+      - name: Kani
+        run: nix develop --command just kani
