@@ -1,8 +1,7 @@
 use core::{
-    cell::UnsafeCell,
     fmt::Debug,
     ops::{Deref, DerefMut},
-    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
+    sync::atomic::{AtomicUsize, Ordering},
 };
 
 #[cfg(all(target_arch = "riscv64", not(miri)))]
@@ -10,18 +9,21 @@ use crate::cpu::Cpu;
 
 const NO_OWNER: usize = usize::MAX;
 
-#[derive(Debug)]
 pub struct Spinlock<T> {
-    locked: AtomicBool,
-    data: UnsafeCell<T>,
+    inner: sys::spinlock::Spinlock<T>,
     owner_cpu: AtomicUsize,
+}
+
+impl<T: Debug> Debug for Spinlock<T> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{:?}", self.inner)
+    }
 }
 
 impl<T> Spinlock<T> {
     pub const fn new(data: T) -> Self {
         Self {
-            locked: AtomicBool::new(false),
-            data: UnsafeCell::new(data),
+            inner: sys::spinlock::Spinlock::new(data),
             owner_cpu: AtomicUsize::new(NO_OWNER),
         }
     }
@@ -33,10 +35,7 @@ impl<T> Spinlock<T> {
 
     pub fn try_with_lock<'a, R>(&'a self, f: impl FnOnce(SpinlockGuard<'a, T>) -> R) -> Option<R> {
         let interrupt_guard = sys::cpu::InterruptGuard::new();
-        let value = self
-            .locked
-            .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed);
-        if value.is_ok() {
+        if self.inner.try_acquire() {
             self.set_owner();
             let lock = SpinlockGuard {
                 spinlock: self,
@@ -51,11 +50,7 @@ impl<T> Spinlock<T> {
         let interrupt_guard = sys::cpu::InterruptGuard::new();
         self.detect_same_cpu_deadlock();
         let mut spin_count: u64 = 0;
-        while self
-            .locked
-            .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
-            .is_err()
-        {
+        while !self.inner.try_acquire() {
             spin_count += 1;
             self.warn_possible_deadlock(spin_count);
             core::hint::spin_loop();
@@ -69,10 +64,7 @@ impl<T> Spinlock<T> {
 
     #[cfg(all(target_arch = "riscv64", not(miri)))]
     fn detect_same_cpu_deadlock(&self) {
-        // The gap between loading `locked` and `owner_cpu` is benign: if the
-        // lock is released in between, we just skip the check (no deadlock).
-        // A false positive requires owner_cpu == our id, meaning we do hold it.
-        if self.locked.load(Ordering::Relaxed) {
+        if self.inner.is_locked() {
             let cpu_id = Cpu::cpu_id().as_usize();
             assert_ne!(
                 self.owner_cpu.load(Ordering::Relaxed),
@@ -117,7 +109,7 @@ impl<T> Spinlock<T> {
 
     #[cfg(test)]
     pub fn into_inner(self) -> T {
-        self.data.into_inner()
+        self.inner.into_inner()
     }
 
     /// # Safety
@@ -125,7 +117,8 @@ impl<T> Spinlock<T> {
     /// Only safe during panic when the holder will never resume.
     pub unsafe fn force_unlock(&self) {
         self.owner_cpu.store(NO_OWNER, Ordering::Relaxed);
-        self.locked.store(false, Ordering::Release);
+        // SAFETY: Caller guarantees this is only used during panic
+        unsafe { self.inner.force_unlock() };
     }
 }
 
@@ -143,7 +136,7 @@ pub struct SpinlockGuard<'a, T> {
 impl<T> Drop for SpinlockGuard<'_, T> {
     fn drop(&mut self) {
         self.spinlock.clear_owner();
-        self.spinlock.locked.store(false, Ordering::Release);
+        self.spinlock.inner.release();
     }
 }
 
@@ -151,22 +144,28 @@ impl<T> Deref for SpinlockGuard<'_, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        // SAFETY: SpinlockGuard has exclusive access to the data
-        unsafe { &*self.spinlock.data.get() }
+        // SAFETY: SpinlockGuard has exclusive access; the lock is held.
+        unsafe { &*self.spinlock.inner.data_ptr() }
     }
 }
 
 impl<T> DerefMut for SpinlockGuard<'_, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        // SAFETY: SpinlockGuard has exclusive access to the data
-        unsafe { &mut *self.spinlock.data.get() }
+        // SAFETY: SpinlockGuard has exclusive access; the lock is held.
+        unsafe { &mut *self.spinlock.inner.data_ptr() }
     }
 }
 
 impl<T: Debug> Debug for SpinlockGuard<'_, T> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        // SAFETY: SpinlockGuard has exclusive access to the data
-        unsafe { writeln!(f, "SpinlockGuard {{\n{:?}\n}}", *self.spinlock.data.get()) }
+        // SAFETY: SpinlockGuard has exclusive access; the lock is held.
+        unsafe {
+            writeln!(
+                f,
+                "SpinlockGuard {{\n{:?}\n}}",
+                *self.spinlock.inner.data_ptr()
+            )
+        }
     }
 }
 
@@ -180,37 +179,30 @@ mod tests {
     #[test_case]
     fn with_lock() {
         let spinlock = Spinlock::new(42);
-        assert!(!spinlock.locked.load(Ordering::Acquire));
+        assert!(!spinlock.inner.is_locked());
         let result = spinlock.with_lock(|mut d| {
             *d = 45;
             *d
         });
-        assert!(!spinlock.locked.load(Ordering::Acquire));
-        unsafe {
-            assert_eq!(*spinlock.data.get(), 45);
-        }
+        assert!(!spinlock.inner.is_locked());
         assert_eq!(result, 45);
     }
 
     #[test_case]
     fn check_lock_and_unlock() {
         let spinlock = Spinlock::new(42);
-        assert!(!spinlock.locked.load(Ordering::Acquire));
+        assert!(!spinlock.inner.is_locked());
         {
             let mut locked = spinlock.lock();
-            assert!(spinlock.locked.load(Ordering::Acquire));
+            assert!(spinlock.inner.is_locked());
             *locked = 1;
         }
-        assert!(!spinlock.locked.load(Ordering::Acquire));
-        unsafe {
-            assert_eq!(*spinlock.data.get(), 1);
-        }
+        assert!(!spinlock.inner.is_locked());
+        assert_eq!(*spinlock.lock(), 1);
         let mut locked = spinlock.lock();
         *locked = 42;
-        assert!(spinlock.locked.load(Ordering::Acquire));
-        unsafe {
-            assert_eq!(*spinlock.data.get(), 42);
-        }
+        assert!(spinlock.inner.is_locked());
+        assert_eq!(*locked, 42);
     }
 
     #[test_case]
