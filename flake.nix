@@ -124,13 +124,6 @@
           pkgs.e2fsprogs
         ];
 
-        basePackages = ciPackages ++ [
-          (pkgs.python3.withPackages (ps: [
-            ps.pygdbmi
-            ps.mcp
-          ]))
-        ];
-
         commonEnv = {
           # Needed for bindgen
           LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
@@ -156,14 +149,17 @@
         devShells.default = pkgs.mkShell (
           commonEnv
           // {
-            nativeBuildInputs = [
+            nativeBuildInputs = ciPackages ++ [
               pkgs.gdb
               pkgs.tmux
               pwndbg.packages.${system}.default
               pkgs.typos-lsp
               pkgs.dtc
-            ]
-            ++ basePackages;
+              (pkgs.python3.withPackages (ps: [
+                ps.pygdbmi
+                ps.mcp
+              ]))
+            ];
             shellHook = hook;
           }
         );
