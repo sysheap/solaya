@@ -23,9 +23,6 @@ jobs:
         with:
           arguments: .#ci
 
-      - name: Build
-        run: just build
-
       - name: Format check
         run: cargo fmt --check
 

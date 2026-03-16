@@ -30,7 +30,7 @@ clippy: build-userspace
     cargo clippy -- -D warnings
     cargo clippy --manifest-path system-tests/Cargo.toml --target x86_64-unknown-linux-gnu --no-deps -- -D warnings
     cargo clippy --manifest-path mcp-server/Cargo.toml --target x86_64-unknown-linux-gnu --no-deps -- -D warnings
-    cargo clippy --tests
+    cargo clippy --tests -- -D warnings
 
 clean:
     rm -f kernel/compiled_userspace/*
@@ -50,12 +50,12 @@ run-fb: build
 
 test: unit-test system-test
 
-ci: build
+ci:
     @echo "Running CI checks..."
-    @echo "==> Clippy"
-    just clippy
     @echo "==> Format check"
     cargo fmt --check
+    @echo "==> Clippy"
+    just clippy
     @echo "==> Unit tests"
     just unit-test
     @echo "==> Miri"
