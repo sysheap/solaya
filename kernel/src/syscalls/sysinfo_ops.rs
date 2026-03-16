@@ -15,21 +15,29 @@ use crate::{
 
 use super::linux::LinuxSyscallHandler;
 
-fn write_cstr(field: &mut [core::ffi::c_char], src: &core::ffi::CStr) {
-    for (dst, &b) in field.iter_mut().zip(src.to_bytes_with_nul()) {
-        *dst = b as core::ffi::c_char;
+trait CStrField {
+    fn copy_from(&mut self, src: &str);
+}
+
+impl CStrField for [core::ffi::c_char] {
+    fn copy_from(&mut self, src: &str) {
+        for (dst, &b) in self.iter_mut().zip(src.as_bytes()) {
+            *dst = b as core::ffi::c_char;
+        }
+        let nul_pos = src.len().min(self.len() - 1);
+        self[nul_pos] = 0;
     }
 }
 
 impl LinuxSyscallHandler {
     pub(super) fn do_uname(&self, buf: LinuxUserspaceArg<*mut u8>) -> Result<isize, Errno> {
         let mut uts = headers::sysinfo_types::utsname::default();
-        write_cstr(&mut uts.sysname, c"Linux");
-        write_cstr(&mut uts.nodename, c"solaya");
-        write_cstr(&mut uts.release, c"6.1.0");
-        write_cstr(&mut uts.version, c"#1");
-        write_cstr(&mut uts.machine, c"riscv64");
-        write_cstr(&mut uts.domainname, c"");
+        uts.sysname.copy_from("Linux");
+        uts.nodename.copy_from("solaya");
+        uts.release.copy_from("6.1.0");
+        uts.version.copy_from("#1");
+        uts.machine.copy_from("riscv64");
+        uts.domainname.copy_from("");
         buf.write_slice(uts.as_slice())?;
         Ok(0)
     }
