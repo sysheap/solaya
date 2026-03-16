@@ -1,3 +1,4 @@
+#![allow(unsafe_code)]
 use super::big_endian::BigEndian;
 use crate::{assert::static_assert_size, debug, klibc::util::UsizeExt};
 

@@ -1,3 +1,4 @@
+#![allow(unsafe_code)]
 use crate::mmio_struct;
 
 pub const VIRTIO_VENDOR_SPECIFIC_CAPABILITY_ID: u8 = 0x9;

@@ -1,3 +1,4 @@
+#![allow(unsafe_code)]
 use core::{
     fmt::Display,
     ops::{BitAnd, BitAndAssign, BitOrAssign, Not, Rem, Shl, Shr, Sub},

@@ -1,3 +1,4 @@
+#![allow(unsafe_code)]
 macro_rules! getter_address {
     ($name:ident) => {
         #[cfg(all(target_arch = "riscv64", not(miri)))]

@@ -1,3 +1,4 @@
+#![allow(unsafe_code)]
 use alloc::{vec, vec::Vec};
 
 use crate::{drivers::virtio::block, klibc::util::BufferExtension};

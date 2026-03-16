@@ -1,3 +1,4 @@
+#![allow(unsafe_code)]
 use alloc::{collections::BTreeMap, string::String, sync::Arc, vec::Vec};
 use headers::errno::Errno;
 

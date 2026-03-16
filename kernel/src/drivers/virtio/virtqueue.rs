@@ -1,3 +1,4 @@
+#![allow(unsafe_code)]
 use alloc::{boxed::Box, collections::BTreeMap, vec::Vec};
 
 use crate::{

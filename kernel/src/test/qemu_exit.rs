@@ -1,3 +1,4 @@
+#![allow(unsafe_code)]
 use crate::{
     io::TEST_DEVICE_ADDRESS,
     klibc::{MMIO, Spinlock},

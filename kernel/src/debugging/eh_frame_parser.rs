@@ -1,3 +1,4 @@
+#![allow(unsafe_code)]
 #![allow(dead_code)]
 
 use crate::klibc::{

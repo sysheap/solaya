@@ -1,3 +1,4 @@
+#![allow(unsafe_code)]
 use core::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign};
 
 use common::numbers::Number;
