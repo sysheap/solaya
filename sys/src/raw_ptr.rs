@@ -1,10 +1,8 @@
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
 
-/// # Safety contract
-/// All functions in this module move the `unsafe` boundary into the sys crate.
-/// Callers must still uphold the documented invariants for each function.
-/// The purpose is to allow the kernel crate to use `#![deny(unsafe_code)]`
-/// while keeping all raw pointer operations centralized here.
+//! Safe wrappers for common unsafe pointer operations.
+//! Moves the `unsafe` boundary into the sys crate so the kernel
+//! can use `#![deny(unsafe_code)]`.
 
 /// Creates a shared slice from a raw pointer and length.
 ///
