@@ -11,6 +11,10 @@ mod stub;
 #[cfg(any(not(target_arch = "riscv64"), miri))]
 pub use stub::*;
 
+pub mod array_vec;
+pub mod runtime_initialized;
+pub mod spinlock;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct CpuId(usize);
 
