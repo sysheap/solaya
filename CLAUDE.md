@@ -7,13 +7,14 @@ RISC-V 64-bit hobby OS kernel written in Rust. No third-party runtime dependenci
 ```bash
 just run          # Build and run in QEMU
 just test         # Run unit tests + system tests
-just ci           # Run all CI checks (clippy, fmt, tests, miri)
+just ci           # Run all CI checks (clippy, fmt, features, tests, miri)
 just build        # Build kernel with userspace
 just kani         # Run Kani model checking proofs
 just system-test  # Run only system tests
 just unit-test    # Run only unit tests
 just clippy       # Run linter
 just miri         # Run miri (detects undefined behavior)
+just check-features  # Verify all feature combinations compile
 just mcp-server   # Build MCP server
 just disassm      # Disassemble kernel
 just addr2line 0x1234  # Get source line for kernel address
@@ -180,6 +181,24 @@ The `sys` crate (`sys/`) encapsulates hardware abstraction and unsafe primitives
 - `raw_ptr` — Safe wrappers for common unsafe pointer operations
 
 The kernel wraps `sys::spinlock::Spinlock` with `klibc::Spinlock` that adds interrupt guard management and deadlock detection.
+
+## Kernel Features
+
+The kernel supports cargo features for compile-time subsystem selection:
+
+```toml
+[features]
+default = ["net", "tcp", "udp", "virtio-net", "virtio-blk", "smp", "ext2"]
+net = []           # Base networking stack
+tcp = ["net"]      # TCP protocol
+udp = ["net"]      # UDP protocol
+virtio-net = ["net"]  # VirtIO network driver
+virtio-blk = []    # VirtIO block driver
+smp = []           # Multi-core support
+ext2 = ["virtio-blk"]  # EXT2 filesystem
+```
+
+Use `just check-features` (runs `cargo hack check --each-feature`) to verify feature combinations compile. Use `cargo build --release --no-default-features` to build a minimal kernel.
 
 ## Detailed Documentation
 

@@ -56,6 +56,8 @@ ci:
     cargo fmt --check
     @echo "==> Clippy"
     just clippy
+    @echo "==> Feature check"
+    just check-features
     @echo "==> Unit tests"
     just unit-test
     @echo "==> Miri"
@@ -63,6 +65,9 @@ ci:
     @echo "==> System tests"
     just system-test
     @echo "All CI checks passed!"
+
+check-features: build-userspace
+    cargo hack check --each-feature --no-dev-deps
 
 kani:
     cargo kani -p solaya --output-format terse

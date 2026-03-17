@@ -116,6 +116,7 @@
         ciPackages = [
           pkgs.qemu
           pkgs.cargo-nextest
+          pkgs.cargo-hack
           pkgs.just
           rustToolchain
           riscv-toolchain.buildPackages.gcc
