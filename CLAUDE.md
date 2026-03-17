@@ -26,8 +26,8 @@ just deadlock-hunt            # Run system tests in loop with GDB enabled
 ## Project Structure
 
 ```
-arch/             # Hardware abstraction (CSR, SBI, timer, trap causes)
-kernel/           # Main kernel (RISC-V 64-bit, no_std)
+sys/              # Hardware abstraction + unsafe primitives (CSR, SBI, spinlock, etc.)
+kernel/           # Main kernel (RISC-V 64-bit, no_std, #![deny(unsafe_code)])
 userspace/        # Userspace programs (musl libc)
 common/           # Shared no_std library
 system-tests/     # Integration tests (run on x86, test via QEMU)
@@ -140,7 +140,7 @@ mod kani_proofs {
 }
 ```
 
-The `arch` crate provides no-op stubs for non-riscv64 targets so Kani can compile kernel code without hardware dependencies.
+The `sys` crate provides no-op stubs for non-riscv64 targets so Kani can compile kernel code without hardware dependencies.
 
 ## Adding Userspace Programs
 
@@ -153,8 +153,8 @@ The `arch` crate provides no-op stubs for non-riscv64 targets so Kani can compil
 | Purpose | File |
 |---------|------|
 | Kernel entry | kernel/src/main.rs |
-| CSR access | arch/src/riscv64/cpu.rs |
-| SBI calls | arch/src/riscv64/sbi/ |
+| CSR access | sys/src/riscv64/cpu.rs |
+| SBI calls | sys/src/riscv64/sbi/ |
 | Syscall dispatch | kernel/src/syscalls/linux.rs (thin trait methods) |
 | Syscall impls | kernel/src/syscalls/*_ops.rs (io, ioctl, fs, mm, signal, net, time, id, process, exec) |
 | Process struct | kernel/src/processes/process.rs |
@@ -167,6 +167,19 @@ The `arch` crate provides no-op stubs for non-riscv64 targets so Kani can compil
 | Log config | kernel/src/logging/configuration.rs |
 | Signals | kernel/src/processes/signal.rs |
 | Syscall tracer config | kernel/src/syscalls/trace_config.rs |
+
+## Sys Crate
+
+The `sys` crate (`sys/`) encapsulates hardware abstraction and unsafe primitives. The kernel crate uses `#![deny(unsafe_code)]` with `#[allow(unsafe_code)]` on modules that still need it.
+
+**Modules in sys:**
+- `riscv64/` / `stub/` — CPU, SBI, timer, trap causes (conditional compilation)
+- `spinlock` — Bare spinlock (no deadlock detection, no interrupt guard)
+- `array_vec` — Fixed-capacity stack vector
+- `runtime_initialized` — One-time late-initialization
+- `raw_ptr` — Safe wrappers for common unsafe pointer operations
+
+The kernel wraps `sys::spinlock::Spinlock` with `klibc::Spinlock` that adds interrupt guard management and deadlock detection.
 
 ## Detailed Documentation
 
