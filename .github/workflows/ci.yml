@@ -17,7 +17,11 @@ jobs:
 
       - uses: DeterminateSystems/nix-installer-action@main
 
-      - uses: DeterminateSystems/magic-nix-cache-action@main
+      - uses: nix-community/cache-nix-action@v6
+        with:
+          primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.lock', 'rust-toolchain') }}
+          restore-prefixes-first-match: |
+            nix-${{ runner.os }}-
 
       - uses: nicknovitski/nix-develop@v1
         with:
