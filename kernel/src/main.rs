@@ -39,7 +39,7 @@ use crate::{
 #[cfg(target_arch = "riscv64")]
 use alloc::vec::Vec;
 #[cfg(target_arch = "riscv64")]
-use asm::wfi_loop;
+use sys::wfi_loop;
 #[cfg(target_arch = "riscv64")]
 use cpu::Cpu;
 #[cfg(target_arch = "riscv64")]

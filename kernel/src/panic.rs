@@ -16,7 +16,8 @@ static CPU_ENTERED_PANIC: AtomicIsize = AtomicIsize::new(-1);
 fn panic(info: &PanicInfo) -> ! {
     use core::sync::atomic::Ordering;
 
-    use crate::{asm::wfi_loop, cpu::Cpu, io::uart::QEMU_UART};
+    use crate::{cpu::Cpu, io::uart::QEMU_UART};
+    use sys::wfi_loop;
 
     // SAFETY: We are panicking; no further interrupt handling is expected.
     unsafe {
