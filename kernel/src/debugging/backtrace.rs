@@ -1,4 +1,3 @@
-#![allow(unsafe_code)]
 use super::eh_frame_parser;
 use crate::{
     assert::static_assert_size,
@@ -55,27 +54,23 @@ impl<'a> Backtrace<'a> {
     fn init(&mut self) {
         assert!(self.fdes.is_empty(), "Init can only be called once.");
 
-        let eh_frame_start = LinkerInformation::__start_eh_frame();
-        let eh_frame_size = LinkerInformation::eh_frame_size();
+        let eh_frame = LinkerInformation::get_eh_frame_bytes();
 
         info!(
             "Initialize backtrace with eh_frame at {} and size {:#x}",
-            eh_frame_start, eh_frame_size
+            LinkerInformation::__start_eh_frame(),
+            eh_frame.len()
         );
 
-        // SAFETY: The eh_frame section is mapped by the kernel page tables.
-        // Start and size come from linker-defined symbols.
-        let eh_frame =
-            unsafe { core::slice::from_raw_parts(eh_frame_start.as_ptr(), eh_frame_size) };
-
         let eh_frame_parser = EhFrameParser::new(eh_frame);
-        let eh_frames = eh_frame_parser.iter(eh_frame_start.as_usize());
+        let eh_frames = eh_frame_parser.iter(LinkerInformation::__start_eh_frame().as_usize());
 
         for frame in eh_frames {
             self.fdes.push(frame);
         }
     }
 
+    #[allow(unsafe_code)]
     fn next(&self, regs: &mut CalleeSavedRegs) -> Result<usize, BacktraceNextError> {
         let ra = regs.ra();
 
@@ -302,6 +297,7 @@ impl CalleeSavedRegs {
         // SAFETY: Naked function that captures callee-saved registers (s0-s11,
         // ra, sp) into the CalleeSavedRegs struct, then calls the closure.
         // No prologue is generated so we get the true register state.
+        #[allow(unsafe_code)]
         #[unsafe(naked)]
         extern "C-unwind" fn dispatch<F: FnMut(&mut CalleeSavedRegs)>(
             regs: &mut CalleeSavedRegs,
@@ -381,6 +377,7 @@ pub fn print() {
 
 const MAX_STACK_SCAN_SLOTS: usize = 512;
 
+#[allow(unsafe_code)]
 fn scan_stack_for_return_addresses(sp: usize, counter: &mut u64) {
     // Per-CPU kernel stacks are mapped at the top of the address space
     let stack_bottom = 0usize.wrapping_sub(KERNEL_STACK_SIZE);
@@ -448,6 +445,7 @@ mod tests {
             addresses: VecDeque<usize>,
         }
 
+        #[allow(unsafe_code)]
         extern "C" fn callback(
             unwind_ctx: &UnwindContext<'_>,
             arg: *mut c_void,

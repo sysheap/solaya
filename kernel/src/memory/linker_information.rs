@@ -92,3 +92,32 @@ sections! {
     bss, XWRMode::ReadWrite;
     kernel_stack, XWRMode::ReadWrite;
 }
+
+#[cfg(all(target_arch = "riscv64", not(miri)))]
+impl LinkerInformation {
+    pub fn get_eh_frame_bytes() -> &'static [u8] {
+        let start = Self::__start_eh_frame().as_ptr::<u8>();
+        let size = Self::eh_frame_size();
+        // SAFETY: The eh_frame section is mapped by the kernel page tables.
+        // Start and size come from linker-defined symbols.
+        unsafe { core::slice::from_raw_parts(start, size) }
+    }
+
+    pub fn get_symbols_cstr() -> &'static core::ffi::CStr {
+        let ptr = Self::__start_symbols().as_ptr::<core::ffi::c_char>();
+        // SAFETY: The symbols section is null-terminated by the build process
+        // (objcopy --update-section appends a NUL byte).
+        unsafe { core::ffi::CStr::from_ptr(ptr) }
+    }
+}
+
+#[cfg(any(not(target_arch = "riscv64"), miri))]
+impl LinkerInformation {
+    pub fn get_eh_frame_bytes() -> &'static [u8] {
+        &[]
+    }
+
+    pub fn get_symbols_cstr() -> &'static core::ffi::CStr {
+        core::ffi::CStr::from_bytes_with_nul(b"\0").expect("valid empty CStr")
+    }
+}
