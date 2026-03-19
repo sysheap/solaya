@@ -1,4 +1,3 @@
-#![allow(unsafe_code)]
 use alloc::vec;
 
 use crate::{
@@ -53,9 +52,7 @@ impl RngDevice {
         let capabilities = pci_device.capabilities();
         let virtio_capabilities: alloc::vec::Vec<MMIO<virtio_pci_cap>> = capabilities
             .filter(|cap| cap.id().read() == VIRTIO_VENDOR_SPECIFIC_CAPABILITY_ID)
-            // SAFETY: VirtIO vendor-specific capabilities have the virtio_pci_cap
-            // layout per the VirtIO spec.
-            .map(|cap| unsafe { cap.new_type::<virtio_pci_cap>() })
+            .map(|cap| cap.new_type::<virtio_pci_cap>())
             .collect();
 
         let common_cfg_cap = virtio_capabilities
@@ -122,9 +119,7 @@ impl RngDevice {
             .iter()
             .find(|cap| cap.cfg_type().read() == VIRTIO_PCI_CAP_NOTIFY_CFG)
             .ok_or("Notification capability not found")?;
-        // SAFETY: The notify capability extends virtio_pci_cap with an
-        // additional notify_off_multiplier field per the VirtIO spec.
-        let notify_cfg = unsafe { notify_cfg_cap.new_type::<virtio_pci_notify_cap>() };
+        let notify_cfg = notify_cfg_cap.new_type::<virtio_pci_notify_cap>();
 
         assert!(
             is_power_of_2_or_zero(notify_cfg.notify_off_multiplier().read()),

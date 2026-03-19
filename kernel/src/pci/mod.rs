@@ -104,13 +104,10 @@ impl Iterator for PciCapabilityIter<'_> {
     fn next(&mut self) -> Option<Self::Item> {
         let capability: MMIO<PciCapability> = match self.next_offset {
             0 => return None,
-            // SAFETY: next_offset is read from PCI capability linked list.
-            // The offset is within the 256-byte configuration space.
-            _ => unsafe {
-                self.pci_device
-                    .configuration_space
-                    .new_type_with_offset(self.next_offset as usize)
-            },
+            _ => self
+                .pci_device
+                .configuration_space
+                .new_type_with_offset(self.next_offset as usize),
         };
         self.next_offset = capability.next().read();
         Some(capability)

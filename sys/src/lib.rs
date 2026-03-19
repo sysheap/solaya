@@ -12,6 +12,7 @@ mod stub;
 pub use stub::*;
 
 pub mod array_vec;
+pub mod mmio;
 pub mod raw_ptr;
 pub mod runtime_initialized;
 pub mod spinlock;

@@ -91,18 +91,9 @@ pub trait BufferExtension {
 
 impl BufferExtension for [u8] {
     fn interpret_as<T>(&self) -> &T {
-        // SAFETY: Size and alignment are verified by assertions. The lifetime
-        // of the returned reference is tied to &self.
-        unsafe {
-            assert!(self.len() >= core::mem::size_of::<T>());
-            let ptr: *const T = self.as_ptr().cast::<T>();
-            assert!(
-                ptr.is_aligned(),
-                "pointer not aligned for {}",
-                core::any::type_name::<T>()
-            );
-            &*ptr
-        }
+        // SAFETY: The slice is checked for sufficient size and alignment.
+        // The caller is responsible for ensuring the bytes represent a valid T.
+        unsafe { sys::raw_ptr::interpret_bytes_as(self) }
     }
 
     fn split_as<T>(&self) -> (&T, &[u8]) {
@@ -113,13 +104,9 @@ impl BufferExtension for [u8] {
 
 pub trait ByteInterpretable {
     fn as_slice(&self) -> &[u8] {
-        // SAFETY: It is always safe to interpret a allocated struct as bytes
-        unsafe {
-            core::slice::from_raw_parts(
-                (self as *const Self).cast::<u8>(),
-                core::mem::size_of_val(self),
-            )
-        }
+        // SAFETY: The type has no uninitialized padding bytes that would be
+        // exposed to the caller (upheld by all implementors).
+        unsafe { sys::raw_ptr::as_byte_slice(self) }
     }
 }
 
