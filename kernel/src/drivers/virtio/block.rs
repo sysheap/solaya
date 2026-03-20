@@ -165,6 +165,48 @@ pub fn capacity(index: usize) -> u64 {
         .map_or(0, |d| d.capacity_bytes())
 }
 
+pub fn register_devfs_node(index: usize) {
+    use crate::fs::{
+        devfs,
+        vfs::{NodeType, VfsNode},
+    };
+    use alloc::sync::Arc;
+
+    struct DevBlock {
+        ino: u64,
+        index: usize,
+    }
+
+    impl VfsNode for DevBlock {
+        fn node_type(&self) -> NodeType {
+            NodeType::File
+        }
+        fn ino(&self) -> u64 {
+            self.ino
+        }
+        fn size(&self) -> usize {
+            capacity(self.index) as usize
+        }
+        fn truncate(&self) -> Result<(), headers::errno::Errno> {
+            Err(headers::errno::Errno::EINVAL)
+        }
+        fn block_device_index(&self) -> Option<usize> {
+            Some(self.index)
+        }
+    }
+
+    assert!(index < 26, "block device index must be < 26 (a-z)");
+    let suffix = (b'a' + index as u8) as char;
+    let name = alloc::format!("vd{suffix}");
+    devfs::register_device(
+        &name,
+        Arc::new(DevBlock {
+            ino: devfs::alloc_dev_ino(),
+            index,
+        }),
+    );
+}
+
 pub async fn read(index: usize, offset: usize, buf: &mut [u8]) -> Result<usize, Errno> {
     let cap = {
         let guard = BLOCK_DEVICES.lock();

@@ -40,6 +40,48 @@ pub fn is_available() -> bool {
     RNG_DEVICE.lock().is_some()
 }
 
+pub fn register_devfs_node() {
+    use crate::fs::{
+        devfs,
+        vfs::{NodeType, VfsNode},
+    };
+    use alloc::sync::Arc;
+    use headers::errno::Errno;
+
+    struct DevRandom {
+        ino: u64,
+    }
+
+    impl VfsNode for DevRandom {
+        fn node_type(&self) -> NodeType {
+            NodeType::File
+        }
+        fn ino(&self) -> u64 {
+            self.ino
+        }
+        fn size(&self) -> usize {
+            0
+        }
+        fn read(&self, _offset: usize, buf: &mut [u8]) -> Result<usize, Errno> {
+            read_random(buf);
+            Ok(buf.len())
+        }
+        fn write(&self, _offset: usize, data: &[u8]) -> Result<usize, Errno> {
+            Ok(data.len())
+        }
+        fn truncate(&self) -> Result<(), Errno> {
+            Ok(())
+        }
+    }
+
+    devfs::register_device(
+        "random",
+        Arc::new(DevRandom {
+            ino: devfs::alloc_dev_ino(),
+        }),
+    );
+}
+
 impl RngDevice {
     pub fn is_virtio_rng(device: &PCIDevice) -> bool {
         let cs = device.configuration_space();

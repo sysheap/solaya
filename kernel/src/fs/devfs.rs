@@ -2,12 +2,8 @@ use alloc::{collections::BTreeMap, string::String, sync::Arc, vec::Vec};
 use headers::errno::Errno;
 
 use crate::{
-    drivers::{
-        bochs_display,
-        virtio::{block, input, rng},
-    },
     io::tty_device::{TtyDevice, console_tty},
-    klibc::{Spinlock, mmio},
+    klibc::Spinlock,
 };
 
 use super::vfs::{DirEntry, NodeType, VfsNode, VfsNodeRef, alloc_ino};
@@ -61,64 +57,6 @@ impl VfsNode for DevZero {
 
     fn read(&self, _offset: usize, buf: &mut [u8]) -> Result<usize, Errno> {
         buf.fill(0);
-        Ok(buf.len())
-    }
-
-    fn write(&self, _offset: usize, data: &[u8]) -> Result<usize, Errno> {
-        Ok(data.len())
-    }
-
-    fn truncate(&self) -> Result<(), Errno> {
-        Ok(())
-    }
-}
-
-struct DevBlock {
-    ino: u64,
-    index: usize,
-}
-
-impl VfsNode for DevBlock {
-    fn node_type(&self) -> NodeType {
-        NodeType::File
-    }
-
-    fn ino(&self) -> u64 {
-        self.ino
-    }
-
-    fn size(&self) -> usize {
-        block::capacity(self.index) as usize
-    }
-
-    fn truncate(&self) -> Result<(), Errno> {
-        Err(Errno::EINVAL)
-    }
-
-    fn block_device_index(&self) -> Option<usize> {
-        Some(self.index)
-    }
-}
-
-struct DevRandom {
-    ino: u64,
-}
-
-impl VfsNode for DevRandom {
-    fn node_type(&self) -> NodeType {
-        NodeType::File
-    }
-
-    fn ino(&self) -> u64 {
-        self.ino
-    }
-
-    fn size(&self) -> usize {
-        0
-    }
-
-    fn read(&self, _offset: usize, buf: &mut [u8]) -> Result<usize, Errno> {
-        rng::read_random(buf);
         Ok(buf.len())
     }
 
@@ -237,132 +175,14 @@ pub(super) fn new() -> VfsNodeRef {
     dir
 }
 
-pub fn register_random_device() {
-    let node: VfsNodeRef = Arc::new(DevRandom { ino: alloc_ino() });
+pub fn register_device(name: &str, node: VfsNodeRef) {
     let dir = DEVFS
         .lock()
         .clone()
         .expect("devfs must be initialized before registering devices");
-    dir.entries.lock().insert(String::from("random"), node);
+    dir.entries.lock().insert(String::from(name), node);
 }
 
-struct DevFramebuffer {
-    ino: u64,
-}
-
-impl VfsNode for DevFramebuffer {
-    fn node_type(&self) -> NodeType {
-        NodeType::File
-    }
-
-    fn ino(&self) -> u64 {
-        self.ino
-    }
-
-    fn size(&self) -> usize {
-        bochs_display::FB_SIZE
-    }
-
-    fn read(&self, offset: usize, buf: &mut [u8]) -> Result<usize, Errno> {
-        let base = bochs_display::fb_base().ok_or(Errno::ENODEV)?;
-        let end = offset.saturating_add(buf.len()).min(bochs_display::FB_SIZE);
-        if offset >= end {
-            return Ok(0);
-        }
-        let len = end - offset;
-        mmio::read_bytes(base.as_usize() + offset, &mut buf[..len]);
-        Ok(len)
-    }
-
-    fn write(&self, offset: usize, data: &[u8]) -> Result<usize, Errno> {
-        let base = bochs_display::fb_base().ok_or(Errno::ENODEV)?;
-        let end = offset
-            .saturating_add(data.len())
-            .min(bochs_display::FB_SIZE);
-        if offset >= end {
-            return Ok(0);
-        }
-        let len = end - offset;
-        let dst = (base.as_usize() + offset) as *mut u8;
-        // SAFETY: dst points into the framebuffer BAR (non-cacheable MMIO on
-        // RISC-V). copy_nonoverlapping emits a tight store loop that the
-        // compiler can unroll. No volatile needed because PCI BAR memory
-        // is I/O-type in PMA — stores are never cached or elided by the CPU.
-        unsafe {
-            core::ptr::copy_nonoverlapping(data.as_ptr(), dst, len);
-        }
-        arch::cpu::memory_fence();
-        Ok(len)
-    }
-
-    fn truncate(&self) -> Result<(), Errno> {
-        Ok(())
-    }
-}
-
-pub fn register_framebuffer_device() {
-    let node: VfsNodeRef = Arc::new(DevFramebuffer { ino: alloc_ino() });
-    let dir = DEVFS
-        .lock()
-        .clone()
-        .expect("devfs must be initialized before registering devices");
-    dir.entries.lock().insert(String::from("fb0"), node);
-}
-
-pub fn register_block_device(index: usize) {
-    assert!(index < 26, "block device index must be < 26 (a-z)");
-    let suffix = (b'a' + index as u8) as char;
-    let name = alloc::format!("vd{suffix}");
-    let node: VfsNodeRef = Arc::new(DevBlock {
-        ino: alloc_ino(),
-        index,
-    });
-    let dir = DEVFS
-        .lock()
-        .clone()
-        .expect("devfs must be initialized before registering devices");
-    dir.entries.lock().insert(name, node);
-}
-
-struct DevKeyboard {
-    ino: u64,
-}
-
-impl VfsNode for DevKeyboard {
-    fn node_type(&self) -> NodeType {
-        NodeType::File
-    }
-
-    fn ino(&self) -> u64 {
-        self.ino
-    }
-
-    fn size(&self) -> usize {
-        0
-    }
-
-    fn read(&self, _offset: usize, buf: &mut [u8]) -> Result<usize, Errno> {
-        let n = input::read_events(buf);
-        if n == 0 {
-            return Err(Errno::EAGAIN);
-        }
-        Ok(n)
-    }
-
-    fn write(&self, _offset: usize, data: &[u8]) -> Result<usize, Errno> {
-        Ok(data.len())
-    }
-
-    fn truncate(&self) -> Result<(), Errno> {
-        Ok(())
-    }
-}
-
-pub fn register_keyboard_device() {
-    let node: VfsNodeRef = Arc::new(DevKeyboard { ino: alloc_ino() });
-    let dir = DEVFS
-        .lock()
-        .clone()
-        .expect("devfs must be initialized before registering devices");
-    dir.entries.lock().insert(String::from("keyboard0"), node);
+pub fn alloc_dev_ino() -> u64 {
+    alloc_ino()
 }
