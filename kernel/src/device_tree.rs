@@ -1,3 +1,4 @@
+#![allow(unsafe_code)]
 use crate::{
     assert::static_assert_size,
     debug, info,

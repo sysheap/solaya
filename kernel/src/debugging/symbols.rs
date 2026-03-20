@@ -1,3 +1,4 @@
+#![allow(unsafe_code)]
 use crate::{
     debug, info, klibc::runtime_initialized::RuntimeInitializedData,
     memory::linker_information::LinkerInformation,

@@ -1,3 +1,4 @@
+#![allow(unsafe_code)]
 use crate::{
     cpu::Cpu,
     debug, info,
