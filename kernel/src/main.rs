@@ -167,7 +167,8 @@ extern "C" fn kernel_init(hart_id: usize, device_tree_pointer: *const ()) -> ! {
 
     Cpu::current().activate_kernel_page_table();
 
-    plic::init_uart_interrupt(boot_cpu_id);
+    plic::init_plic(boot_cpu_id);
+    plic::register_interrupt(10, io::uart::on_uart_interrupt);
 
     let mut pci_devices = enumerate_devices(&pci_information);
 
@@ -181,7 +182,7 @@ extern "C" fn kernel_init(hart_id: usize, device_tree_pointer: *const ()) -> ! {
             .expect("Initialization must work.");
         net::assign_network_device(init.device);
         net::init_isr_status(init.interrupt_status);
-        plic::init_virtio_net_interrupt(plic_irq);
+        plic::register_interrupt(plic_irq, crate::net::on_network_interrupt);
         processes::kernel_tasks::spawn(net::network_rx_task());
     }
 
@@ -196,7 +197,7 @@ extern "C" fn kernel_init(hart_id: usize, device_tree_pointer: *const ()) -> ! {
         drivers::virtio::block::register_isr_status(init.interrupt_status);
         let idx = drivers::virtio::block::assign_block_device(init.device);
         fs::devfs::register_block_device(idx);
-        plic::init_virtio_block_interrupt(plic_irq);
+        plic::register_interrupt(plic_irq, drivers::virtio::block::on_block_interrupt);
     }
 
     if drivers::virtio::block::device_count() > 0 {
@@ -233,7 +234,7 @@ extern "C" fn kernel_init(hart_id: usize, device_tree_pointer: *const ()) -> ! {
             .expect("Input device initialization must work.");
         drivers::virtio::input::init_isr_status(init.interrupt_status);
         drivers::virtio::input::set_device(init.device);
-        plic::init_virtio_input_interrupt(plic_irq);
+        plic::register_interrupt(plic_irq, drivers::virtio::input::on_input_interrupt);
         fs::devfs::register_keyboard_device();
     }
 

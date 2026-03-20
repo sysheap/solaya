@@ -1,8 +1,7 @@
 use crate::{
     cpu::Cpu,
     debug, info,
-    interrupts::plic::{InterruptSource, PLIC},
-    io::uart::QEMU_UART,
+    interrupts::plic::{self, PLIC},
     memory::VirtAddr,
     processes::{task::Task, thread::ThreadState, timer, waker::ThreadWaker},
     syscalls::linux::LinuxSyscallHandler,
@@ -60,68 +59,14 @@ fn handle_timer_interrupt() {
 
 fn handle_external_interrupt() {
     debug!("External interrupt occurred!");
-    let mut plic = PLIC.lock();
-    let plic_interrupt = match plic.get_next_pending() {
+    let mut plic_guard = PLIC.lock();
+    let irq = match plic_guard.claim() {
         Some(i) => i,
         None => return,
     };
-
-    match plic_interrupt {
-        InterruptSource::Uart => {
-            let mut raw_bytes = crate::klibc::array_vec::ArrayVec::<u8, 64>::new();
-            {
-                let uart = QEMU_UART.lock();
-                while let Some(input) = uart.read() {
-                    let _ = raw_bytes.push(input);
-                }
-            }
-
-            plic.complete_interrupt(plic_interrupt);
-            drop(plic);
-
-            let mut signal_to_send: Option<u32> = None;
-            let tty = crate::io::tty_device::console_tty();
-            for &byte in &raw_bytes {
-                let result = tty.lock().process_input_byte(byte);
-                if !result.echo.is_empty() {
-                    let mut uart = QEMU_UART.lock();
-                    for &echo_byte in &result.echo {
-                        uart.write_byte(echo_byte);
-                    }
-                }
-                if let crate::io::tty_device::InputAction::Signal(sig) = result.action {
-                    signal_to_send = Some(sig);
-                }
-            }
-
-            if let Some(sig) = signal_to_send {
-                let fg_pgid = {
-                    let mut dev = tty.lock();
-                    let pgid = dev.fg_pgid();
-                    dev.record_tty_signal(sig, pgid);
-                    pgid
-                };
-                Cpu::with_scheduler(|mut s| {
-                    s.send_tty_signal(sig, fg_pgid);
-                });
-            }
-        }
-        InterruptSource::VirtioNet => {
-            plic.complete_interrupt(plic_interrupt);
-            drop(plic);
-            crate::net::on_network_interrupt();
-        }
-        InterruptSource::VirtioBlock(_) => {
-            plic.complete_interrupt(plic_interrupt);
-            drop(plic);
-            crate::drivers::virtio::block::on_block_interrupt();
-        }
-        InterruptSource::VirtioInput => {
-            plic.complete_interrupt(plic_interrupt);
-            drop(plic);
-            crate::drivers::virtio::input::on_input_interrupt();
-        }
-    }
+    plic_guard.complete(irq);
+    drop(plic_guard);
+    plic::dispatch_interrupt(irq);
 }
 
 // Check if we still own the thread (syscall might have set it to Waiting or another CPU
