@@ -170,73 +170,8 @@ extern "C" fn kernel_init(hart_id: usize, device_tree_pointer: *const ()) -> ! {
     plic::init_plic(boot_cpu_id);
     plic::register_interrupt(10, io::uart::on_uart_interrupt);
 
-    let mut pci_devices = enumerate_devices(&pci_information);
-
-    let virtio_net = pci_devices
-        .iter()
-        .position(drivers::virtio::net::NetworkDevice::is_virtio_net);
-    if let Some(index) = virtio_net {
-        let device = pci_devices.swap_remove(index);
-        let plic_irq = device.plic_interrupt_id();
-        let init = drivers::virtio::net::NetworkDevice::initialize(device)
-            .expect("Initialization must work.");
-        net::assign_network_device(init.device);
-        net::init_isr_status(init.interrupt_status);
-        plic::register_interrupt(plic_irq, crate::net::on_network_interrupt);
-        processes::kernel_tasks::spawn(net::network_rx_task());
-    }
-
-    while let Some(i) = pci_devices
-        .iter()
-        .position(drivers::virtio::block::BlockDevice::is_virtio_block)
-    {
-        let device = pci_devices.swap_remove(i);
-        let plic_irq = device.plic_interrupt_id();
-        let init = drivers::virtio::block::BlockDevice::initialize(device)
-            .expect("Block device initialization must work.");
-        drivers::virtio::block::register_isr_status(init.interrupt_status);
-        let idx = drivers::virtio::block::assign_block_device(init.device);
-        drivers::virtio::block::register_devfs_node(idx);
-        plic::register_interrupt(plic_irq, drivers::virtio::block::on_block_interrupt);
-    }
-
-    if drivers::virtio::block::device_count() > 0 {
-        processes::kernel_tasks::spawn(fs::ext2::mount_ext2(0));
-    }
-
-    if let Some(i) = pci_devices
-        .iter()
-        .position(drivers::bochs_display::is_bochs_display)
-    {
-        let device = pci_devices.swap_remove(i);
-        drivers::bochs_display::initialize(device);
-        drivers::bochs_display::register_devfs_node();
-    }
-
-    if let Some(i) = pci_devices
-        .iter()
-        .position(drivers::virtio::rng::RngDevice::is_virtio_rng)
-    {
-        let device = pci_devices.swap_remove(i);
-        let rng = drivers::virtio::rng::RngDevice::initialize(device)
-            .expect("RNG device initialization must work.");
-        drivers::virtio::rng::set_device(rng);
-        drivers::virtio::rng::register_devfs_node();
-    }
-
-    if let Some(i) = pci_devices
-        .iter()
-        .position(drivers::virtio::input::InputDevice::is_virtio_input)
-    {
-        let device = pci_devices.swap_remove(i);
-        let plic_irq = device.plic_interrupt_id();
-        let init = drivers::virtio::input::InputDevice::initialize(device)
-            .expect("Input device initialization must work.");
-        drivers::virtio::input::init_isr_status(init.interrupt_status);
-        drivers::virtio::input::set_device(init.device);
-        plic::register_interrupt(plic_irq, drivers::virtio::input::on_input_interrupt);
-        drivers::virtio::input::register_devfs_node();
-    }
+    let pci_devices = enumerate_devices(&pci_information);
+    drivers::init_all_pci_devices(pci_devices);
 
     processes::kernel_tasks::create_worker_thread();
 
