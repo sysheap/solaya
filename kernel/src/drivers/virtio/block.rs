@@ -13,7 +13,8 @@ use crate::{
             DEVICE_STATUS_FAILED, DEVICE_STATUS_FEATURES_OK, VIRTIO_DEVICE_ID, VIRTIO_F_VERSION_1,
             VIRTIO_PCI_CAP_COMMON_CFG, VIRTIO_PCI_CAP_DEVICE_CFG, VIRTIO_PCI_CAP_ISR_CFG,
             VIRTIO_PCI_CAP_NOTIFY_CFG, VIRTIO_VENDOR_ID, VIRTIO_VENDOR_SPECIFIC_CAPABILITY_ID,
-            virtio_pci_cap, virtio_pci_common_cfg, virtio_pci_notify_cap,
+            virtio_pci_cap, virtio_pci_capFields, virtio_pci_common_cfg,
+            virtio_pci_common_cfgFields, virtio_pci_notify_cap, virtio_pci_notify_capFields,
         },
         virtqueue::{BufferDirection, UsedBuffer, VirtQueue},
     },
@@ -24,7 +25,7 @@ use crate::{
         util::{ByteInterpretable, is_power_of_2_or_zero},
     },
     mmio_struct,
-    pci::PCIDevice,
+    pci::{GeneralDevicePciHeaderFields, PCIDevice, PciCapabilityFields},
 };
 
 const EXPECTED_QUEUE_SIZE: usize = 0x100;
