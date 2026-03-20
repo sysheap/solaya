@@ -74,3 +74,66 @@ pub fn initialize(mut pci_device: PCIDevice) {
         fb_addr, FB_WIDTH, FB_HEIGHT, FB_BPP
     );
 }
+
+pub fn register_devfs_node() {
+    use crate::{
+        fs::{
+            devfs,
+            vfs::{NodeType, VfsNode},
+        },
+        klibc::mmio,
+    };
+    use alloc::sync::Arc;
+    use headers::errno::Errno;
+
+    struct DevFramebuffer {
+        ino: u64,
+    }
+
+    impl VfsNode for DevFramebuffer {
+        fn node_type(&self) -> NodeType {
+            NodeType::File
+        }
+        fn ino(&self) -> u64 {
+            self.ino
+        }
+        fn size(&self) -> usize {
+            FB_SIZE
+        }
+        fn read(&self, offset: usize, buf: &mut [u8]) -> Result<usize, Errno> {
+            let base = fb_base().ok_or(Errno::ENODEV)?;
+            let end = offset.saturating_add(buf.len()).min(FB_SIZE);
+            if offset >= end {
+                return Ok(0);
+            }
+            let len = end - offset;
+            mmio::read_bytes(base.as_usize() + offset, &mut buf[..len]);
+            Ok(len)
+        }
+        fn write(&self, offset: usize, data: &[u8]) -> Result<usize, Errno> {
+            let base = fb_base().ok_or(Errno::ENODEV)?;
+            let end = offset.saturating_add(data.len()).min(FB_SIZE);
+            if offset >= end {
+                return Ok(0);
+            }
+            let len = end - offset;
+            let dst = (base.as_usize() + offset) as *mut u8;
+            // SAFETY: dst points into the framebuffer BAR (non-cacheable MMIO).
+            unsafe {
+                core::ptr::copy_nonoverlapping(data.as_ptr(), dst, len);
+            }
+            arch::cpu::memory_fence();
+            Ok(len)
+        }
+        fn truncate(&self) -> Result<(), Errno> {
+            Ok(())
+        }
+    }
+
+    devfs::register_device(
+        "fb0",
+        Arc::new(DevFramebuffer {
+            ino: devfs::alloc_dev_ino(),
+        }),
+    );
+}

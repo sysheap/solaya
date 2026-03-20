@@ -75,6 +75,51 @@ pub fn set_device(device: InputDevice) {
     *INPUT_DEVICE.lock() = Some(device);
 }
 
+pub fn register_devfs_node() {
+    use crate::fs::{
+        devfs,
+        vfs::{NodeType, VfsNode},
+    };
+    use alloc::sync::Arc;
+    use headers::errno::Errno;
+
+    struct DevKeyboard {
+        ino: u64,
+    }
+
+    impl VfsNode for DevKeyboard {
+        fn node_type(&self) -> NodeType {
+            NodeType::File
+        }
+        fn ino(&self) -> u64 {
+            self.ino
+        }
+        fn size(&self) -> usize {
+            0
+        }
+        fn read(&self, _offset: usize, buf: &mut [u8]) -> Result<usize, Errno> {
+            let n = read_events(buf);
+            if n == 0 {
+                return Err(Errno::EAGAIN);
+            }
+            Ok(n)
+        }
+        fn write(&self, _offset: usize, data: &[u8]) -> Result<usize, Errno> {
+            Ok(data.len())
+        }
+        fn truncate(&self) -> Result<(), Errno> {
+            Ok(())
+        }
+    }
+
+    devfs::register_device(
+        "keyboard0",
+        Arc::new(DevKeyboard {
+            ino: devfs::alloc_dev_ino(),
+        }),
+    );
+}
+
 impl InputDevice {
     pub fn is_virtio_input(device: &PCIDevice) -> bool {
         let cs = device.configuration_space();
