@@ -1,18 +1,22 @@
-use alloc::vec::Vec;
-use core::sync::atomic::{AtomicU32, Ordering};
-
 use crate::{
     info,
     klibc::{MMIO, Spinlock, runtime_initialized::RuntimeInitializedData},
 };
+use alloc::vec::Vec;
 use arch::CpuId;
 
 pub const PLIC_BASE: usize = 0x0c00_0000;
 pub const PLIC_SIZE: usize = 0x1000_0000;
 
+struct InterruptHandler {
+    irq: u32,
+    handler: fn(),
+}
+
+static INTERRUPT_HANDLERS: Spinlock<Vec<InterruptHandler>> = Spinlock::new(Vec::new());
+
 pub struct Plic {
     priority_register_base: MMIO<u32>,
-    // pending_register: MMIO<u32>,
     enable_register: MMIO<u32>,
     threshold_register: MMIO<u32>,
     claim_complete_register: MMIO<u32>,
@@ -23,7 +27,6 @@ impl Plic {
         let context = cpu_id.as_usize() * 2 + 1;
         Self {
             priority_register_base: MMIO::new(plic_base),
-            // pending_register: MMIO::new(plic_base + 0x1000),
             enable_register: MMIO::new(plic_base + 0x2000 + (0x80 * context)),
             threshold_register: MMIO::new(plic_base + 0x20_0000 + (0x1000 * context)),
             claim_complete_register: MMIO::new(plic_base + 0x20_0004 + (0x1000 * context)),
@@ -57,77 +60,45 @@ impl Plic {
         self.threshold_register.write(threshold);
     }
 
-    pub fn get_next_pending(&mut self) -> Option<InterruptSource> {
-        let open_interrupt = self.claim_complete_register.read();
-
-        match open_interrupt {
-            0 => None,
-            UART_INTERRUPT_NUMBER => Some(InterruptSource::Uart),
-            id if id == VIRTIO_NET_IRQ.load(Ordering::Relaxed) => Some(InterruptSource::VirtioNet),
-            id if VIRTIO_BLK_IRQS.lock().contains(&id) => Some(InterruptSource::VirtioBlock(id)),
-            id if id == VIRTIO_INPUT_IRQ.load(Ordering::Relaxed) => {
-                Some(InterruptSource::VirtioInput)
-            }
-            id => panic!("Unknown PLIC interrupt source ID {id}"),
-        }
+    pub fn claim(&mut self) -> Option<u32> {
+        let irq = self.claim_complete_register.read();
+        if irq == 0 { None } else { Some(irq) }
     }
 
-    pub fn complete_interrupt(&mut self, source: InterruptSource) {
-        let interrupt_id = match source {
-            InterruptSource::Uart => UART_INTERRUPT_NUMBER,
-            InterruptSource::VirtioNet => VIRTIO_NET_IRQ.load(Ordering::Relaxed),
-            InterruptSource::VirtioBlock(irq) => irq,
-            InterruptSource::VirtioInput => VIRTIO_INPUT_IRQ.load(Ordering::Relaxed),
-        };
-        self.claim_complete_register.write(interrupt_id);
+    pub fn complete(&mut self, irq: u32) {
+        self.claim_complete_register.write(irq);
     }
 }
 
 pub static PLIC: RuntimeInitializedData<Spinlock<Plic>> = RuntimeInitializedData::new();
 
-const UART_INTERRUPT_NUMBER: u32 = 10;
-static VIRTIO_NET_IRQ: AtomicU32 = AtomicU32::new(0);
-static VIRTIO_BLK_IRQS: Spinlock<Vec<u32>> = Spinlock::new(Vec::new());
-static VIRTIO_INPUT_IRQ: AtomicU32 = AtomicU32::new(0);
-
-pub enum InterruptSource {
-    Uart,
-    VirtioNet,
-    VirtioBlock(u32),
-    VirtioInput,
-}
-
-pub fn init_uart_interrupt(cpu_id: CpuId) {
-    info!("Initializing plic uart interrupt");
-
+pub fn init_plic(cpu_id: CpuId) {
+    info!("Initializing PLIC");
     PLIC.initialize(Spinlock::new(Plic::new(PLIC_BASE, cpu_id)));
-
     let mut plic = PLIC.lock();
     plic.set_threshold(0);
-    plic.enable(UART_INTERRUPT_NUMBER);
-    plic.set_priority(UART_INTERRUPT_NUMBER, 1);
 }
 
-pub fn init_virtio_net_interrupt(interrupt_id: u32) {
-    info!("Initializing plic virtio net interrupt (IRQ {interrupt_id})");
-    VIRTIO_NET_IRQ.store(interrupt_id, Ordering::Relaxed);
+pub fn register_interrupt(irq: u32, handler: fn()) {
+    info!("Registering PLIC interrupt (IRQ {irq})");
     let mut plic = PLIC.lock();
-    plic.enable(interrupt_id);
-    plic.set_priority(interrupt_id, 1);
+    plic.enable(irq);
+    plic.set_priority(irq, 1);
+    drop(plic);
+    INTERRUPT_HANDLERS
+        .lock()
+        .push(InterruptHandler { irq, handler });
 }
 
-pub fn init_virtio_block_interrupt(interrupt_id: u32) {
-    info!("Initializing plic virtio block interrupt (IRQ {interrupt_id})");
-    VIRTIO_BLK_IRQS.lock().push(interrupt_id);
-    let mut plic = PLIC.lock();
-    plic.enable(interrupt_id);
-    plic.set_priority(interrupt_id, 1);
-}
-
-pub fn init_virtio_input_interrupt(interrupt_id: u32) {
-    info!("Initializing plic virtio input interrupt (IRQ {interrupt_id})");
-    VIRTIO_INPUT_IRQ.store(interrupt_id, Ordering::Relaxed);
-    let mut plic = PLIC.lock();
-    plic.enable(interrupt_id);
-    plic.set_priority(interrupt_id, 1);
+pub fn dispatch_interrupt(irq: u32) {
+    let handlers = INTERRUPT_HANDLERS.lock();
+    for entry in handlers.iter() {
+        if entry.irq == irq {
+            let handler = entry.handler;
+            drop(handlers);
+            handler();
+            return;
+        }
+    }
+    panic!("Unknown PLIC interrupt source ID {irq}");
 }

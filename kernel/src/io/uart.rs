@@ -82,6 +82,43 @@ impl Uart {
     }
 }
 
+pub fn on_uart_interrupt() {
+    let mut raw_bytes = crate::klibc::array_vec::ArrayVec::<u8, 64>::new();
+    {
+        let uart = QEMU_UART.lock();
+        while let Some(input) = uart.read() {
+            let _ = raw_bytes.push(input);
+        }
+    }
+
+    let mut signal_to_send: Option<u32> = None;
+    let tty = crate::io::tty_device::console_tty();
+    for &byte in &raw_bytes {
+        let result = tty.lock().process_input_byte(byte);
+        if !result.echo.is_empty() {
+            let mut uart = QEMU_UART.lock();
+            for &echo_byte in &result.echo {
+                uart.write_byte(echo_byte);
+            }
+        }
+        if let crate::io::tty_device::InputAction::Signal(sig) = result.action {
+            signal_to_send = Some(sig);
+        }
+    }
+
+    if let Some(sig) = signal_to_send {
+        let fg_pgid = {
+            let mut dev = tty.lock();
+            let pgid = dev.fg_pgid();
+            dev.record_tty_signal(sig, pgid);
+            pgid
+        };
+        crate::cpu::Cpu::with_scheduler(|mut s| {
+            s.send_tty_signal(sig, fg_pgid);
+        });
+    }
+}
+
 impl Write for Uart {
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
         if !self.is_init {
