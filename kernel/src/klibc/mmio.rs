@@ -152,10 +152,16 @@ macro_rules! mmio_struct {
                 )*
             }
 
-            impl $crate::klibc::mmio::MMIO<$name> {
+            #[allow(non_camel_case_types, dead_code)]
+            pub trait ${concat($name, Fields)} {
                 $(
-                    #[allow(dead_code)]
-                    pub const fn $field_name(&self) -> $crate::klibc::mmio::MMIO<$field_type> {
+                    fn $field_name(&self) -> $crate::klibc::mmio::MMIO<$field_type>;
+                )*
+            }
+
+            impl ${concat($name, Fields)} for $crate::klibc::mmio::MMIO<$name> {
+                $(
+                    fn $field_name(&self) -> $crate::klibc::mmio::MMIO<$field_type> {
                         // SAFETY: offset_of! gives the correct byte offset for
                         // this field within the MMIO struct layout.
                         unsafe {
