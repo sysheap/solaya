@@ -166,7 +166,7 @@ pub fn load_elf(
     args: &[&str],
     env: &[&str],
 ) -> Result<LoadedElf, LoaderError> {
-    let mut page_tables = RootPageTableHolder::new_with_kernel_mapping(false);
+    let mut page_tables = RootPageTableHolder::new_with_kernel_mapping(&[]);
 
     let elf_header = elf_file.get_header();
     let mut allocated_pages = BTreeMap::new();
