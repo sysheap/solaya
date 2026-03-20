@@ -1,4 +1,4 @@
-pub mod array_vec;
+pub use sys::klibc::array_vec;
 pub mod big_endian;
 pub mod btreemap;
 pub mod consumable_buffer;
@@ -7,7 +7,7 @@ pub mod leb128;
 pub mod mmio;
 pub mod non_empty_vec;
 pub mod runtime_initialized;
-pub mod sizes;
+pub use sys::klibc::sizes;
 pub mod spinlock;
 pub mod util;
 pub mod writable_buffer;
