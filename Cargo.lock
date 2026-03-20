@@ -239,6 +239,7 @@ dependencies = [
  "elf",
  "gimli 0.33.0",
  "headers",
+ "sys",
  "unwinding",
 ]
 
@@ -251,6 +252,15 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-ident",
+]
+
+[[package]]
+name = "sys"
+version = "0.1.0"
+dependencies = [
+ "arch",
+ "common",
+ "headers",
 ]
 
 [[package]]

@@ -3,6 +3,7 @@ members = [
     "arch",
     "common", "headers",
     "kernel",
+    "sys",
     "userspace",
 ]
 default-members = ["kernel"]
