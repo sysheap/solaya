@@ -14,9 +14,7 @@ use core::{
 };
 use headers::syscall_types::SIGSEGV;
 
-// SAFETY: Called from trap.S assembly; must use C ABI and fixed symbol name.
-#[unsafe(no_mangle)]
-extern "C" fn get_process_satp_value() -> usize {
+pub extern "C" fn get_process_satp_value() -> usize {
     Cpu::with_current_process(|p| p.get_satp_value())
 }
 
@@ -33,11 +31,7 @@ fn assert_sepc_not_in_trap_handler() {
     );
 }
 
-// SAFETY: Called from trap.S assembly; must use C ABI and fixed symbol name.
-// Single entry point for all traps (direct mode stvec). Reads scause to
-// distinguish interrupts from exceptions and dispatches accordingly.
-#[unsafe(no_mangle)]
-extern "C" fn handle_trap() {
+pub extern "C" fn handle_trap() {
     let cause = InterruptCause::from_scause();
     if cause.is_interrupt() {
         match cause.get_exception_code() {
