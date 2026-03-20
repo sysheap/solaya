@@ -1,8 +1,8 @@
 build: build-cargo patch-symbols
 
 patch-symbols:
-    riscv64-unknown-linux-musl-nm --demangle --numeric-sort --line-numbers target/riscv64gc-unknown-none-elf/release/kernel | grep -e ' t ' -e ' T ' > symbols && printf '\0' >> symbols
-    riscv64-unknown-linux-musl-objcopy --update-section symbols=./symbols target/riscv64gc-unknown-none-elf/release/kernel
+    riscv64-unknown-linux-musl-nm --demangle --numeric-sort --line-numbers target/riscv64gc-unknown-none-elf/release/boot | grep -e ' t ' -e ' T ' > symbols && printf '\0' >> symbols
+    riscv64-unknown-linux-musl-objcopy --update-section symbols=./symbols target/riscv64gc-unknown-none-elf/release/boot
 
 build-cargo: build-userspace
     cargo build --release
@@ -27,10 +27,10 @@ build-userspace: build-coreutils
 
 clippy: build-userspace
     cd userspace && cargo clippy -- -D warnings
-    cargo clippy -- -D warnings
+    cargo clippy -p boot -p solaya -- -D warnings
     cargo clippy --manifest-path system-tests/Cargo.toml --target x86_64-unknown-linux-gnu --no-deps -- -D warnings
     cargo clippy --manifest-path mcp-server/Cargo.toml --target x86_64-unknown-linux-gnu --no-deps -- -D warnings
-    cargo clippy --tests -- -D warnings
+    cargo clippy -p solaya --tests -- -D warnings
 
 clean:
     rm -f kernel/compiled_userspace/*
@@ -68,7 +68,7 @@ kani:
     cargo kani -p solaya --output-format terse
 
 unit-test: build-userspace
-    cargo test --release
+    cargo test --release -p solaya
 
 system-test: build
     cargo nextest run --release --manifest-path system-tests/Cargo.toml --target x86_64-unknown-linux-gnu
@@ -84,7 +84,7 @@ deadlock-hunt: build
     i=0; while true; do i=$((i+1)); echo "==> Deadlock hunt iteration $i at $(date)"; SOLAYA_ENABLE_GDB=1 cargo nextest run --release --manifest-path system-tests/Cargo.toml --target x86_64-unknown-linux-gnu --profile deadlock-hunt || break; done
 
 miri: build-cargo
-    MIRIFLAGS="-Zmiri-env-forward=RUST_BACKTRACE -Zmiri-strict-provenance" RUST_BACKTRACE=1 cargo miri test --target riscv64gc-unknown-linux-gnu
+    MIRIFLAGS="-Zmiri-env-forward=RUST_BACKTRACE -Zmiri-strict-provenance" RUST_BACKTRACE=1 cargo miri test -p solaya --target riscv64gc-unknown-linux-gnu
 
 mcp-server:
     cargo build --release --manifest-path mcp-server/Cargo.toml --target x86_64-unknown-linux-gnu
@@ -96,19 +96,19 @@ fetch-deps:
 
 attach:
     @test -f .gdb-port || { echo "Error: .gdb-port not found. Is QEMU running with --gdb?"; exit 1; }
-    {{gdb}} -ex "target remote :$(cat .gdb-port)" $(pwd)/target/riscv64gc-unknown-none-elf/release/kernel
+    {{gdb}} -ex "target remote :$(cat .gdb-port)" $(pwd)/target/riscv64gc-unknown-none-elf/release/boot
 
 debug: build
-    tmux new-session -d '{{debugReleaseCommand}}' \; split-window -v 'while [ ! -f .gdb-port ]; do sleep 0.1; done; {{gdb}} -ex "target remote :$(cat .gdb-port)" $(pwd)/target/riscv64gc-unknown-none-elf/release/kernel' \; attach
+    tmux new-session -d '{{debugReleaseCommand}}' \; split-window -v 'while [ ! -f .gdb-port ]; do sleep 0.1; done; {{gdb}} -ex "target remote :$(cat .gdb-port)" $(pwd)/target/riscv64gc-unknown-none-elf/release/boot' \; attach
 
 debugf FUNC: build
-    tmux new-session -d '{{debugReleaseCommand}}' \; split-window -v 'while [ ! -f .gdb-port ]; do sleep 0.1; done; {{gdb}} -ex "target remote :$(cat .gdb-port)" -ex "hbreak {{FUNC}}" -ex "c" $(pwd)/target/riscv64gc-unknown-none-elf/release/kernel' \; attach
+    tmux new-session -d '{{debugReleaseCommand}}' \; split-window -v 'while [ ! -f .gdb-port ]; do sleep 0.1; done; {{gdb}} -ex "target remote :$(cat .gdb-port)" -ex "hbreak {{FUNC}}" -ex "c" $(pwd)/target/riscv64gc-unknown-none-elf/release/boot' \; attach
 
 debuguf BIN FUNC: build
     tmux new-session -d '{{debugReleaseCommand}}' \; split-window -v 'while [ ! -f .gdb-port ]; do sleep 0.1; done; {{gdb}} -ex "target remote :$(cat .gdb-port)" -ex "hbreak {{FUNC}}" -ex "c" $(pwd)/kernel/compiled_userspace/{{BIN}}' \; attach
 
 disassm: build
-    riscv64-unknown-linux-musl-objdump -d --demangle --disassembler-color=on visualize-jumps=extended-color target/riscv64gc-unknown-none-elf/release/kernel
+    riscv64-unknown-linux-musl-objdump -d --demangle --disassembler-color=on visualize-jumps=extended-color target/riscv64gc-unknown-none-elf/release/boot
 
 addr2line ADDR:
-    riscv64-unknown-linux-musl-addr2line -f -p -i -C -e target/riscv64gc-unknown-none-elf/release/kernel {{ADDR}}
+    riscv64-unknown-linux-musl-addr2line -f -p -i -C -e target/riscv64gc-unknown-none-elf/release/boot {{ADDR}}

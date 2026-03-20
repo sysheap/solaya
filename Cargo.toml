@@ -1,12 +1,13 @@
 [workspace]
 members = [
     "arch",
+    "boot",
     "common", "headers",
     "kernel",
     "sys",
     "userspace",
 ]
-default-members = ["kernel"]
+default-members = ["boot"]
 resolver = "2"
 
 [workspace.package]

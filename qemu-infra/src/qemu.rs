@@ -151,7 +151,7 @@ impl QemuInstance {
         let qmp_socket = options.qmp_socket.clone();
         let network_port = options.apply(&mut command);
 
-        command.arg("target/riscv64gc-unknown-none-elf/release/kernel");
+        command.arg("target/riscv64gc-unknown-none-elf/release/boot");
 
         let mut instance = command.spawn()?;
 
