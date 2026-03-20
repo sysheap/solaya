@@ -1,3 +1,4 @@
+#![allow(unsafe_code)]
 use core::arch::global_asm;
 
 use crate::{

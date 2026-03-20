@@ -1,3 +1,4 @@
+#![allow(unsafe_code)]
 use core::{
     cell::UnsafeCell,
     fmt::Debug,

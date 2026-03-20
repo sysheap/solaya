@@ -1,3 +1,4 @@
+#![allow(unsafe_code)]
 #![cfg_attr(miri, allow(unused_imports))]
 use crate::{println, test::qemu_exit::wait_for_the_end};
 use core::{

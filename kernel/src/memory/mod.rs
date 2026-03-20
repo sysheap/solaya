@@ -1,3 +1,4 @@
+#![allow(unsafe_code)]
 use crate::klibc::Spinlock;
 #[cfg(target_arch = "riscv64")]
 use crate::{device_tree, info};

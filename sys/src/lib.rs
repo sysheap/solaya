@@ -6,6 +6,7 @@
 #![feature(ptr_mask)]
 #![feature(str_from_raw_parts)]
 #![feature(macro_metavar_expr_concat)]
+#![feature(macro_metavar_expr)]
 
 extern crate alloc;
 

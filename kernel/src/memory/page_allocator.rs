@@ -1,3 +1,4 @@
+#![allow(unsafe_code)]
 use super::page::Page;
 use crate::{
     debug,

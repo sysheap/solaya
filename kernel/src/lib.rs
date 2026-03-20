@@ -9,6 +9,7 @@
 #![cfg_attr(kani, feature(maybe_uninit_slice))]
 #![cfg_attr(test, allow(dead_code))]
 #![cfg_attr(test, allow(unused_imports))]
+#![deny(unsafe_code)]
 #![deny(clippy::unwrap_used)]
 #![cfg_attr(not(test), deny(clippy::undocumented_unsafe_blocks))]
 #![deny(clippy::ptr_as_ptr)]
@@ -193,6 +194,7 @@ pub extern "C" fn prepare_for_scheduling() -> ! {
 }
 
 #[cfg(target_arch = "riscv64")]
+#[allow(unsafe_code)]
 fn start_other_harts(current_hart_id: usize, number_of_cpus: usize) {
     // SAFETY: start_hart is defined in boot.S; it initializes the hart and
     // jumps to prepare_for_scheduling.

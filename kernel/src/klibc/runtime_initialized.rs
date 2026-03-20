@@ -1,3 +1,4 @@
+#![allow(unsafe_code)]
 use core::{cell::UnsafeCell, mem::MaybeUninit, ops::Deref, sync::atomic::AtomicBool};
 
 pub struct RuntimeInitializedData<T> {
