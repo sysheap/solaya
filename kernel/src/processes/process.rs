@@ -301,7 +301,7 @@ impl Process {
     pub fn fork_address_space(&self) -> ForkedAddressSpace {
         use super::signal;
 
-        let mut child_pt = RootPageTableHolder::new_with_kernel_mapping(false);
+        let mut child_pt = RootPageTableHolder::new_with_kernel_mapping(&[]);
 
         child_pt.map_userspace(
             signal::TRAMPOLINE_VADDR,

@@ -131,7 +131,7 @@ impl Thread {
 
         let allocated_pages = BTreeMap::new();
 
-        let page_table = RootPageTableHolder::new_with_kernel_mapping(false);
+        let page_table = RootPageTableHolder::new_with_kernel_mapping(&[]);
 
         let register_state = TrapFrame::zero();
 

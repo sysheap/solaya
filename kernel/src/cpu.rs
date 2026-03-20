@@ -51,7 +51,8 @@ impl Cpu {
             "cpu_id {cpu_id} must be less than number_cpus {number_cpus}"
         );
         let kernel_stack = Box::leak(vec![0u8; KERNEL_STACK_SIZE].into_boxed_slice()).as_mut_ptr();
-        let mut page_tables = RootPageTableHolder::new_with_kernel_mapping(true);
+        let mut page_tables =
+            RootPageTableHolder::new_with_kernel_mapping(&crate::memory::kernel_device_mappings());
 
         let stack_start_virtual = (0usize).wrapping_sub(KERNEL_STACK_SIZE);
 

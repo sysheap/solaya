@@ -65,7 +65,8 @@ pub fn create_worker_thread() {
     let stack = alloc::boxed::Box::leak(alloc::vec![0u8; WORKER_STACK_SIZE].into_boxed_slice());
     let stack_top = stack.as_ptr() as usize + WORKER_STACK_SIZE;
 
-    let page_table = RootPageTableHolder::new_with_kernel_mapping(true);
+    let page_table =
+        RootPageTableHolder::new_with_kernel_mapping(&crate::memory::kernel_device_mappings());
 
     let mut register_state = TrapFrame::zero();
     register_state[common::syscalls::trap_frame::Register::sp] = stack_top;

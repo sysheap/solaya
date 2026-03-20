@@ -28,6 +28,36 @@ pub use page::PAGE_SIZE;
 #[cfg(target_arch = "riscv64")]
 pub use runtime_mappings::initialize_runtime_mappings;
 
+#[cfg(target_arch = "riscv64")]
+pub fn kernel_device_mappings() -> alloc::vec::Vec<page_tables::MappingDescription> {
+    use crate::{interrupts::plic, io::TEST_DEVICE_ADDRESS, processes::timer};
+    use alloc::vec::Vec;
+
+    let mut mappings = Vec::new();
+    mappings.push(page_tables::MappingDescription {
+        virtual_address_start: VirtAddr::new(plic::PLIC_BASE),
+        size: plic::PLIC_SIZE,
+        privileges: page_tables::XWRMode::ReadWrite,
+        name: "PLIC",
+    });
+    mappings.push(page_tables::MappingDescription {
+        virtual_address_start: VirtAddr::new(timer::CLINT_BASE),
+        size: timer::CLINT_SIZE,
+        privileges: page_tables::XWRMode::ReadWrite,
+        name: "CLINT",
+    });
+    mappings.push(page_tables::MappingDescription {
+        virtual_address_start: VirtAddr::new(TEST_DEVICE_ADDRESS),
+        size: PAGE_SIZE,
+        privileges: page_tables::XWRMode::ReadWrite,
+        name: "Qemu Test Device",
+    });
+    for mapping in runtime_mappings::get_runtime_mappings() {
+        mappings.push(mapping.clone());
+    }
+    mappings
+}
+
 static PAGE_ALLOCATOR: Spinlock<MetadataPageAllocator> =
     Spinlock::new(MetadataPageAllocator::new());
 
