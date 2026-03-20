@@ -15,8 +15,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!("cargo:rerun-if-changed=../common/");
     println!("cargo:rerun-if-changed=../flake.nix");
     println!("cargo:rerun-if-changed=../flake.lock");
-    println!("cargo:rustc-link-arg-bin=kernel=-Tkernel/qemu.ld");
     println!("cargo::rustc-check-cfg=cfg(kani)");
+    // For unit tests (which produce a binary from this library crate)
+    println!("cargo:rustc-link-arg=-Tkernel/qemu.ld");
 
     if is_miri_execution() || is_kani_execution() {
         return Ok(());

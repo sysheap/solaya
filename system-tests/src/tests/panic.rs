@@ -9,8 +9,7 @@ async fn panic() -> anyhow::Result<()> {
 
     assert!(output.contains("Hello from Panic! Triggering kernel panic"));
     assert!(output.contains("Kernel Page Tables Pagetables at"));
-    assert!(output.contains("<__rustc::rust_begin_unwind"));
-    assert!(output.contains("<asm_handle_trap+"));
+    assert!(output.contains("<solaya::panic::panic_handler"));
 
     Ok(())
 }

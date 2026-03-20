@@ -3,7 +3,7 @@ import signal
 from pathlib import Path
 from pygdbmi.gdbcontroller import GdbController
 
-DEFAULT_KERNEL_PATH = "target/riscv64gc-unknown-none-elf/release/kernel"
+DEFAULT_KERNEL_PATH = "target/riscv64gc-unknown-none-elf/release/boot"
 GDB_PORT_FILE = ".gdb-port"
 
 

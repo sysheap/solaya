@@ -16,9 +16,9 @@ common = { path = "../common" }
 headers = { path = "../headers" }
 sys = { path = "../sys" }
 
-[[bin]]
-name = "kernel"
-path = "src/main.rs"
+[lib]
+name = "solaya"
+path = "src/lib.rs"
 test = true
 
 [dev-dependencies]

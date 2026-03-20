@@ -70,7 +70,7 @@ mod logging;
 mod memory;
 mod net;
 #[cfg(all(target_arch = "riscv64", not(miri)))]
-mod panic;
+pub mod panic;
 mod pci;
 #[cfg(target_arch = "riscv64")]
 mod processes;
