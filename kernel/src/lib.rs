@@ -80,6 +80,34 @@ mod syscalls;
 
 mod test;
 
+// When running unit tests, the kernel is compiled as a standalone binary (not via
+// boot crate). Assembly references these symbols by name, so we need #[no_mangle]
+// wrappers in test mode.
+#[cfg(test)]
+mod test_entry_points {
+    #![allow(unsafe_code)]
+    #[unsafe(no_mangle)]
+    extern "C" fn kernel_init(hart_id: usize, dt: *const ()) -> ! {
+        crate::kernel_init(hart_id, dt)
+    }
+    #[unsafe(no_mangle)]
+    extern "C" fn prepare_for_scheduling() -> ! {
+        crate::prepare_for_scheduling()
+    }
+    #[unsafe(no_mangle)]
+    extern "C" fn handle_trap() {
+        crate::interrupts::trap::handle_trap()
+    }
+    #[unsafe(no_mangle)]
+    extern "C" fn get_process_satp_value() -> usize {
+        crate::interrupts::trap::get_process_satp_value()
+    }
+    #[unsafe(no_mangle)]
+    fn asm_panic_rust() {
+        crate::asm::asm_panic_rust()
+    }
+}
+
 #[macro_use]
 extern crate alloc;
 
