@@ -223,13 +223,7 @@ pub extern "C" fn prepare_for_scheduling() -> ! {
 }
 
 #[cfg(target_arch = "riscv64")]
-#[allow(unsafe_code)]
 fn start_other_harts(current_hart_id: usize, number_of_cpus: usize) {
-    // SAFETY: start_hart is defined in boot.S; it initializes the hart and
-    // jumps to prepare_for_scheduling.
-    unsafe extern "C" {
-        fn start_hart();
-    }
     for hart_id in 0..number_of_cpus {
         if hart_id == current_hart_id {
             continue;
@@ -238,7 +232,7 @@ fn start_other_harts(current_hart_id: usize, number_of_cpus: usize) {
         let cpu_struct = Cpu::init(cpu::CpuId::from_hart_id(hart_id), number_of_cpus);
         arch::sbi::extensions::hart_state_extension::start_hart(
             hart_id,
-            start_hart as *const () as usize,
+            arch::linker_symbols::start_hart_addr(),
             cpu_struct as usize,
         )
         .assert_success();

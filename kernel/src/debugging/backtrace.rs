@@ -63,10 +63,10 @@ impl<'a> Backtrace<'a> {
             eh_frame_start, eh_frame_size
         );
 
-        // SAFETY: The eh_frame section is mapped by the kernel page tables.
-        // Start and size come from linker-defined symbols.
-        let eh_frame =
-            unsafe { core::slice::from_raw_parts(eh_frame_start.as_ptr(), eh_frame_size) };
+        let eh_frame = sys::memory::linker_region_as_slice(
+            sys::memory::VirtAddr::new(eh_frame_start.as_usize()),
+            eh_frame_size,
+        );
 
         let eh_frame_parser = EhFrameParser::new(eh_frame);
         let eh_frames = eh_frame_parser.iter(eh_frame_start.as_usize());
