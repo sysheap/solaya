@@ -123,6 +123,17 @@ pub trait ByteInterpretable {
     }
 }
 
+pub fn read_from_bytes<T: Copy>(data: &[u8]) -> T {
+    assert!(
+        data.len() >= core::mem::size_of::<T>(),
+        "read_from_bytes: need {} bytes, got {}",
+        core::mem::size_of::<T>(),
+        data.len()
+    );
+    // SAFETY: Length checked above. read_unaligned handles any alignment.
+    unsafe { core::ptr::read_unaligned(data.as_ptr().cast::<T>()) }
+}
+
 pub fn is_power_of_2_or_zero<DataType>(value: DataType) -> bool
 where
     DataType:

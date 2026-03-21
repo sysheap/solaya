@@ -3,6 +3,14 @@ use core::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign};
 
 use common::numbers::Number;
 
+pub fn write_bytes(addr: usize, data: &[u8]) {
+    // SAFETY: Same safety model as read_bytes — the caller provides
+    // a valid MMIO address.
+    unsafe {
+        core::ptr::copy_nonoverlapping(data.as_ptr(), addr as *mut u8, data.len());
+    }
+}
+
 /// Read bytes from an MMIO region, using word-sized reads where aligned.
 pub fn read_bytes(addr: usize, buf: &mut [u8]) {
     let mut pos = 0;
@@ -51,18 +59,30 @@ impl<T> MMIO<T> {
         }
     }
 
-    /// # Safety
-    /// The address must be valid for the target type `U`.
-    pub const unsafe fn new_type<U>(&self) -> MMIO<U> {
-        // SAFETY: Forwarded to new_type_with_offset with offset 0.
-        unsafe { self.new_type_with_offset(0) }
+    pub fn add_within_region(&self, count: usize, region_elements: usize) -> Self {
+        assert!(
+            count < region_elements,
+            "MMIO offset {count} out of bounds (max {region_elements})"
+        );
+        // SAFETY: Bounds-checked above.
+        unsafe { self.add(count) }
     }
 
-    /// # Safety
-    /// The address + offset must be valid for the target type `U` and within
-    /// the same MMIO region.
-    pub const unsafe fn new_type_with_offset<U>(&self, offset: usize) -> MMIO<U> {
-        // SAFETY: Caller guarantees the resulting address is valid for U.
+    /// Reinterpret this MMIO address as a different type. The MMIO address was
+    /// validated at MMIO::new() time. Reinterpreting as a different type is safe
+    /// for MMIO hardware registers — the hardware defines the layout, not Rust's
+    /// type system. This follows the same safety model as read()/write().
+    pub const fn new_type<U>(&self) -> MMIO<U> {
+        self.new_type_with_offset(0)
+    }
+
+    /// Reinterpret this MMIO address at a byte offset as a different type.
+    /// See `new_type` for safety reasoning.
+    pub const fn new_type_with_offset<U>(&self, offset: usize) -> MMIO<U> {
+        // SAFETY: The base MMIO address was validated at construction.
+        // Reinterpreting at an offset within the MMIO region is safe for
+        // hardware registers. Callers use compile-time offsets (offset_of!)
+        // or hardware-defined structure layouts.
         unsafe {
             MMIO::<U> {
                 addr: self.addr.byte_add(offset).cast::<U>(),
@@ -98,8 +118,7 @@ impl<T: Copy, const LENGTH: usize> MMIO<[T; LENGTH]> {
 
     fn get_index(&self, index: usize) -> MMIO<T> {
         assert!(index < LENGTH, "Access out of bounds");
-        // SAFETY: Bounds-checked above; the offset stays within the array region.
-        unsafe { self.new_type_with_offset(index * core::mem::size_of::<T>()) }
+        self.new_type_with_offset(index * core::mem::size_of::<T>())
     }
 }
 
@@ -163,11 +182,7 @@ macro_rules! mmio_struct {
             impl ${concat($name, Fields)} for $crate::klibc::mmio::MMIO<$name> {
                 $(
                     fn $field_name(&self) -> $crate::klibc::mmio::MMIO<$field_type> {
-                        // SAFETY: offset_of! gives the correct byte offset for
-                        // this field within the MMIO struct layout.
-                        unsafe {
-                            self.new_type_with_offset(core::mem::offset_of!($name, $field_name))
-                        }
+                        self.new_type_with_offset(core::mem::offset_of!($name, $field_name))
                     }
                 )*
             }

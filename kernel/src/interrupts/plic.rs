@@ -1,4 +1,3 @@
-#![allow(unsafe_code)]
 use crate::{
     info,
     klibc::{MMIO, Spinlock, runtime_initialized::RuntimeInitializedData},
@@ -36,24 +35,17 @@ impl Plic {
     fn enable(&mut self, interrupt_id: u32) {
         let word_offset = interrupt_id / 32;
         let bit = interrupt_id % 32;
-        // SAFETY: Each 32-bit word in the enable register array covers 32
-        // interrupt IDs. word_offset selects the correct word within the
-        // PLIC enable register region.
-        unsafe {
-            let mut reg = self.enable_register.add(word_offset as usize);
-            reg |= 1 << bit;
-        }
+        let mut reg = self
+            .enable_register
+            .add_within_region(word_offset as usize, PLIC_SIZE / 4);
+        reg |= 1 << bit;
     }
 
     fn set_priority(&mut self, interrupt_id: u32, priority: u32) {
         assert!(priority <= 7);
-        // SAFETY: Each interrupt source has a 4-byte priority register at
-        // base + 4*interrupt_id, which is within the PLIC MMIO region.
-        unsafe {
-            self.priority_register_base
-                .add(interrupt_id as usize)
-                .write(priority);
-        }
+        self.priority_register_base
+            .add_within_region(interrupt_id as usize, PLIC_SIZE / 4)
+            .write(priority);
     }
 
     fn set_threshold(&mut self, threshold: u32) {

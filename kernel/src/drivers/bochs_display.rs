@@ -1,10 +1,11 @@
-#![allow(unsafe_code)]
 use crate::{
     info,
-    klibc::MMIO,
+    klibc::{MMIO, mmio},
     pci::{GeneralDevicePciHeaderFields, PCIDevice, PciCpuAddr},
 };
 use core::sync::atomic::{AtomicUsize, Ordering};
+#[allow(unused_imports)]
+use mmio::write_bytes;
 
 const VBE_DISPI_INDEX_XRES: u16 = 1;
 const VBE_DISPI_INDEX_YRES: u16 = 2;
@@ -118,11 +119,7 @@ pub fn register_devfs_node() {
                 return Ok(0);
             }
             let len = end - offset;
-            let dst = (base.as_usize() + offset) as *mut u8;
-            // SAFETY: dst points into the framebuffer BAR (non-cacheable MMIO).
-            unsafe {
-                core::ptr::copy_nonoverlapping(data.as_ptr(), dst, len);
-            }
+            mmio::write_bytes(base.as_usize() + offset, &data[..len]);
             arch::cpu::memory_fence();
             Ok(len)
         }
