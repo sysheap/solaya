@@ -15,6 +15,7 @@ pub mod io;
 pub mod klibc;
 pub mod logging;
 pub mod memory;
+pub mod panic_support;
 
 pub use klibc::{
     mmio::MMIO,

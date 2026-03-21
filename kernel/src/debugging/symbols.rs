@@ -1,4 +1,3 @@
-#![allow(unsafe_code)]
 use crate::{
     debug, info, klibc::runtime_initialized::RuntimeInitializedData,
     memory::linker_information::LinkerInformation,
@@ -8,9 +7,7 @@ pub static THE: RuntimeInitializedData<&'static str> = RuntimeInitializedData::n
 
 pub fn init() {
     let symbols_start = LinkerInformation::__start_symbols();
-    // SAFETY: The symbols section is null-terminated by the build process
-    // (objcopy --update-section appends a NUL byte).
-    let cstr = unsafe { core::ffi::CStr::from_ptr(symbols_start.as_ptr()) };
+    let cstr = sys::klibc::util::cstr_from_null_terminated_ptr(symbols_start.as_ptr());
     let str = cstr.to_str().expect("Symbols must be UTF-8");
     info!("Initialized symbols ({} bytes)", str.len());
     THE.initialize(str);

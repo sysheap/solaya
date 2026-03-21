@@ -118,6 +118,15 @@ pub trait ByteInterpretable {
     }
 }
 
+pub fn cstr_from_null_terminated_ptr(ptr: *const core::ffi::c_char) -> &'static core::ffi::CStr {
+    assert!(
+        !ptr.is_null(),
+        "cstr_from_null_terminated_ptr: null pointer"
+    );
+    // SAFETY: Caller guarantees ptr points to a null-terminated string.
+    unsafe { core::ffi::CStr::from_ptr(ptr) }
+}
+
 pub fn as_byte_slice<T: ?Sized>(value: &T) -> &[u8] {
     // SAFETY: It is always safe to interpret an allocated struct as bytes.
     unsafe {
