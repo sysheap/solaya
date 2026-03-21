@@ -21,3 +21,11 @@ linker_symbol_stub!(__stop_bss);
 linker_symbol_stub!(__start_kernel_stack);
 linker_symbol_stub!(__stop_kernel_stack);
 linker_symbol_stub!(__start_symbols);
+
+pub fn asm_handle_trap_addr() -> usize {
+    DUMMY_ADDR
+}
+
+pub fn start_hart_addr() -> usize {
+    DUMMY_ADDR
+}

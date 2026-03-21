@@ -1,4 +1,3 @@
-#![allow(unsafe_code)]
 use crate::{
     cpu::Cpu,
     debug, info,
@@ -21,11 +20,7 @@ pub extern "C" fn get_process_satp_value() -> usize {
 
 fn assert_sepc_not_in_trap_handler() {
     let sepc = arch::cpu::read_sepc();
-    // SAFETY: asm_handle_trap is defined in trap.S
-    unsafe extern "C" {
-        fn asm_handle_trap();
-    }
-    let trap_base = asm_handle_trap as *const () as usize;
+    let trap_base = arch::linker_symbols::asm_handle_trap_addr();
     assert!(
         !(trap_base..trap_base + 64).contains(&sepc),
         "BUG: sepc {sepc:#x} points into trap handler {trap_base:#x}"
