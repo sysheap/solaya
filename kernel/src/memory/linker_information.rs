@@ -1,29 +1,13 @@
-#![allow(unsafe_code)]
 macro_rules! getter_address {
     ($name:ident) => {
-        #[cfg(all(target_arch = "riscv64", not(miri)))]
         pub fn $name() -> VirtAddr {
-            // SAFETY: These symbols are defined by the linker script. We only
-            // take their address (never read their value), which is always safe.
-            unsafe extern "C" {
-                static $name: usize;
-            }
-            VirtAddr::new(core::ptr::addr_of!($name) as usize)
-        }
-        #[cfg(any(not(target_arch = "riscv64"), miri))]
-        pub fn $name() -> VirtAddr {
-            VirtAddr::new($crate::klibc::util::align_down(
-                u32::MAX as usize,
-                $crate::memory::PAGE_SIZE,
-            ))
+            VirtAddr::new(arch::linker_symbols::$name())
         }
     };
 }
 
 macro_rules! getter {
     ($name:ident) => {
-        // The linker generates magic variables which marks section start and end in the form
-        // __start_SECTION and __stop_SECTION
         getter_address!(${concat(__start_, $name)});
         getter_address!(${concat(__stop_, $name)});
         pub fn ${concat($name, _size)}() -> usize {
@@ -56,11 +40,8 @@ macro_rules! sections {
         impl LinkerInformation {
             $(getter!($name);)*
 
-            // We don't know the end of the symbols yet because it
-            // will be binary patched
             getter_address!(__start_symbols);
 
-            // The heap will start directly page aligned after the symbols
             pub fn __start_heap() -> VirtAddr {
                 VirtAddr::new(align_up(debugging::symbols::symbols_end(), PAGE_SIZE))
             }
