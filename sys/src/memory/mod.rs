@@ -1,5 +1,5 @@
 pub mod address;
+pub mod page;
 
 pub use address::{PhysAddr, VirtAddr};
-
-pub const PAGE_SIZE: usize = 4096;
+pub use page::{PAGE_SIZE, Page, Pages, PagesAsSlice, PinnedHeapPages};
