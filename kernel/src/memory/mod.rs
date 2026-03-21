@@ -1,4 +1,3 @@
-#![allow(unsafe_code)]
 use crate::klibc::Spinlock;
 #[cfg(target_arch = "riscv64")]
 use crate::{device_tree, info};
@@ -7,7 +6,7 @@ use self::{
     page::Page,
     page_allocator::{MetadataPageAllocator, PageAllocator},
 };
-use core::{mem::MaybeUninit, ops::Range, ptr::NonNull, slice::from_raw_parts_mut};
+use core::{ops::Range, ptr::NonNull};
 #[cfg(target_arch = "riscv64")]
 use linker_information::LinkerInformation;
 
@@ -108,11 +107,10 @@ pub fn init_page_allocator(reserved_areas: &[Range<*const u8>]) {
         crate::klibc::util::PrintMemorySizeHumanFriendly(heap_size)
     );
 
-    // SAFETY: The heap region [heap_start, heap_start+heap_size) is reserved
-    // by the linker script and not used by any other code. MaybeUninit<u8>
-    // has no validity requirements.
-    let memory =
-        unsafe { from_raw_parts_mut(heap_start.as_mut_ptr::<MaybeUninit<u8>>(), heap_size) };
+    let memory = sys::memory::linker_region_as_uninit_slice(
+        sys::memory::VirtAddr::new(heap_start.as_usize()),
+        heap_size,
+    );
     PAGE_ALLOCATOR.lock().init(memory, reserved_areas);
 }
 
