@@ -46,10 +46,6 @@ impl VirtAddr {
         self.0 as *const T
     }
 
-    pub const fn as_mut_ptr<T>(self) -> *mut T {
-        self.0 as *mut T
-    }
-
     pub const fn is_page_aligned(self) -> bool {
         self.0 & 0xFFF == 0
     }
