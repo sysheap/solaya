@@ -1,4 +1,3 @@
-#![allow(unsafe_code)]
 use super::big_endian::BigEndian;
 use crate::{assert::static_assert_size, debug, klibc::util::UsizeExt};
 
@@ -283,10 +282,7 @@ impl<'a> ElfFile<'a> {
     }
 
     pub fn get_header(&self) -> &ElfHeader {
-        assert!(self.data.len() >= core::mem::size_of::<ElfHeader>());
-        // SAFETY: Size checked above; ElfFile is only created after
-        // check_validity passes, which verifies magic and header size.
-        unsafe { &*self.data.as_ptr().cast::<ElfHeader>() }
+        super::util::ref_from_bytes(self.data)
     }
 
     pub fn get_program_headers(&self) -> &[ElfProgramHeaderEntry] {
@@ -304,16 +300,11 @@ impl<'a> ElfFile<'a> {
                 <= self.data.len()
         );
 
-        // SAFETY: Bounds checked by the assert above; entry_size matches
-        // the struct size. The ELF data is valid (verified at construction).
-        let data = unsafe {
-            let program_header_pointer = self
-                .data
-                .as_ptr()
-                .byte_add(position_program_header.as_usize())
-                .cast::<ElfProgramHeaderEntry>();
-            core::slice::from_raw_parts(program_header_pointer, number_of_entries as usize)
-        };
+        let data = super::util::slice_from_bytes(
+            self.data,
+            position_program_header.as_usize(),
+            number_of_entries as usize,
+        );
 
         debug!("Program headers: {:#x?}", data);
 
@@ -337,17 +328,7 @@ impl<'a> ElfFile<'a> {
             return &[];
         }
         assert_eq!(entry_size, core::mem::size_of::<ElfSectionHeader>());
-        assert!(offset + entry_size * count <= self.data.len());
-
-        // SAFETY: Bounds checked above; entry_size matches struct size.
-        unsafe {
-            let ptr = self
-                .data
-                .as_ptr()
-                .byte_add(offset)
-                .cast::<ElfSectionHeader>();
-            core::slice::from_raw_parts(ptr, count)
-        }
+        super::util::slice_from_bytes(self.data, offset, count)
     }
 
     fn get_section_name(&self, section: &ElfSectionHeader) -> Option<&'a str> {
@@ -388,13 +369,7 @@ impl<'a> ElfFile<'a> {
 
         let sym_offset = symtab.sh_offset.as_usize();
         let sym_count = symtab.sh_size.as_usize() / core::mem::size_of::<Elf64Sym>();
-        assert!(sym_offset + symtab.sh_size.as_usize() <= self.data.len());
-
-        // SAFETY: Bounds checked above; Elf64Sym is repr(C) and entsize matches.
-        let symbols = unsafe {
-            let ptr = self.data.as_ptr().byte_add(sym_offset).cast::<Elf64Sym>();
-            core::slice::from_raw_parts(ptr, sym_count)
-        };
+        let symbols: &[Elf64Sym] = super::util::slice_from_bytes(self.data, sym_offset, sym_count);
 
         let mut best: Option<(&Elf64Sym, usize)> = None;
         for sym in symbols {
@@ -429,9 +404,7 @@ impl<'a> ElfFile<'a> {
             return Some(ElfParseErrors::FileTooShort);
         }
 
-        // SAFETY: Size checked above (FileTooShort check). We only read the
-        // header to validate fields before constructing ElfFile.
-        let header = unsafe { &*data.as_ptr().cast::<ElfHeader>() };
+        let header: &ElfHeader = super::util::ref_from_bytes(data);
 
         if header.magic_number.get() != ELF_MAGIC_NUMBER {
             return Some(ElfParseErrors::MagicNumberWrong);

@@ -1,4 +1,3 @@
-#![allow(unsafe_code)]
 use core::{
     fmt::Display,
     ops::{BitAnd, BitAndAssign, BitOrAssign, Not, Rem, Shl, Shr, Sub},
@@ -84,6 +83,9 @@ pub const fn minimum_amount_of_pages(value: usize) -> usize {
     align_up(value, PAGE_SIZE) / PAGE_SIZE
 }
 
+// Re-export unsafe utility functions from sys
+pub use sys::klibc::util::{read_from_bytes, ref_from_bytes, slice_from_bytes};
+
 pub trait BufferExtension {
     fn interpret_as<T>(&self) -> &T;
     fn split_as<T>(&self) -> (&T, &[u8]);
@@ -91,18 +93,7 @@ pub trait BufferExtension {
 
 impl BufferExtension for [u8] {
     fn interpret_as<T>(&self) -> &T {
-        // SAFETY: Size and alignment are verified by assertions. The lifetime
-        // of the returned reference is tied to &self.
-        unsafe {
-            assert!(self.len() >= core::mem::size_of::<T>());
-            let ptr: *const T = self.as_ptr().cast::<T>();
-            assert!(
-                ptr.is_aligned(),
-                "pointer not aligned for {}",
-                core::any::type_name::<T>()
-            );
-            &*ptr
-        }
+        ref_from_bytes(self)
     }
 
     fn split_as<T>(&self) -> (&T, &[u8]) {
@@ -113,25 +104,8 @@ impl BufferExtension for [u8] {
 
 pub trait ByteInterpretable {
     fn as_slice(&self) -> &[u8] {
-        // SAFETY: It is always safe to interpret a allocated struct as bytes
-        unsafe {
-            core::slice::from_raw_parts(
-                (self as *const Self).cast::<u8>(),
-                core::mem::size_of_val(self),
-            )
-        }
+        sys::klibc::util::as_byte_slice(self)
     }
-}
-
-pub fn read_from_bytes<T: Copy>(data: &[u8]) -> T {
-    assert!(
-        data.len() >= core::mem::size_of::<T>(),
-        "read_from_bytes: need {} bytes, got {}",
-        core::mem::size_of::<T>(),
-        data.len()
-    );
-    // SAFETY: Length checked above. read_unaligned handles any alignment.
-    unsafe { core::ptr::read_unaligned(data.as_ptr().cast::<T>()) }
 }
 
 pub fn is_power_of_2_or_zero<DataType>(value: DataType) -> bool
@@ -354,6 +328,7 @@ mod kani_proofs {
 }
 
 #[cfg(test)]
+#[allow(unsafe_code)]
 mod tests {
     use crate::memory::PAGE_SIZE;
 

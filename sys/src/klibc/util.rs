@@ -118,6 +118,40 @@ pub trait ByteInterpretable {
     }
 }
 
+pub fn as_byte_slice<T: ?Sized>(value: &T) -> &[u8] {
+    // SAFETY: It is always safe to interpret an allocated struct as bytes.
+    unsafe {
+        core::slice::from_raw_parts(
+            (value as *const T).cast::<u8>(),
+            core::mem::size_of_val(value),
+        )
+    }
+}
+
+pub fn ref_from_bytes<T>(data: &[u8]) -> &T {
+    assert!(data.len() >= core::mem::size_of::<T>());
+    let ptr = data.as_ptr().cast::<T>();
+    assert!(ptr.is_aligned(), "ref_from_bytes: pointer not aligned");
+    // SAFETY: Size and alignment checked above.
+    unsafe { &*ptr }
+}
+
+pub fn slice_from_bytes<T>(data: &[u8], offset: usize, count: usize) -> &[T] {
+    let elem_size = core::mem::size_of::<T>();
+    let total = elem_size * count;
+    assert!(
+        offset + total <= data.len(),
+        "slice_from_bytes: offset {} + total {} > len {}",
+        offset,
+        total,
+        data.len()
+    );
+    let ptr = data[offset..].as_ptr().cast::<T>();
+    assert!(ptr.is_aligned(), "slice_from_bytes: pointer not aligned");
+    // SAFETY: Bounds and alignment checked above.
+    unsafe { core::slice::from_raw_parts(ptr, count) }
+}
+
 pub fn read_from_bytes<T: Copy>(data: &[u8]) -> T {
     assert!(
         data.len() >= core::mem::size_of::<T>(),
