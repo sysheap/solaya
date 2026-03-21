@@ -1,7 +1,7 @@
 use crate::{
     info,
     klibc::{MMIO, mmio},
-    pci::{GeneralDevicePciHeaderFields, PCIDevice, PciCpuAddr},
+    pci::{GeneralDevicePciHeaderExt, GeneralDevicePciHeaderFields, PCIDevice, PciCpuAddr},
 };
 use core::sync::atomic::{AtomicUsize, Ordering};
 #[allow(unused_imports)]

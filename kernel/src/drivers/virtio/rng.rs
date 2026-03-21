@@ -14,7 +14,9 @@ use crate::{
     },
     info,
     klibc::{MMIO, Spinlock, util::is_power_of_2_or_zero},
-    pci::{GeneralDevicePciHeaderFields, PCIDevice, PciCapabilityFields},
+    pci::{
+        GeneralDevicePciHeaderExt, GeneralDevicePciHeaderFields, PCIDevice, PciCapabilityFields,
+    },
 };
 
 const QUEUE_SIZE: usize = 0x10;

@@ -18,7 +18,9 @@ use crate::{
         runtime_initialized::RuntimeInitializedData,
         util::{ByteInterpretable, is_power_of_2_or_zero},
     },
-    pci::{GeneralDevicePciHeaderFields, PCIDevice, PciCapabilityFields},
+    pci::{
+        GeneralDevicePciHeaderExt, GeneralDevicePciHeaderFields, PCIDevice, PciCapabilityFields,
+    },
 };
 
 const QUEUE_SIZE: usize = 32;
