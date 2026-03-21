@@ -29,6 +29,17 @@ pub fn cpu_id() -> CpuId {
     CpuId::from_hart_id(0)
 }
 
+/// Disable interrupts and halt forever. Used for shutdown paths.
+pub fn disable_interrupts_and_halt() -> ! {
+    // SAFETY: We are shutting down — disabling interrupts prevents further preemption.
+    unsafe {
+        arch::cpu::disable_global_interrupts();
+    }
+    loop {
+        arch::cpu::wait_for_interrupt();
+    }
+}
+
 /// Layout prefix of the per-CPU struct. The kernel's Cpu struct must have
 /// these fields in exactly this order as its first fields (via #[repr(C)]).
 #[repr(C)]
