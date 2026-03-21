@@ -24,6 +24,10 @@ pub const TRAP_FRAME_OFFSET: usize = offset_of!(Cpu, trap_frame);
 
 pub const KERNEL_PAGE_TABLES_SATP_OFFSET: usize = offset_of!(Cpu, kernel_page_tables_satp_value);
 
+// repr(C) is required: sys::cpu::CpuIdLayout reads cpu_id at a fixed offset
+// from the sscratch pointer, and assembly uses TRAP_FRAME_OFFSET /
+// KERNEL_PAGE_TABLES_SATP_OFFSET constants computed from this struct.
+#[repr(C)]
 pub struct Cpu {
     kernel_page_tables_satp_value: usize,
     trap_frame: TrapFrame,
