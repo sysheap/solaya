@@ -117,6 +117,7 @@ pub fn default_action(sig: u32) -> DefaultAction {
     }
 }
 
+#[derive(Clone, Copy)]
 #[repr(C)]
 struct SignalFrame {
     saved_regs: [usize; 32],
@@ -255,9 +256,7 @@ pub fn restore_signal_frame(thread: &mut Thread) -> Result<(), headers::errno::E
         .lock()
         .read_userspace_slice(&read_ptr, SIGNAL_FRAME_SIZE)?;
     assert!(bytes.len() == SIGNAL_FRAME_SIZE);
-    // SAFETY: SignalFrame is repr(C) with only primitive fields, valid for any bit pattern.
-    let frame: SignalFrame =
-        unsafe { core::ptr::read_unaligned(bytes.as_ptr().cast::<SignalFrame>()) };
+    let frame: SignalFrame = crate::klibc::util::read_from_bytes(&bytes);
 
     *thread.get_register_state_mut().gp_registers_mut() = frame.saved_regs;
     *thread.get_register_state_mut().fp_registers_mut() = frame.saved_fregs;

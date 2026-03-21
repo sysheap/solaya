@@ -1,19 +1,16 @@
-#![allow(unsafe_code)]
 use crate::processes::{process::ProcessRef, userspace_ptr::UserspacePtr};
 use alloc::vec::Vec;
 use common::pointer::Pointer;
 use core::marker::PhantomData;
 use headers::errno::Errno;
 
-// SAFETY: We can safely send 'just' an usize value
-// Validation happens later anyways
-unsafe impl<T> Send for LinuxUserspaceArg<T> {}
-
 #[derive(Clone)]
 pub struct LinuxUserspaceArg<T> {
     arg: usize,
     process: ProcessRef,
-    phantom: PhantomData<T>,
+    // fn() -> T is always Send, unlike PhantomData<T> which inherits T's bounds.
+    // LinuxUserspaceArg stores only a usize, not an actual T.
+    phantom: PhantomData<fn() -> T>,
 }
 
 impl<T> LinuxUserspaceArg<T> {
@@ -34,14 +31,14 @@ impl<T> LinuxUserspaceArg<T> {
     }
 }
 
-impl<T> LinuxUserspaceArg<*const T> {
+impl<T: Copy> LinuxUserspaceArg<*const T> {
     pub fn validate_ptr(&self) -> Result<T, Errno> {
         self.process
             .with_lock(|p| p.read_userspace_ptr(&self.into()))
     }
 }
 
-impl<T> LinuxUserspaceArg<Option<*const T>> {
+impl<T: Copy> LinuxUserspaceArg<Option<*const T>> {
     pub fn validate_ptr(&self) -> Result<Option<T>, Errno> {
         if self.arg == 0 {
             return Ok(None);

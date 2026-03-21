@@ -1,10 +1,10 @@
-#![allow(unsafe_code)]
 use alloc::{boxed::Box, collections::BTreeMap, vec::Vec};
 
 use crate::{
     debug,
     klibc::{MMIO, non_empty_vec::NonEmptyVec},
 };
+use sys::klibc::deconstructed_vec::DeconstructedVec;
 
 /// A virtio queue.
 /// Using Box to prevent content from being moved.
@@ -17,37 +17,6 @@ pub struct VirtQueue<const QUEUE_SIZE: usize> {
     device_area: Box<virtq_used<QUEUE_SIZE>>,
     queue_index: u16,
     notify: Option<MMIO<u16>>,
-}
-
-#[allow(dead_code)]
-struct DeconstructedVec {
-    ptr: *mut u8,
-    length: usize,
-    capacity: usize,
-}
-
-// SAFETY: A deconstructed Vec<u8> can be send to other threads just like Vec<u8>
-unsafe impl Send for DeconstructedVec {}
-
-impl DeconstructedVec {
-    fn from_vec(vec: Vec<u8>) -> Self {
-        let (ptr, length, capacity) = vec.into_raw_parts();
-        Self {
-            ptr,
-            length,
-            capacity,
-        }
-    }
-
-    fn into_vec_with_len(self, length: usize) -> Vec<u8> {
-        assert!(
-            length <= self.capacity,
-            "Length must be smaller or equal capacity"
-        );
-        // SAFETY: ptr/capacity were obtained from Vec::into_raw_parts in
-        // from_vec. length is bounds-checked above.
-        unsafe { Vec::from_raw_parts(self.ptr, length, self.capacity) }
-    }
 }
 
 pub enum BufferDirection {
@@ -222,11 +191,11 @@ impl<const QUEUE_SIZE: usize> VirtQueue<QUEUE_SIZE> {
                     .expect("There must be an outstanding buffer for this id");
 
                 let buf_len = if is_device_writable {
-                    let len = core::cmp::min(remaining_written, stored.length);
-                    remaining_written = remaining_written.saturating_sub(stored.length);
+                    let len = core::cmp::min(remaining_written, stored.length());
+                    remaining_written = remaining_written.saturating_sub(stored.length());
                     len
                 } else {
-                    stored.length
+                    stored.length()
                 };
 
                 let buf = stored.into_vec_with_len(buf_len);

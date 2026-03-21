@@ -1,4 +1,3 @@
-#![allow(unsafe_code)]
 use alloc::vec::Vec;
 use core::net::Ipv4Addr;
 
@@ -16,7 +15,7 @@ pub const FLAG_SYN: u16 = headers::socket::TH_SYN as u16;
 pub const FLAG_RST: u16 = headers::socket::TH_RST as u16;
 pub const FLAG_ACK: u16 = headers::socket::TH_ACK as u16;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 #[repr(C)]
 pub struct TcpHeader {
     source_port: BigEndian<u16>,
@@ -119,10 +118,7 @@ impl TcpHeader {
             return Err(TcpParseError::PacketTooSmall);
         }
 
-        // SAFETY: data.len() >= HEADER_SIZE verified above. read_unaligned
-        // handles arbitrary alignment. TcpHeader is repr(C) with no padding.
-        let tcp_header: TcpHeader =
-            unsafe { core::ptr::read_unaligned(data.as_ptr().cast::<TcpHeader>()) };
+        let tcp_header: TcpHeader = crate::klibc::util::read_from_bytes(data);
 
         let data_offset = usize::from(tcp_header.data_offset_and_flags.get() >> 12);
         if data_offset < 5 {

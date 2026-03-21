@@ -1,25 +1,23 @@
-#![allow(unsafe_code)]
 use common::pointer::Pointer;
 use headers::errno::Errno;
 
 use crate::{klibc::SpinlockGuard, processes::process::Process};
-
-// SAFETY: Userspace pointer can safely moved between Kernel threads.
-unsafe impl<PTR: Pointer> Send for UserspacePtr<PTR> {}
+use sys::klibc::send_sync::AssertSendSync;
 
 #[derive(Debug)]
 pub struct UserspacePtr<PTR: Pointer> {
-    /// Pointer is a userspace pointer
-    ptr: PTR,
+    ptr: AssertSendSync<PTR>,
 }
 
 impl<PTR: Pointer> UserspacePtr<PTR> {
     pub fn new(ptr: PTR) -> Self {
-        Self { ptr }
+        Self {
+            ptr: AssertSendSync(ptr),
+        }
     }
 
-    pub unsafe fn get(&self) -> PTR {
-        self.ptr
+    pub fn get(&self) -> PTR {
+        *self.ptr
     }
 }
 
@@ -33,8 +31,10 @@ impl<T> UserspacePtr<*mut T> {
     }
 }
 
-// SAFETY: Userspace pointer can safely moved between Kernel threads.
-unsafe impl<T> Send for ContainsUserspacePtr<T> {}
+pub struct ContainsUserspacePtr<T>(pub AssertSendSync<T>);
 
-#[derive(Debug)]
-pub struct ContainsUserspacePtr<T>(pub T);
+impl<T: core::fmt::Debug> core::fmt::Debug for ContainsUserspacePtr<T> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        self.0.fmt(f)
+    }
+}

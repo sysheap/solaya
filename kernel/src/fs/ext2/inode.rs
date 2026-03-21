@@ -1,4 +1,3 @@
-#![allow(unsafe_code)]
 use alloc::{vec, vec::Vec};
 
 use crate::{drivers::virtio::block, klibc::util::BufferExtension};
@@ -27,15 +26,7 @@ pub async fn read_inode(
         .expect("inode read must succeed");
     assert!(n == inode_size, "short inode read");
 
-    // Copy into a properly aligned Ext2Inode
-    let mut inode = core::mem::MaybeUninit::<Ext2Inode>::uninit();
-    let inode_bytes = core::mem::size_of::<Ext2Inode>();
-    // SAFETY: We copy exactly the right number of bytes into uninitialized memory,
-    // then assume_init since all fields are plain integers with no invalid bit patterns.
-    unsafe {
-        core::ptr::copy_nonoverlapping(buf.as_ptr(), inode.as_mut_ptr().cast::<u8>(), inode_bytes);
-        inode.assume_init()
-    }
+    crate::klibc::util::read_from_bytes(&buf)
 }
 
 pub async fn read_inode_data(dev: usize, sb: &Ext2Superblock, inode: &Ext2Inode) -> Vec<u8> {
