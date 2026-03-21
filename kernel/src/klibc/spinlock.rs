@@ -128,6 +128,12 @@ impl<T> Spinlock<T> {
         self.owner_cpu.store(NO_OWNER, Ordering::Relaxed);
         self.locked.store(false, Ordering::Release);
     }
+
+    /// Forcibly unlocks during a panic. The lock holder will never resume.
+    pub fn panic_force_unlock(&self) {
+        // SAFETY: Called during panic — the lock holder will never resume.
+        unsafe { self.force_unlock() }
+    }
 }
 
 // SAFETY: Spinlock provides mutual exclusion via an atomic lock, so it is safe

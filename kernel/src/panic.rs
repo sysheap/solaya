@@ -1,4 +1,3 @@
-#![allow(unsafe_code)]
 #![cfg_attr(miri, allow(unused_imports))]
 use crate::{println, test::qemu_exit::wait_for_the_end};
 use core::{
@@ -23,10 +22,7 @@ pub fn panic_handler(info: &PanicInfo) -> ! {
 
     use crate::{asm::wfi_loop, cpu::Cpu, io::uart::QEMU_UART};
 
-    // SAFETY: We are panicking; no further interrupt handling is expected.
-    unsafe {
-        arch::cpu::disable_global_interrupts();
-    }
+    sys::panic_support::panic_disable_interrupts();
 
     let cpu_id = Cpu::cpu_id().as_usize() as isize;
 
@@ -40,11 +36,7 @@ pub fn panic_handler(info: &PanicInfo) -> ! {
         wfi_loop();
     }
 
-    // SAFETY: We are panicking and need to print regardless of who holds
-    // the UART lock (they will never resume).
-    unsafe {
-        QEMU_UART.force_unlock();
-    }
+    QEMU_UART.panic_force_unlock();
 
     println!("\nKERNEL Panic");
     println!("\nPanic Occurred on cpu {}!", Cpu::cpu_id());
