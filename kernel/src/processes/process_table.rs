@@ -1,4 +1,3 @@
-#![allow(unsafe_code)]
 use alloc::{
     collections::{BTreeMap, VecDeque},
     vec::Vec,
@@ -308,9 +307,7 @@ impl ProcessTable {
 
                 let futex_addr = if let Some(clear_child_tid) = t.get_clear_child_tid() {
                     let process = t.process();
-                    // SAFETY: We only need the raw address value for the futex key,
-                    // not to dereference the pointer.
-                    let addr = unsafe { clear_child_tid.get() } as usize;
+                    let addr = clear_child_tid.get() as usize;
                     let _ = clear_child_tid.write_with_process_lock(&process.lock(), 0);
                     Some(addr)
                 } else {

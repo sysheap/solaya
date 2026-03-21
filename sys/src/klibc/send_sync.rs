@@ -5,6 +5,20 @@ use core::ops::{Deref, DerefMut};
 /// (e.g., access is serialized through a Spinlock).
 pub struct AssertSendSync<T>(pub T);
 
+impl<T: core::fmt::Debug> core::fmt::Debug for AssertSendSync<T> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl<T: Clone> Clone for AssertSendSync<T> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+
+impl<T: Copy> Copy for AssertSendSync<T> {}
+
 // SAFETY: The caller guarantees thread-safety (e.g., via external Spinlock).
 unsafe impl<T> Send for AssertSendSync<T> {}
 // SAFETY: The caller guarantees thread-safety (e.g., via external Spinlock).

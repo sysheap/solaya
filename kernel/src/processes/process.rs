@@ -1,4 +1,3 @@
-#![allow(unsafe_code)]
 use crate::{
     debug,
     klibc::Spinlock,
@@ -109,9 +108,9 @@ impl Process {
         len: usize,
     ) -> Result<Vec<T>, Errno> {
         let kernel_ptr = self.get_kernel_space_fat_pointer(ptr, len)?;
-        // SAFETY: We just validate the pointer
-        let slice = unsafe { core::slice::from_raw_parts(kernel_ptr, len) };
-        Ok(slice.to_vec())
+        Ok(sys::klibc::validated_ptr::read_validated_slice(
+            kernel_ptr, len,
+        ))
     }
 
     pub fn write_userspace_slice<T: Copy>(
@@ -121,9 +120,7 @@ impl Process {
     ) -> Result<(), Errno> {
         let len = data.len();
         let kernel_ptr = self.get_kernel_space_fat_pointer(ptr, len)?;
-        // SAFETY: We just validate the pointer
-        let slice = unsafe { core::slice::from_raw_parts_mut(kernel_ptr, len) };
-        slice.copy_from_slice(data);
+        sys::klibc::validated_ptr::write_validated_slice(kernel_ptr, data);
         Ok(())
     }
 
@@ -132,8 +129,7 @@ impl Process {
         ptr: &UserspacePtr<PTR>,
     ) -> Result<PTR, Errno> {
         let pt = self.get_page_table();
-        // SAFETY: We know it is a userspace pointer and we gonna translate it later
-        let ptr = unsafe { ptr.get() };
+        let ptr = ptr.get();
         if !pt.is_valid_userspace_ptr(ptr, PTR::WRITABLE) {
             return Err(Errno::EFAULT);
         }
@@ -147,8 +143,7 @@ impl Process {
         len: usize,
     ) -> Result<PTR, Errno> {
         let pt = self.get_page_table();
-        // SAFETY: We know it is a userspace pointer and we gonna translate it later
-        let ptr = unsafe { ptr.get() };
+        let ptr = ptr.get();
         if !pt.is_valid_userspace_fat_ptr(ptr, len, PTR::WRITABLE) {
             return Err(Errno::EFAULT);
         }
@@ -156,10 +151,9 @@ impl Process {
             .ok_or(Errno::EFAULT)
     }
 
-    pub fn read_userspace_ptr<T>(&self, ptr: &UserspacePtr<*const T>) -> Result<T, Errno> {
+    pub fn read_userspace_ptr<T: Copy>(&self, ptr: &UserspacePtr<*const T>) -> Result<T, Errno> {
         let kernel_ptr = self.get_kernel_space_pointer(ptr)?;
-        // SAFETY: We just validate the pointer
-        unsafe { Ok(kernel_ptr.read()) }
+        Ok(sys::klibc::validated_ptr::read_validated_value(kernel_ptr))
     }
 
     pub fn write_userspace_ptr<T>(
@@ -168,10 +162,7 @@ impl Process {
         value: T,
     ) -> Result<(), Errno> {
         let kernel_ptr = self.get_kernel_space_pointer(ptr)?;
-        // SAFETY: We just validate the pointer
-        unsafe {
-            kernel_ptr.write(value);
-        }
+        sys::klibc::validated_ptr::write_validated_value(kernel_ptr, value);
         Ok(())
     }
 

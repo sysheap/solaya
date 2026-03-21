@@ -13,6 +13,7 @@ pub const EXT2_IND_BLOCK: usize = 12;
 pub const EXT2_DIND_BLOCK: usize = 13;
 pub const EXT2_TIND_BLOCK: usize = 14;
 
+#[derive(Clone, Copy)]
 #[repr(C)]
 pub struct Ext2Superblock {
     pub s_inodes_count: u32,
@@ -76,6 +77,7 @@ pub struct Ext2BlockGroupDescriptor {
     pub bg_reserved: [u32; 3],
 }
 
+#[derive(Clone, Copy)]
 #[repr(C)]
 pub struct Ext2Inode {
     pub i_mode: u16,

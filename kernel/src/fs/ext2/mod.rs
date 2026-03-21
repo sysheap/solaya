@@ -1,4 +1,3 @@
-#![allow(unsafe_code)]
 mod dir;
 mod file;
 mod inode;
@@ -55,12 +54,7 @@ async fn read_superblock(dev: usize) -> Ext2Superblock {
         .expect("superblock read must succeed");
     assert!(n == sb_size, "short superblock read");
 
-    let mut sb = core::mem::MaybeUninit::<Ext2Superblock>::uninit();
-    // SAFETY: All fields are plain integers; we copy the exact struct size.
-    unsafe {
-        core::ptr::copy_nonoverlapping(buf.as_ptr(), sb.as_mut_ptr().cast::<u8>(), sb_size);
-        sb.assume_init()
-    }
+    crate::klibc::util::read_from_bytes(&buf)
 }
 
 async fn read_block_group_descriptors(
