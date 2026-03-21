@@ -1,10 +1,7 @@
-#![allow(unsafe_code)]
-use core::arch::global_asm;
-
 use crate::{
     debug,
     klibc::util::ByteInterpretable,
-    memory::{PAGE_SIZE, PhysAddr, VirtAddr},
+    memory::VirtAddr,
     processes::{thread::Thread, userspace_ptr::UserspacePtr},
 };
 use common::syscalls::trap_frame::Register;
@@ -17,31 +14,7 @@ use headers::syscall_types::{
 
 pub const TRAMPOLINE_VADDR: VirtAddr = VirtAddr::new(0x1000);
 
-#[cfg(not(miri))]
-global_asm!(
-    ".pushsection .text",
-    ".balign {PAGE_SIZE}",
-    "__signal_trampoline:",
-    "li a7, {NR_RT_SIGRETURN}",
-    "ecall",
-    ".skip {PAGE_SIZE} - (. - __signal_trampoline)",
-    ".popsection",
-    PAGE_SIZE = const PAGE_SIZE,
-    NR_RT_SIGRETURN = const headers::syscalls::SYSCALL_NR_RT_SIGRETURN,
-);
-
-#[cfg(not(miri))]
-pub fn trampoline_phys_addr() -> PhysAddr {
-    unsafe extern "C" {
-        static __signal_trampoline: u8;
-    }
-    PhysAddr::new(core::ptr::addr_of!(__signal_trampoline) as usize)
-}
-
-#[cfg(miri)]
-pub fn trampoline_phys_addr() -> PhysAddr {
-    PhysAddr::new(0x1000)
-}
+pub use crate::asm::signal_trampoline_phys_addr as trampoline_phys_addr;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExitStatus {

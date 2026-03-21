@@ -8,6 +8,39 @@ global_asm!(include_str!("trap.S"), TRAP_FRAME_OFFSET = const cpu::TRAP_FRAME_OF
 global_asm!(include_str!("powersave.S"));
 global_asm!(include_str!("panic.S"));
 
+#[cfg(not(miri))]
+global_asm!(
+    ".pushsection .text",
+    ".balign {PAGE_SIZE}",
+    "__signal_trampoline:",
+    "li a7, {NR_RT_SIGRETURN}",
+    "ecall",
+    ".skip {PAGE_SIZE} - (. - __signal_trampoline)",
+    ".popsection",
+    PAGE_SIZE = const crate::memory::PAGE_SIZE,
+    NR_RT_SIGRETURN = const headers::syscalls::SYSCALL_NR_RT_SIGRETURN,
+);
+
+#[cfg(not(miri))]
+pub fn signal_trampoline_phys_addr() -> crate::memory::PhysAddr {
+    unsafe extern "C" {
+        static __signal_trampoline: u8;
+    }
+    crate::memory::PhysAddr::new(core::ptr::addr_of!(__signal_trampoline) as usize)
+}
+
+#[cfg(miri)]
+pub fn signal_trampoline_phys_addr() -> crate::memory::PhysAddr {
+    crate::memory::PhysAddr::new(0x1000)
+}
+
+pub fn powersave_fn_addr() -> usize {
+    unsafe extern "C" {
+        fn powersave();
+    }
+    powersave as *const () as usize
+}
+
 pub fn asm_panic_rust() {
     let ra: usize;
     // SAFETY: Reads the return address register to report the faulting location.

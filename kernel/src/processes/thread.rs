@@ -1,4 +1,3 @@
-#![allow(unsafe_code)]
 use super::process::ProcessRef;
 use crate::{
     debug,
@@ -126,11 +125,6 @@ impl core::fmt::Display for Thread {
 
 impl Thread {
     pub fn create_powersave_thread() -> Arc<Spinlock<Self>> {
-        // SAFETY: powersave is defined in powersave.S; it runs wfi in a loop.
-        unsafe extern "C" {
-            fn powersave();
-        }
-
         let allocated_pages = BTreeMap::new();
 
         let page_table = RootPageTableHolder::new_with_kernel_mapping(&[]);
@@ -142,7 +136,7 @@ impl Thread {
             POWERSAVE_TID,
             register_state,
             page_table,
-            VirtAddr::new(powersave as *const () as usize),
+            VirtAddr::new(crate::asm::powersave_fn_addr()),
             allocated_pages,
             true,
             Brk::empty(),
