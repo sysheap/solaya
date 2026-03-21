@@ -25,7 +25,9 @@ use crate::{
         util::{ByteInterpretable, is_power_of_2_or_zero},
     },
     mmio_struct,
-    pci::{GeneralDevicePciHeaderFields, PCIDevice, PciCapabilityFields},
+    pci::{
+        GeneralDevicePciHeaderExt, GeneralDevicePciHeaderFields, PCIDevice, PciCapabilityFields,
+    },
 };
 
 const EXPECTED_QUEUE_SIZE: usize = 0x100;

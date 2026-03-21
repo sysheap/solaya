@@ -19,7 +19,10 @@ use crate::{
     },
     mmio_struct,
     net::mac::MacAddress,
-    pci::{GeneralDevicePciHeaderFields, PCIAllocatedSpace, PCIDevice, PciCapabilityFields},
+    pci::{
+        GeneralDevicePciHeaderExt, GeneralDevicePciHeaderFields, PCIAllocatedSpace, PCIDevice,
+        PciCapabilityFields,
+    },
 };
 use alloc::vec::Vec;
 

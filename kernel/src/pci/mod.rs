@@ -62,23 +62,30 @@ mmio_struct! {
     }
 }
 
-impl MMIO<GeneralDevicePciHeader> {
-    pub fn bar(&self, index: u8) -> u32 {
+pub trait GeneralDevicePciHeaderExt {
+    fn bar(&self, index: u8) -> u32;
+    fn write_bar(&mut self, index: u8, value: u32);
+    fn set_command_register_bits(&mut self, bits: u16);
+    fn clear_command_register_bits(&mut self, bits: u16);
+}
+
+impl GeneralDevicePciHeaderExt for MMIO<GeneralDevicePciHeader> {
+    fn bar(&self, index: u8) -> u32 {
         assert!(index < 6);
         self.bars().read_index(index as usize)
     }
 
-    pub fn write_bar(&mut self, index: u8, value: u32) {
+    fn write_bar(&mut self, index: u8, value: u32) {
         assert!(index < 6);
         self.bars().write_index(index as usize, value);
     }
 
-    pub fn set_command_register_bits(&mut self, bits: u16) {
+    fn set_command_register_bits(&mut self, bits: u16) {
         let mut command_register = self.command_register();
         command_register |= bits;
     }
 
-    pub fn clear_command_register_bits(&mut self, bits: u16) {
+    fn clear_command_register_bits(&mut self, bits: u16) {
         let mut command_register = self.command_register();
         command_register &= !bits;
     }
