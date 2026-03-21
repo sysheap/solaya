@@ -118,6 +118,7 @@ pub trait ByteInterpretable {
     }
 }
 
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 pub fn cstr_from_null_terminated_ptr(ptr: *const core::ffi::c_char) -> &'static core::ffi::CStr {
     assert!(
         !ptr.is_null(),
