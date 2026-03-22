@@ -38,3 +38,19 @@ pub fn start_hart_addr() -> usize {
     }
     start_hart as *const () as usize
 }
+
+/// Return the physical address of the signal trampoline page (defined in asm).
+pub fn signal_trampoline_addr() -> usize {
+    unsafe extern "C" {
+        static __signal_trampoline: u8;
+    }
+    core::ptr::addr_of!(__signal_trampoline) as usize
+}
+
+/// Return the address of the powersave function (defined in powersave.S).
+pub fn powersave_fn_addr() -> usize {
+    unsafe extern "C" {
+        fn powersave();
+    }
+    powersave as *const () as usize
+}

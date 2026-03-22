@@ -10,6 +10,8 @@
 
 extern crate alloc;
 
+#[cfg(target_arch = "riscv64")]
+mod asm;
 pub mod cpu;
 pub mod io;
 pub mod klibc;

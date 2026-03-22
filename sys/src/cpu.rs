@@ -1,6 +1,20 @@
 pub use arch::CpuId;
+use common::syscalls::trap_frame::TrapFrame;
+use core::mem::offset_of;
 
 use crate::klibc::runtime_initialized::RuntimeInitializedData;
+
+/// Mirror of the kernel's Cpu struct prefix — just enough fields to compute
+/// assembly-visible offsets. The kernel asserts these match at compile time.
+#[repr(C)]
+pub struct CpuLayout {
+    pub kernel_page_tables_satp_value: usize,
+    pub trap_frame: TrapFrame,
+}
+
+pub const TRAP_FRAME_OFFSET: usize = offset_of!(CpuLayout, trap_frame);
+pub const KERNEL_PAGE_TABLES_SATP_OFFSET: usize =
+    offset_of!(CpuLayout, kernel_page_tables_satp_value);
 
 pub static STARTING_CPU_ID: RuntimeInitializedData<CpuId> = RuntimeInitializedData::new();
 

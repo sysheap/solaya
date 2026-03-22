@@ -29,3 +29,11 @@ pub fn asm_handle_trap_addr() -> usize {
 pub fn start_hart_addr() -> usize {
     DUMMY_ADDR
 }
+
+pub fn signal_trampoline_addr() -> usize {
+    DUMMY_ADDR
+}
+
+pub fn powersave_fn_addr() -> usize {
+    DUMMY_ADDR
+}

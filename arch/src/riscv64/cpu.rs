@@ -130,6 +130,22 @@ pub fn trigger_supervisor_software_interrupt() {
     csrs_sip(1 << SIP_SSIP);
 }
 
+/// Infinite WFI loop. Used as the idle function when no threads are runnable.
+#[unsafe(naked)]
+pub extern "C" fn wfi_loop() -> ! {
+    core::arch::naked_asm!("0:", "  wfi", "  j 0b",)
+}
+
+/// Called from panic.S — reads the return address register and panics with it.
+pub fn asm_panic_rust() {
+    let ra: usize;
+    // SAFETY: Reads the return address register to report the faulting location.
+    unsafe {
+        asm!("mv {}, ra", out(reg) ra);
+    }
+    panic!("Panic from asm code (ra={ra:#x})");
+}
+
 pub struct InterruptGuard {
     was_enabled: bool,
 }

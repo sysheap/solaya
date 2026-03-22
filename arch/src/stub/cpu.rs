@@ -69,6 +69,16 @@ pub fn set_ret_to_kernel_mode(_kernel_mode: bool) {}
 #[allow(dead_code)]
 pub fn trigger_supervisor_software_interrupt() {}
 
+#[allow(dead_code)]
+pub extern "C" fn wfi_loop() -> ! {
+    panic!("wfi_loop is not available on this target");
+}
+
+#[allow(dead_code)]
+pub fn asm_panic_rust() {
+    panic!("Panic from asm code");
+}
+
 pub struct InterruptGuard;
 
 impl InterruptGuard {
