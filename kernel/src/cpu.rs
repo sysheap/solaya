@@ -1,11 +1,10 @@
 use alloc::{boxed::Box, sync::Arc};
 use common::syscalls::trap_frame::TrapFrame;
-use core::mem::offset_of;
 
 pub use arch::CpuId;
 
 use crate::{
-    klibc::{Spinlock, SpinlockGuard, runtime_initialized::RuntimeInitializedData, sizes::KiB},
+    klibc::{Spinlock, SpinlockGuard, sizes::KiB},
     memory::page_tables::RootPageTableHolder,
     processes::{
         process::Process,
@@ -17,26 +16,12 @@ use arch::sbi::extensions::ipi_extension::sbi_send_ipi;
 
 pub(crate) const KERNEL_STACK_SIZE: usize = KiB(512);
 
-pub static STARTING_CPU_ID: RuntimeInitializedData<CpuId> = RuntimeInitializedData::new();
-
-pub const TRAP_FRAME_OFFSET: usize = offset_of!(Cpu, trap_frame);
-pub const KERNEL_PAGE_TABLES_SATP_OFFSET: usize = offset_of!(Cpu, kernel_page_tables_satp_value);
-pub const CPU_ID_OFFSET: usize = offset_of!(Cpu, cpu_id);
-
-const _: () = {
-    assert!(TRAP_FRAME_OFFSET == sys::cpu::TRAP_FRAME_OFFSET);
-    assert!(KERNEL_PAGE_TABLES_SATP_OFFSET == sys::cpu::KERNEL_PAGE_TABLES_SATP_OFFSET);
-};
-
-// repr(C) is required: sys::cpu::CpuIdLayout reads cpu_id at a fixed offset
-// from the sscratch pointer, and assembly uses TRAP_FRAME_OFFSET /
-// KERNEL_PAGE_TABLES_SATP_OFFSET constants computed from this struct.
+// repr(C) is required: CpuBase must be the first field so that assembly
+// offsets computed from sys::cpu work correctly via the sscratch pointer.
 #[repr(C)]
 pub struct Cpu {
-    kernel_page_tables_satp_value: usize,
-    trap_frame: TrapFrame,
+    base: sys::cpu::CpuBase,
     scheduler: Spinlock<CpuScheduler>,
-    cpu_id: CpuId,
     kernel_page_tables: RootPageTableHolder,
     number_cpus: usize,
 }
@@ -48,7 +33,7 @@ impl Cpu {
             "If we have more cpu's we need to use hart_mask_base, that is not implemented yet."
         );
         let mut mask = 0;
-        for id in (0..self.number_cpus).filter(|i| *i != self.cpu_id.as_usize()) {
+        for id in (0..self.number_cpus).filter(|i| *i != self.base.cpu_id.as_usize()) {
             mask |= 1 << id;
         }
         sbi_send_ipi(mask, 0).assert_success();
@@ -77,10 +62,12 @@ impl Cpu {
         let satp_value = page_tables.get_satp_value_from_page_tables();
 
         let cpu = Box::new(Self {
-            kernel_page_tables_satp_value: satp_value,
-            trap_frame: TrapFrame::zero(),
+            base: sys::cpu::CpuBase {
+                kernel_page_tables_satp_value: satp_value,
+                trap_frame: TrapFrame::zero(),
+                cpu_id,
+            },
             scheduler: Spinlock::new(CpuScheduler::new()),
-            cpu_id,
             number_cpus,
             kernel_page_tables: page_tables,
         });
@@ -93,11 +80,11 @@ impl Cpu {
     }
 
     pub fn read_trap_frame() -> TrapFrame {
-        sys::cpu::per_cpu_volatile_read::<TrapFrame>(TRAP_FRAME_OFFSET)
+        sys::cpu::per_cpu_volatile_read::<TrapFrame>(sys::cpu::TRAP_FRAME_OFFSET)
     }
 
     pub fn write_trap_frame(trap_frame: TrapFrame) {
-        sys::cpu::per_cpu_volatile_write::<TrapFrame>(TRAP_FRAME_OFFSET, trap_frame);
+        sys::cpu::per_cpu_volatile_write::<TrapFrame>(sys::cpu::TRAP_FRAME_OFFSET, trap_frame);
     }
 
     pub fn with_scheduler<R>(f: impl FnOnce(SpinlockGuard<'_, CpuScheduler>) -> R) -> R {
