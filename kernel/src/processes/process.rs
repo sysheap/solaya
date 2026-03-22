@@ -13,9 +13,10 @@ use alloc::{
     sync::Arc,
     vec::Vec,
 };
-use common::{pid::Tid, pointer::Pointer};
+use common::pid::Tid;
 use core::{self, fmt::Debug, ptr::null_mut};
 use headers::errno::Errno;
+use sys::klibc::validated_ptr::ValidatedPtr;
 
 pub const POWERSAVE_TID: Tid = Tid::new(0);
 
@@ -106,10 +107,8 @@ impl Process {
         ptr: &UserspacePtr<*const T>,
         len: usize,
     ) -> Result<Vec<T>, Errno> {
-        let kernel_ptr = self.get_kernel_space_fat_pointer(ptr, len)?;
-        Ok(sys::klibc::validated_ptr::read_validated_slice(
-            kernel_ptr, len,
-        ))
+        let validated = ValidatedPtr::<T>::from_userspace(ptr.get(), len, self.get_page_table())?;
+        Ok(validated.read_slice(len))
     }
 
     pub fn write_userspace_slice<T: Copy>(
@@ -117,42 +116,15 @@ impl Process {
         ptr: &UserspacePtr<*mut T>,
         data: &[T],
     ) -> Result<(), Errno> {
-        let len = data.len();
-        let kernel_ptr = self.get_kernel_space_fat_pointer(ptr, len)?;
-        sys::klibc::validated_ptr::write_validated_slice(kernel_ptr, data);
+        let validated =
+            ValidatedPtr::<T>::from_userspace(ptr.get(), data.len(), self.get_page_table())?;
+        validated.write_slice(data);
         Ok(())
     }
 
-    fn get_kernel_space_pointer<PTR: Pointer>(
-        &self,
-        ptr: &UserspacePtr<PTR>,
-    ) -> Result<PTR, Errno> {
-        let pt = self.get_page_table();
-        let ptr = ptr.get();
-        if !pt.is_valid_userspace_ptr(ptr, PTR::WRITABLE) {
-            return Err(Errno::EFAULT);
-        }
-        pt.translate_userspace_address_to_physical_address(ptr)
-            .ok_or(Errno::EFAULT)
-    }
-
-    fn get_kernel_space_fat_pointer<PTR: Pointer>(
-        &self,
-        ptr: &UserspacePtr<PTR>,
-        len: usize,
-    ) -> Result<PTR, Errno> {
-        let pt = self.get_page_table();
-        let ptr = ptr.get();
-        if !pt.is_valid_userspace_fat_ptr(ptr, len, PTR::WRITABLE) {
-            return Err(Errno::EFAULT);
-        }
-        pt.translate_userspace_address_to_physical_address(ptr)
-            .ok_or(Errno::EFAULT)
-    }
-
     pub fn read_userspace_ptr<T: Copy>(&self, ptr: &UserspacePtr<*const T>) -> Result<T, Errno> {
-        let kernel_ptr = self.get_kernel_space_pointer(ptr)?;
-        Ok(sys::klibc::validated_ptr::read_validated_value(kernel_ptr))
+        let validated = ValidatedPtr::<T>::from_userspace(ptr.get(), 1, self.get_page_table())?;
+        Ok(validated.read())
     }
 
     pub fn write_userspace_ptr<T>(
@@ -160,8 +132,8 @@ impl Process {
         ptr: &UserspacePtr<*mut T>,
         value: T,
     ) -> Result<(), Errno> {
-        let kernel_ptr = self.get_kernel_space_pointer(ptr)?;
-        sys::klibc::validated_ptr::write_validated_value(kernel_ptr, value);
+        let validated = ValidatedPtr::<T>::from_userspace(ptr.get(), 1, self.get_page_table())?;
+        validated.write(value);
         Ok(())
     }
 

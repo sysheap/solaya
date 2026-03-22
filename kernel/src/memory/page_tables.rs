@@ -10,6 +10,7 @@ use alloc::{
     vec::Vec,
 };
 use common::{pointer::Pointer, unwrap_or_return};
+use headers::errno::Errno;
 
 use crate::{
     debug, debugging,
@@ -467,10 +468,6 @@ impl RootPageTableHolder {
         self.walk_to_entry(va).map(|e| e.get_xwr_mode())
     }
 
-    pub fn is_valid_userspace_ptr(&self, ptr: impl Pointer, writable: bool) -> bool {
-        self.is_valid_userspace_fat_ptr(ptr, 1, writable)
-    }
-
     pub fn translate_userspace_address_to_physical_address<PTR: Pointer>(
         &self,
         ptr: PTR,
@@ -566,6 +563,23 @@ impl RootPageTableHolder {
 
     pub fn is_mapped(&self, range: Range<VirtAddr>) -> bool {
         self.already_mapped.iter().any(|m| m.contains(&range))
+    }
+}
+
+impl sys::klibc::validated_ptr::PtrValidator for RootPageTableHolder {
+    fn validate_userspace<PTR: Pointer>(&self, ptr: PTR, len: usize) -> Result<PTR, Errno> {
+        if !self.is_valid_userspace_fat_ptr(ptr, len, PTR::WRITABLE) {
+            return Err(Errno::EFAULT);
+        }
+        self.translate_userspace_address_to_physical_address(ptr)
+            .ok_or(Errno::EFAULT)
+    }
+
+    fn validate_kernel<PTR: Pointer>(&self, _ptr: PTR, _len: usize) -> Result<PTR, Errno> {
+        // Kernel pointers are in kernel address space, already mapped via
+        // identity/direct mapping. No translation needed.
+        // TODO: Add kernel page table walk validation here.
+        Ok(_ptr)
     }
 }
 

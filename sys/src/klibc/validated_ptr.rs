@@ -1,33 +1,88 @@
-// These functions intentionally take raw pointers but are safe — the caller
-// has already validated the pointer via page table translation.
 use alloc::vec::Vec;
+use common::pointer::Pointer;
+use headers::errno::Errno;
 
-#[allow(clippy::not_unsafe_ptr_arg_deref)]
-pub fn read_validated_slice<T: Clone>(ptr: *const T, len: usize) -> Vec<T> {
-    assert!(!ptr.is_null(), "read_validated_slice: null pointer");
-    // SAFETY: Caller validated via page table lookup. Pointer is kernel-mapped.
-    let slice = unsafe { core::slice::from_raw_parts(ptr, len) };
-    slice.to_vec()
+pub trait PtrValidator {
+    fn validate_userspace<PTR: Pointer>(&self, ptr: PTR, len: usize) -> Result<PTR, Errno>;
+    fn validate_kernel<PTR: Pointer>(&self, ptr: PTR, len: usize) -> Result<PTR, Errno>;
 }
 
-#[allow(clippy::not_unsafe_ptr_arg_deref)]
-pub fn write_validated_slice<T: Copy>(ptr: *mut T, data: &[T]) {
-    assert!(!ptr.is_null(), "write_validated_slice: null pointer");
-    // SAFETY: Caller validated via page table lookup. Pointer is kernel-mapped.
-    let slice = unsafe { core::slice::from_raw_parts_mut(ptr, data.len()) };
-    slice.copy_from_slice(data);
+pub struct ValidatedPtr<T> {
+    ptr: *mut T,
 }
 
-#[allow(clippy::not_unsafe_ptr_arg_deref)]
-pub fn read_validated_value<T: Copy>(ptr: *const T) -> T {
-    assert!(!ptr.is_null(), "read_validated_value: null pointer");
-    // SAFETY: Caller validated via page table lookup. Pointer is kernel-mapped.
-    unsafe { ptr.read() }
+impl<T> ValidatedPtr<T> {
+    pub fn from_userspace(
+        raw: impl Pointer,
+        len: usize,
+        validator: &impl PtrValidator,
+    ) -> Result<Self, Errno> {
+        let translated = validator.validate_userspace(raw, len)?;
+        Ok(Self {
+            ptr: translated.as_raw() as *mut T,
+        })
+    }
+
+    pub fn from_kernel(
+        raw: impl Pointer,
+        len: usize,
+        validator: &impl PtrValidator,
+    ) -> Result<Self, Errno> {
+        validator.validate_kernel(raw, len)?;
+        Ok(Self {
+            ptr: raw.as_raw() as *mut T,
+        })
+    }
+
+    pub fn from_trusted(ptr: *const T) -> Self {
+        assert!(!ptr.is_null());
+        assert!(ptr.is_aligned());
+        Self { ptr: ptr as *mut T }
+    }
 }
 
-#[allow(clippy::not_unsafe_ptr_arg_deref)]
-pub fn write_validated_value<T>(ptr: *mut T, value: T) {
-    assert!(!ptr.is_null(), "write_validated_value: null pointer");
-    // SAFETY: Caller validated via page table lookup. Pointer is kernel-mapped.
-    unsafe { ptr.write(value) }
+impl<T: Copy> ValidatedPtr<T> {
+    pub fn read(&self) -> T {
+        // SAFETY: Pointer was validated at construction time.
+        unsafe { self.ptr.cast_const().read() }
+    }
+
+    pub fn write_slice(&self, data: &[T]) {
+        // SAFETY: Pointer was validated at construction time for the required length.
+        let slice = unsafe { core::slice::from_raw_parts_mut(self.ptr, data.len()) };
+        slice.copy_from_slice(data);
+    }
+}
+
+impl<T> ValidatedPtr<T> {
+    pub fn write(&self, value: T) {
+        // SAFETY: Pointer was validated at construction time.
+        unsafe { self.ptr.write(value) }
+    }
+
+    /// Returns a static reference to the pointed-to data.
+    /// Only valid for pointers to statically-allocated memory (firmware blobs,
+    /// linker regions, leaked allocations). The caller must ensure the memory
+    /// outlives 'static.
+    pub fn as_static_ref(&self) -> &'static T {
+        // SAFETY: Pointer was validated at construction time. Caller guarantees
+        // the memory is statically allocated.
+        unsafe { &*self.ptr.cast_const() }
+    }
+
+    /// Returns a static slice of the pointed-to data.
+    /// Only valid for pointers to statically-allocated memory.
+    pub fn as_static_slice(&self, len: usize) -> &'static [T] {
+        // SAFETY: Pointer was validated at construction time. Caller guarantees
+        // the memory is statically allocated and valid for `len` elements.
+        unsafe { core::slice::from_raw_parts(self.ptr.cast_const(), len) }
+    }
+}
+
+impl<T: Clone> ValidatedPtr<T> {
+    pub fn read_slice(&self, len: usize) -> Vec<T> {
+        // SAFETY: Pointer was validated at construction time for the required length.
+        let slice = unsafe { core::slice::from_raw_parts(self.ptr.cast_const(), len) };
+        slice.to_vec()
+    }
 }
