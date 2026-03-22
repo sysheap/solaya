@@ -29,6 +29,14 @@ pub fn linker_region_as_slice(start: VirtAddr, size: usize) -> &'static [u8] {
     unsafe { core::slice::from_raw_parts(start.as_ptr::<u8>(), size) }
 }
 
+/// Read a usize from a kernel stack address.
+/// The address must be within a valid, mapped stack region.
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+pub fn read_usize_from_address(addr: usize) -> usize {
+    // SAFETY: Caller guarantees addr is within a valid kernel stack.
+    unsafe { (addr as *const usize).read() }
+}
+
 /// Create an immutable byte slice from a firmware-provided pointer.
 /// Panics if ptr is null. The caller must ensure the region [ptr, ptr+size)
 /// is validly mapped and immutable for the lifetime of the kernel.
