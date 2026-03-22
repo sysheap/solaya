@@ -31,7 +31,7 @@ use headers::{
     errno::Errno,
     syscall_types::{_NSIG, sigaction, sigaltstack, sigset_t, stack_t},
 };
-use sys::klibc::send_sync::AssertSendSync;
+use sys::klibc::send_sync::UnsafeSendSync;
 
 use crate::klibc::Spinlock;
 
@@ -70,7 +70,7 @@ struct SignalState {
 impl SignalState {
     fn new() -> Self {
         Self {
-            sigaltstack: ContainsUserspacePtr(AssertSendSync(sigaltstack {
+            sigaltstack: ContainsUserspacePtr(UnsafeSendSync(sigaltstack {
                 ss_sp: null_mut(),
                 ss_flags: 0,
                 ss_size: 0,
@@ -349,7 +349,7 @@ impl Thread {
     }
 
     pub fn set_sigaltstack(&mut self, sigaltstack: &sigaltstack) {
-        self.signal_state.sigaltstack.0 = AssertSendSync(*sigaltstack);
+        self.signal_state.sigaltstack.0 = UnsafeSendSync(*sigaltstack);
     }
 
     pub fn clear_wakeup_pending(&mut self) {

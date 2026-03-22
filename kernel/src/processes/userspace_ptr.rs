@@ -2,17 +2,17 @@ use common::pointer::Pointer;
 use headers::errno::Errno;
 
 use crate::{klibc::SpinlockGuard, processes::process::Process};
-use sys::klibc::send_sync::AssertSendSync;
+use sys::klibc::send_sync::UnsafeSendSync;
 
 #[derive(Debug)]
 pub struct UserspacePtr<PTR: Pointer> {
-    ptr: AssertSendSync<PTR>,
+    ptr: UnsafeSendSync<PTR>,
 }
 
 impl<PTR: Pointer> UserspacePtr<PTR> {
     pub fn new(ptr: PTR) -> Self {
         Self {
-            ptr: AssertSendSync(ptr),
+            ptr: UnsafeSendSync(ptr),
         }
     }
 
@@ -31,7 +31,7 @@ impl<T> UserspacePtr<*mut T> {
     }
 }
 
-pub struct ContainsUserspacePtr<T>(pub AssertSendSync<T>);
+pub struct ContainsUserspacePtr<T>(pub UnsafeSendSync<T>);
 
 impl<T: core::fmt::Debug> core::fmt::Debug for ContainsUserspacePtr<T> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {

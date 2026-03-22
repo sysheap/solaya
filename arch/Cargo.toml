@@ -5,6 +5,9 @@ version.workspace = true
 authors.workspace = true
 description.workspace = true
 
+[dependencies]
+common = { path = "../common" }
+
 [lib]
 test = false
 bench = false

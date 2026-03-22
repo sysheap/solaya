@@ -17,7 +17,7 @@ pub struct CalleeSavedRegs {
     x27: usize,
 }
 
-const _: [(); 0x70] = [(); core::mem::size_of::<CalleeSavedRegs>()];
+common::static_assert_size!(CalleeSavedRegs, 0x70);
 
 impl core::fmt::Display for CalleeSavedRegs {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
