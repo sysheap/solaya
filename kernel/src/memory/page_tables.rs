@@ -17,15 +17,11 @@ use crate::{
         sizes::{GiB, MiB},
         util::is_aligned,
     },
-    memory::page::PAGE_SIZE,
+    memory::PAGE_SIZE,
 };
 
-pub use super::page_table_entry::XWRMode;
-use super::{
-    address::{PhysAddr, VirtAddr},
-    heap_size,
-    linker_information::LinkerInformation,
-};
+use super::{PhysAddr, VirtAddr, heap_size, linker_information::LinkerInformation};
+pub use sys::memory::page_table::XWRMode;
 use sys::memory::page_table::{OwnedPageTable, PageTable, PageTableEntry, activate_page_table};
 
 #[derive(Clone)]
@@ -576,8 +572,9 @@ impl RootPageTableHolder {
 #[cfg(all(test, not(miri)))]
 mod tests {
     use super::{MappingEntry, RootPageTableHolder};
-    use crate::memory::{PhysAddr, VirtAddr, page_table_entry::XWRMode};
+    use crate::memory::{PhysAddr, VirtAddr};
     use alloc::string::ToString;
+    use sys::memory::page_table::XWRMode;
 
     #[test_case]
     fn check_drop_of_page_table_holder() {

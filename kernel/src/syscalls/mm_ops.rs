@@ -4,7 +4,7 @@ use headers::{
     syscall_types::{MAP_ANONYMOUS, MAP_FIXED, MAP_PRIVATE},
 };
 
-use crate::memory::{PAGE_SIZE, VirtAddr, page::Pages, page_tables::XWRMode};
+use crate::memory::{PAGE_SIZE, Pages, VirtAddr, page_tables::XWRMode};
 
 use super::linux::LinuxSyscallHandler;
 

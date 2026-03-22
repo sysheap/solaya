@@ -118,7 +118,7 @@ impl TcpHeader {
             return Err(TcpParseError::PacketTooSmall);
         }
 
-        let tcp_header: TcpHeader = crate::klibc::util::read_from_bytes(data);
+        let tcp_header: TcpHeader = sys::klibc::util::read_from_bytes(data);
 
         let data_offset = usize::from(tcp_header.data_offset_and_flags.get() >> 12);
         if data_offset < 5 {

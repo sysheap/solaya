@@ -282,7 +282,7 @@ impl<'a> ElfFile<'a> {
     }
 
     pub fn get_header(&self) -> &ElfHeader {
-        super::util::ref_from_bytes(self.data)
+        sys::klibc::util::ref_from_bytes(self.data)
     }
 
     pub fn get_program_headers(&self) -> &[ElfProgramHeaderEntry] {
@@ -300,7 +300,7 @@ impl<'a> ElfFile<'a> {
                 <= self.data.len()
         );
 
-        let data = super::util::slice_from_bytes(
+        let data = sys::klibc::util::slice_from_bytes(
             self.data,
             position_program_header.as_usize(),
             number_of_entries as usize,
@@ -328,7 +328,7 @@ impl<'a> ElfFile<'a> {
             return &[];
         }
         assert_eq!(entry_size, core::mem::size_of::<ElfSectionHeader>());
-        super::util::slice_from_bytes(self.data, offset, count)
+        sys::klibc::util::slice_from_bytes(self.data, offset, count)
     }
 
     fn get_section_name(&self, section: &ElfSectionHeader) -> Option<&'a str> {
@@ -369,7 +369,8 @@ impl<'a> ElfFile<'a> {
 
         let sym_offset = symtab.sh_offset.as_usize();
         let sym_count = symtab.sh_size.as_usize() / core::mem::size_of::<Elf64Sym>();
-        let symbols: &[Elf64Sym] = super::util::slice_from_bytes(self.data, sym_offset, sym_count);
+        let symbols: &[Elf64Sym] =
+            sys::klibc::util::slice_from_bytes(self.data, sym_offset, sym_count);
 
         let mut best: Option<(&Elf64Sym, usize)> = None;
         for sym in symbols {
@@ -404,7 +405,7 @@ impl<'a> ElfFile<'a> {
             return Some(ElfParseErrors::FileTooShort);
         }
 
-        let header: &ElfHeader = super::util::ref_from_bytes(data);
+        let header: &ElfHeader = sys::klibc::util::ref_from_bytes(data);
 
         if header.magic_number.get() != ELF_MAGIC_NUMBER {
             return Some(ElfParseErrors::MagicNumberWrong);

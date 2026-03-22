@@ -1,4 +1,4 @@
-pub use sys::memory::heap::SpinlockHeap;
+use sys::memory::heap::SpinlockHeap;
 
 #[cfg(all(target_arch = "riscv64", not(miri)))]
 #[global_allocator]

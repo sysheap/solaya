@@ -2,7 +2,7 @@ use super::process::ProcessRef;
 use crate::{
     debug,
     klibc::elf::ElfFile,
-    memory::{VirtAddr, page::PinnedHeapPages, page_tables::RootPageTableHolder},
+    memory::{PinnedHeapPages, VirtAddr, page_tables::RootPageTableHolder},
     processes::{
         brk::Brk,
         loader::{self, LoadedElf},

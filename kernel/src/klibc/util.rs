@@ -77,9 +77,6 @@ pub const fn minimum_amount_of_pages(value: usize) -> usize {
     align_up(value, PAGE_SIZE) / PAGE_SIZE
 }
 
-// Re-export unsafe utility functions from sys
-pub use sys::klibc::util::{read_from_bytes, ref_from_bytes, slice_from_bytes};
-
 pub trait BufferExtension {
     fn interpret_as<T>(&self) -> &T;
     fn split_as<T>(&self) -> (&T, &[u8]);
@@ -87,7 +84,7 @@ pub trait BufferExtension {
 
 impl BufferExtension for [u8] {
     fn interpret_as<T>(&self) -> &T {
-        ref_from_bytes(self)
+        sys::klibc::util::ref_from_bytes(self)
     }
 
     fn split_as<T>(&self) -> (&T, &[u8]) {

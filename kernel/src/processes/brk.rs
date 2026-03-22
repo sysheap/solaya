@@ -1,8 +1,7 @@
 use crate::{
     klibc::util::align_up_page_size,
     memory::{
-        PhysAddr, VirtAddr,
-        page::{Pages, PinnedHeapPages},
+        Pages, PhysAddr, PinnedHeapPages, VirtAddr,
         page_tables::{RootPageTableHolder, XWRMode},
     },
 };

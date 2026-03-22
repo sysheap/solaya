@@ -51,3 +51,23 @@ impl<T> Deref for RuntimeInitializedData<T> {
         unsafe { (*self.data.get()).assume_init_ref() }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::RuntimeInitializedData;
+
+    #[test]
+    fn check_initialized_value() {
+        let runtime_init = RuntimeInitializedData::<u8>::new();
+        assert!(!runtime_init.is_initialized());
+        runtime_init.initialize(42);
+        assert!(runtime_init.is_initialized());
+    }
+
+    #[test]
+    fn check_return_value() {
+        let runtime_init = RuntimeInitializedData::<u8>::new();
+        runtime_init.initialize(42);
+        assert_eq!(*runtime_init, 42);
+    }
+}

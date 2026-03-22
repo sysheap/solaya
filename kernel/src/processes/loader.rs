@@ -11,8 +11,7 @@ use crate::{
         util::{InBytes, UsizeExt, minimum_amount_of_pages},
     },
     memory::{
-        PAGE_SIZE, PhysAddr, VirtAddr,
-        page::{PagesAsSlice, PinnedHeapPages},
+        PAGE_SIZE, PagesAsSlice, PhysAddr, PinnedHeapPages, VirtAddr,
         page_tables::{RootPageTableHolder, XWRMode},
     },
     processes::brk::Brk,
