@@ -1,4 +1,3 @@
-#![allow(unsafe_code)]
 use crate::{
     assert::static_assert_size,
     debug, info,
@@ -11,13 +10,12 @@ use core::{
     fmt::{Debug, Display},
     mem::size_of,
     ops::Range,
-    slice,
 };
 
 const FDT_MAGIC: u32 = 0xd00dfeed;
 const FDT_VERSION: u32 = 17;
 
-pub static THE: RuntimeInitializedData<&'static DeviceTree> = RuntimeInitializedData::new();
+pub static THE: RuntimeInitializedData<DeviceTree> = RuntimeInitializedData::new();
 
 #[repr(C)]
 #[derive(Debug, PartialEq, Eq)]
@@ -36,88 +34,61 @@ pub struct Header {
 
 static_assert_size!(Header, 40);
 
-// It would have been nicer to have a struct which has the header
-// as first field and then the rest of the data as a dynamic sized type.
-// However, I learned through miri that the total size of a DST is rounded up
-// to it's alignment. However, qemu does follow that. Therefore, it could be
-// that the totalsize is not aligned by 4 byte which makes it UB to have a reference
-// to such a struct. Therefore, let's take the ugly way and make the whole struct a
-// DST.
-#[repr(C)]
 #[derive(Debug, PartialEq, Eq)]
 pub struct DeviceTree {
-    data: [u8],
+    data: &'static [u8],
 }
 
 impl DeviceTree {
-    fn new(device_tree_pointer: *const ()) -> &'static Self {
-        let magic = device_tree_pointer.cast::<BigEndian<u32>>();
-        assert!(magic.is_aligned(), "Device tree must be 4 byte aligned");
+    fn new(device_tree_pointer: *const ()) -> Self {
         assert!(!device_tree_pointer.is_null());
-        // SAFETY: The pointer is non-null and aligned (asserted above). We read
-        // the magic value to verify this is actually a device tree blob.
-        let header = unsafe {
-            assert_eq!(magic.read().get(), FDT_MAGIC);
-            &*device_tree_pointer.cast::<Header>()
-        };
+        assert!(
+            (device_tree_pointer as usize).is_multiple_of(size_of::<u32>()),
+            "Device tree must be 4 byte aligned"
+        );
+        // Read just the header first to get totalsize.
+        let header_slice =
+            sys::memory::firmware_blob_as_slice(device_tree_pointer.cast(), size_of::<Header>());
+        let header: &Header = sys::klibc::util::ref_from_bytes(header_slice);
+        assert_eq!(header.magic.get(), FDT_MAGIC);
         assert_eq!(
             header.version.get(),
             FDT_VERSION,
             "Device tree version mismatch"
         );
-        // SAFETY: We validated magic and version above. The firmware guarantees
-        // the DTB is a contiguous block of totalsize bytes at this address.
-        unsafe {
-            &*(core::ptr::from_raw_parts::<DeviceTree>(
-                device_tree_pointer,
-                // Metadata only describes the size of the last field
-                header.totalsize.get() as usize,
-            ))
+        let total_size = header.totalsize.get() as usize;
+        Self {
+            data: sys::memory::firmware_blob_as_slice(device_tree_pointer.cast(), total_size),
         }
     }
 
     fn header(&self) -> &Header {
-        // SAFETY: The data slice starts with a valid Header (verified in new()).
-        unsafe { &*self.data.as_ptr().cast::<Header>() }
-    }
-
-    fn offset_from_header<T>(&self, offset: usize) -> *const T {
-        assert!(offset < self.header().totalsize.get() as usize);
-        (self as *const DeviceTree)
-            .wrapping_byte_add(offset)
-            .cast::<T>()
+        sys::klibc::util::ref_from_bytes(self.data)
     }
 
     pub fn get_reserved_areas(&self) -> &[ReserveEntry] {
-        let offset = self.header().off_mem_rsvmap.get();
-        let start: *const ReserveEntry = self.offset_from_header(offset as usize);
+        let offset = self.header().off_mem_rsvmap.get() as usize;
+        let remaining = &self.data[offset..];
+        let entry_size = size_of::<ReserveEntry>();
+        let max_entries = remaining.len() / entry_size;
         let mut len = 0;
-        // SAFETY: The reserved memory map is within the DTB (offset checked
-        // by offset_from_header). Entries are iterated until the sentinel.
-        unsafe {
-            loop {
-                let entry = &*start.add(len);
-                // The last entry is marked with address and size set to 0
-                if entry.address == 0 && entry.size == 0 {
-                    break;
-                }
-                len += 1;
+        while len < max_entries {
+            let entry: &ReserveEntry =
+                sys::klibc::util::ref_from_bytes(&remaining[len * entry_size..]);
+            if entry.address == 0 && entry.size == 0 {
+                break;
             }
-            slice::from_raw_parts(start, len)
+            len += 1;
         }
+        sys::klibc::util::slice_from_bytes(remaining, 0, len)
     }
 
     pub fn root_node(&self) -> Node<'_> {
-        let offset = self.header().off_dt_struct.get();
-        let start = self.offset_from_header(offset as usize);
-        debug!("Structure Block Start: {:p}", start);
-        // SAFETY: The struct block is within the DTB blob. Offset and size are
-        // read from the validated header.
-        let data =
-            unsafe { slice::from_raw_parts(start, self.header().size_dt_struct.get() as usize) };
+        let offset = self.header().off_dt_struct.get() as usize;
+        let size = self.header().size_dt_struct.get() as usize;
+        let data = &self.data[offset..offset + size];
+        debug!("Structure Block Start: {:p}", data.as_ptr());
         let structure_block = ConsumableBuffer::new(data);
-        // The fake node is needed such address-cells and size-cells are porperly
-        // parsed
         let fake_node = Node::new("fake_node", self, structure_block);
         fake_node
             .find_node("")
@@ -125,14 +96,12 @@ impl DeviceTree {
     }
 
     fn get_string(&self, offset: usize) -> Option<&str> {
-        let start: *const u8 = self.offset_from_header(self.header().off_dt_strings.get() as usize);
-        let size = self.header().size_dt_strings.get() as usize;
-        if offset >= size {
+        let strings_offset = self.header().off_dt_strings.get() as usize;
+        let strings_size = self.header().size_dt_strings.get() as usize;
+        if offset >= strings_size {
             return None;
         }
-        // SAFETY: The strings block is within the DTB blob. Offset and size
-        // are read from the validated header.
-        let strings_data = unsafe { slice::from_raw_parts(start, size) };
+        let strings_data = &self.data[strings_offset..strings_offset + strings_size];
         let mut consumable_buffer = ConsumableBuffer::new(&strings_data[offset..]);
         consumable_buffer.consume_str()
     }
@@ -234,7 +203,6 @@ impl<'a> Node<'a> {
                     if let Some(target_node) = node.find_node_recursive(needle) {
                         return Some(target_node);
                     }
-                    // Advance already parsed values
                     self.structure_block = node.structure_block;
                 }
                 FdtToken::Prop(prop, mut data) => {
@@ -265,8 +233,6 @@ impl<'a> Node<'a> {
                     }
                 }
                 FdtToken::Nop => {}
-                // If we encounter any other token we already iterated through
-                // all tokens here
                 _ => break,
             }
         }
@@ -357,10 +323,8 @@ impl<'a> Iterator for Node<'a> {
 }
 
 pub fn get_devicetree_range() -> Range<*const u8> {
-    let size = THE.header().totalsize.get() as usize;
-    let device_tree_pointer = (*THE as *const DeviceTree).cast::<u8>();
-
-    device_tree_pointer..device_tree_pointer.wrapping_byte_add(size)
+    let data = THE.data;
+    data.as_ptr()..data.as_ptr().wrapping_add(data.len())
 }
 
 pub fn init(device_tree_pointer: *const ()) {
@@ -385,10 +349,15 @@ mod tests {
 
     const DTB: &[u8] = include_bytes_align_as!(Header, "test/test_data/dtb");
 
-    fn get_root_node() -> Node<'static> {
+    fn get_device_tree() -> &'static DeviceTree {
+        use alloc::boxed::Box;
         let device_tree = DeviceTree::new(DTB.as_ptr().cast::<()>());
         assert!(device_tree.header().totalsize.get() as usize <= DTB.len());
-        device_tree.root_node()
+        Box::leak(Box::new(device_tree))
+    }
+
+    fn get_root_node() -> Node<'static> {
+        get_device_tree().root_node()
     }
 
     #[test_case]
