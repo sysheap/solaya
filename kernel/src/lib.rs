@@ -81,8 +81,7 @@ mod syscalls;
 mod test;
 
 // When running unit tests, the kernel is compiled as a standalone binary (not via
-// boot crate). Assembly references these symbols by name, so we need #[no_mangle]
-// wrappers in test mode.
+// boot crate). Assembly in sys references these symbols by name.
 #[cfg(test)]
 mod test_entry_points {
     #![allow(unsafe_code)]
