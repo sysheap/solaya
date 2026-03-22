@@ -4,7 +4,7 @@ use crate::{
     klibc::{MMIO, Spinlock},
     mmio_struct,
 };
-use sys::klibc::send_sync::AssertSendSync;
+use sys::klibc::send_sync::UnsafeSendSync;
 
 pub const UART_BASE_ADDRESS: usize = 0x1000_0000;
 
@@ -27,8 +27,8 @@ mmio_struct! {
     }
 }
 
-pub static QEMU_UART: Spinlock<AssertSendSync<Uart>> =
-    Spinlock::new(AssertSendSync(Uart::new(UART_BASE_ADDRESS)));
+pub static QEMU_UART: Spinlock<UnsafeSendSync<Uart>> =
+    Spinlock::new(UnsafeSendSync(Uart::new(UART_BASE_ADDRESS)));
 
 pub struct Uart {
     regs: MMIO<UartRegisters>,

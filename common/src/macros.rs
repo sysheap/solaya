@@ -1,3 +1,10 @@
+#[macro_export]
+macro_rules! static_assert_size {
+    ($type: ty, $size: expr) => {
+        const _: [(); $size] = [(); core::mem::size_of::<$type>()];
+    };
+}
+
 // Copied from https://stackoverflow.com/questions/51344951/how-do-you-unwrap-a-result-on-ok-or-return-from-the-function-on-err
 #[macro_export]
 macro_rules! unwrap_or_return {

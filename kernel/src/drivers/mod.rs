@@ -6,6 +6,14 @@ use alloc::vec::Vec;
 use crate::{fs, interrupts::plic, net, pci::PCIDevice, processes::kernel_tasks};
 
 pub fn init_all_pci_devices(mut pci_devices: Vec<PCIDevice>) {
+    init_network_device(&mut pci_devices);
+    init_block_devices(&mut pci_devices);
+    init_display_device(&mut pci_devices);
+    init_rng_device(&mut pci_devices);
+    init_input_device(&mut pci_devices);
+}
+
+fn init_network_device(pci_devices: &mut Vec<PCIDevice>) {
     if let Some(i) = pci_devices
         .iter()
         .position(virtio::net::NetworkDevice::is_virtio_net)
@@ -19,7 +27,9 @@ pub fn init_all_pci_devices(mut pci_devices: Vec<PCIDevice>) {
         plic::register_interrupt(plic_irq, net::on_network_interrupt);
         kernel_tasks::spawn(net::network_rx_task());
     }
+}
 
+fn init_block_devices(pci_devices: &mut Vec<PCIDevice>) {
     while let Some(i) = pci_devices
         .iter()
         .position(virtio::block::BlockDevice::is_virtio_block)
@@ -37,13 +47,17 @@ pub fn init_all_pci_devices(mut pci_devices: Vec<PCIDevice>) {
     if virtio::block::device_count() > 0 {
         kernel_tasks::spawn(fs::ext2::mount_ext2(0));
     }
+}
 
+fn init_display_device(pci_devices: &mut Vec<PCIDevice>) {
     if let Some(i) = pci_devices.iter().position(bochs_display::is_bochs_display) {
         let device = pci_devices.swap_remove(i);
         bochs_display::initialize(device);
         bochs_display::register_devfs_node();
     }
+}
 
+fn init_rng_device(pci_devices: &mut Vec<PCIDevice>) {
     if let Some(i) = pci_devices
         .iter()
         .position(virtio::rng::RngDevice::is_virtio_rng)
@@ -54,7 +68,9 @@ pub fn init_all_pci_devices(mut pci_devices: Vec<PCIDevice>) {
         virtio::rng::set_device(rng);
         virtio::rng::register_devfs_node();
     }
+}
 
+fn init_input_device(pci_devices: &mut Vec<PCIDevice>) {
     if let Some(i) = pci_devices
         .iter()
         .position(virtio::input::InputDevice::is_virtio_input)
