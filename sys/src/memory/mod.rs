@@ -25,3 +25,15 @@ pub fn linker_region_as_slice(start: VirtAddr, size: usize) -> &'static [u8] {
     // after boot.
     unsafe { core::slice::from_raw_parts(start.as_ptr::<u8>(), size) }
 }
+
+/// Create an immutable byte slice from a firmware-provided pointer.
+/// Panics if ptr is null. The caller must ensure the region [ptr, ptr+size)
+/// is validly mapped and immutable for the lifetime of the kernel.
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+pub fn firmware_blob_as_slice(ptr: *const u8, size: usize) -> &'static [u8] {
+    assert!(!ptr.is_null(), "firmware blob pointer must not be null");
+    // SAFETY: Firmware guarantees the blob is a contiguous, immutable region.
+    // The function is intentionally safe — it encapsulates the unsafety of the
+    // firmware → kernel boundary.
+    unsafe { core::slice::from_raw_parts(ptr, size) }
+}
