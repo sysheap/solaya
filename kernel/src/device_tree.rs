@@ -349,15 +349,21 @@ mod tests {
 
     const DTB: &[u8] = include_bytes_align_as!(Header, "test/test_data/dtb");
 
-    fn get_device_tree() -> &'static DeviceTree {
-        use alloc::boxed::Box;
-        let device_tree = DeviceTree::new(DTB.as_ptr().cast::<()>());
-        assert!(device_tree.header().totalsize.get() as usize <= DTB.len());
-        Box::leak(Box::new(device_tree))
+    // Static DeviceTree to avoid Box::leak per test (miri leak check).
+    static TEST_DT: crate::klibc::runtime_initialized::RuntimeInitializedData<DeviceTree> =
+        crate::klibc::runtime_initialized::RuntimeInitializedData::new();
+
+    fn ensure_dt_initialized() {
+        if !TEST_DT.is_initialized() {
+            let device_tree = DeviceTree::new(DTB.as_ptr().cast::<()>());
+            assert!(device_tree.header().totalsize.get() as usize <= DTB.len());
+            TEST_DT.initialize(device_tree);
+        }
     }
 
     fn get_root_node() -> Node<'static> {
-        get_device_tree().root_node()
+        ensure_dt_initialized();
+        TEST_DT.root_node()
     }
 
     #[test_case]
