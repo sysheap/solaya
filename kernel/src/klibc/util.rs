@@ -42,14 +42,6 @@ pub const fn align_up(value: usize, alignment: usize) -> usize {
     }
 }
 
-pub fn align_down_ptr<T>(ptr: *const T, alignment: usize) -> *const T {
-    assert!(
-        alignment.is_power_of_two(),
-        "alignment must be a power of two"
-    );
-    ptr.mask(!(alignment - 1))
-}
-
 #[cfg(miri)]
 pub fn align_down(value: usize, alignment: usize) -> usize {
     assert!(
