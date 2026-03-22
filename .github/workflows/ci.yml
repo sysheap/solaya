@@ -22,6 +22,7 @@ jobs:
           primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.lock', 'rust-toolchain') }}
           restore-prefixes-first-match: |
             nix-${{ runner.os }}-
+          save-always: true
 
       - uses: nicknovitski/nix-develop@v1
         with:
