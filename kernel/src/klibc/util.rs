@@ -328,7 +328,6 @@ mod kani_proofs {
 }
 
 #[cfg(test)]
-#[allow(unsafe_code)]
 mod tests {
     use crate::memory::PAGE_SIZE;
 
@@ -425,14 +424,11 @@ mod tests {
 
         let payload = [0xAA, 0xBB, 0xCC];
         let total_len = core::mem::size_of::<Header>() + payload.len();
-        // Allocate with Header alignment so interpret_as's is_aligned() check is guaranteed.
-        let layout =
-            alloc::alloc::Layout::from_size_align(total_len, core::mem::align_of::<Header>())
-                .expect("Layout must be valid");
-        let buf = unsafe {
-            let ptr = alloc::alloc::alloc_zeroed(layout);
-            core::slice::from_raw_parts_mut(ptr, total_len)
-        };
+        // Use repr(C, align(2)) to guarantee Header-compatible alignment without unsafe.
+        #[repr(C, align(2))]
+        struct AlignedBuf([u8; 16]);
+        let mut storage = AlignedBuf([0u8; 16]);
+        let buf = &mut storage.0[..total_len];
         buf[0..2].copy_from_slice(&0xCAFEu16.to_ne_bytes());
         buf[2..4].copy_from_slice(&128u16.to_ne_bytes());
         buf[4] = 0x07;
@@ -444,7 +440,5 @@ mod tests {
         assert_eq!(header.len, 128);
         assert_eq!(header.flags, 0x07);
         assert_eq!(rest, &payload);
-
-        unsafe { alloc::alloc::dealloc(buf.as_mut_ptr(), layout) };
     }
 }
