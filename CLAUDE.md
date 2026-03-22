@@ -26,8 +26,10 @@ just deadlock-hunt            # Run system tests in loop with GDB enabled
 ## Project Structure
 
 ```
-arch/             # Hardware abstraction (CSR, SBI, timer, trap causes)
-kernel/           # Main kernel (RISC-V 64-bit, no_std)
+boot/             # Entry point wrapper (#[no_mangle] fns, calls into kernel)
+kernel/           # Main kernel logic (RISC-V 64-bit, no_std, #![forbid(unsafe_code)])
+sys/              # Self-contained system library (page allocator, heap, spinlock, MMIO, logging)
+arch/             # Hardware abstraction (CSR, SBI, timer, trap causes, backtrace, linker symbols)
 userspace/        # Userspace programs (musl libc)
 common/           # Shared no_std library
 system-tests/     # Integration tests (run on x86, test via QEMU)
@@ -41,13 +43,17 @@ doc/ai/           # Detailed AI documentation (see OVERVIEW.md)
 
 | Directory | Purpose |
 |-----------|---------|
-| kernel/src/memory/ | Page allocator, page tables, heap |
+| sys/src/memory/ | Core types: PhysAddr, VirtAddr, Page, PageTable, page allocator, heap |
+| sys/src/klibc/ | Spinlock, MMIO, ValidatedPtr, utility functions |
+| sys/src/logging/ | Log macros and per-module configuration |
+| sys/src/cpu.rs | CpuBase struct, per-CPU access via sscratch |
+| kernel/src/memory/ | RootPageTableHolder, kernel mappings, linker info |
 | kernel/src/processes/ | Process, thread, scheduler, signals |
-| kernel/src/syscalls/ | syscall handlers |
+| kernel/src/syscalls/ | Syscall handlers |
 | kernel/src/interrupts/ | Trap handling, PLIC, timer |
 | kernel/src/fs/ | VFS layer (tmpfs, procfs, devfs) |
 | kernel/src/net/ | Network stack (UDP, TCP) |
-| kernel/src/drivers/virtio/ | VirtIO drivers (network, block) |
+| kernel/src/drivers/ | VirtIO drivers, consolidated init_all_pci_devices() |
 | kernel/src/io/ | UART, TtyDevice (terminal subsystem) |
 
 ## Debugging
@@ -58,7 +64,7 @@ doc/ai/           # Detailed AI documentation (see OVERVIEW.md)
 - `warn!()` - Always printed.
 
 ### Enable Debug Output for a Module
-Edit `kernel/src/logging/configuration.rs`:
+Edit `sys/src/logging/configuration.rs`:
 ```rust
 // Add to LOG_FOLLOWING_MODULES to enable:
 const LOG_FOLLOWING_MODULES: &[&str] = &["kernel::processes::scheduler"];
@@ -152,19 +158,31 @@ The `arch` crate provides no-op stubs for non-riscv64 targets so Kani can compil
 
 | Purpose | File |
 |---------|------|
-| Kernel entry | kernel/src/main.rs |
+| Boot entry points | boot/src/main.rs |
+| Kernel init | kernel/src/lib.rs |
+| CPU struct (base) | sys/src/cpu.rs |
+| CPU struct (full) | kernel/src/cpu.rs |
 | CSR access | arch/src/riscv64/cpu.rs |
 | SBI calls | arch/src/riscv64/sbi/ |
+| Assembly (boot, trap) | sys/src/asm/ |
 | Syscall dispatch | kernel/src/syscalls/linux.rs (thin trait methods) |
 | Syscall impls | kernel/src/syscalls/*_ops.rs (io, ioctl, fs, mm, signal, net, time, id, process, exec) |
 | Process struct | kernel/src/processes/process.rs |
 | Scheduler | kernel/src/processes/scheduler.rs |
-| Page tables | kernel/src/memory/page_tables.rs |
-| Address types | kernel/src/memory/address.rs, kernel/src/pci/address.rs |
+| Page table types | sys/src/memory/page_table.rs |
+| Page table mapping | kernel/src/memory/page_tables.rs |
+| Address types | sys/src/memory/address.rs, kernel/src/pci/address.rs |
+| Page allocator | sys/src/memory/page_allocator.rs |
+| Heap allocator | sys/src/memory/heap.rs |
 | Trap handler | kernel/src/interrupts/trap.rs |
+| Driver init | kernel/src/drivers/mod.rs |
+| MMIO type | sys/src/klibc/mmio.rs |
+| Spinlock | sys/src/klibc/spinlock.rs |
+| ValidatedPtr | sys/src/klibc/validated_ptr.rs |
+| Logging | sys/src/logging/mod.rs |
+| Log config | sys/src/logging/configuration.rs |
 | QEMU infra | qemu-infra/src/qemu.rs |
 | MCP server | mcp-server/src/server.rs |
-| Log config | kernel/src/logging/configuration.rs |
 | Signals | kernel/src/processes/signal.rs |
 | Syscall tracer config | kernel/src/syscalls/trace_config.rs |
 

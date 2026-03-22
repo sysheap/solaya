@@ -11,12 +11,12 @@ Memory management consists of:
 ## Constants
 
 ```rust
-pub const PAGE_SIZE: usize = 4096;  // kernel/src/memory/page.rs:5
+pub const PAGE_SIZE: usize = 4096;  // sys/src/memory/page.rs
 ```
 
 ## Page Allocator
 
-**File:** `kernel/src/memory/page_allocator.rs`
+**File:** `sys/src/memory/page_allocator.rs`
 
 ### MetadataPageAllocator
 
@@ -77,7 +77,7 @@ fn used_heap_pages(&self) -> usize
 
 ## Page Tables
 
-**File:** `kernel/src/memory/page_tables.rs`
+Core types in `sys/src/memory/page_table.rs`, mapping logic in `kernel/src/memory/page_tables.rs`.
 
 ### RISC-V Sv39 Format
 
@@ -177,7 +177,7 @@ impl RootPageTableHolder {
 
 ## PinnedHeapPages
 
-**File:** `kernel/src/memory/page.rs`
+**File:** `sys/src/memory/page.rs`
 
 High-level wrapper for allocating pages:
 
@@ -212,7 +212,7 @@ pub fn get_runtime_mappings() -> &'static [MappingDescription]
 
 ## Heap Allocator
 
-**File:** `kernel/src/memory/heap.rs`
+Core allocator in `sys/src/memory/heap.rs`, kernel-specific setup in `kernel/src/memory/heap.rs`.
 
 Global allocator implementation using the page allocator.
 
@@ -246,11 +246,15 @@ Global allocator implementation using the page allocator.
 
 | File | Purpose |
 |------|---------|
-| kernel/src/memory/mod.rs | Module exports, init functions |
-| kernel/src/memory/page.rs | Page struct, PinnedHeapPages |
-| kernel/src/memory/page_allocator.rs | MetadataPageAllocator |
-| kernel/src/memory/page_tables.rs | RootPageTableHolder, PTEs |
-| kernel/src/memory/heap.rs | Global allocator |
+| sys/src/memory/address.rs | PhysAddr, VirtAddr types |
+| sys/src/memory/page.rs | Page, Pages, PinnedHeapPages |
+| sys/src/memory/page_allocator.rs | MetadataPageAllocator |
+| sys/src/memory/page_table.rs | PageTable, PageTableEntry, OwnedPageTable |
+| sys/src/memory/heap.rs | Core heap allocator (SpinlockHeap) |
+| kernel/src/memory/mod.rs | Re-exports from sys, init functions |
+| kernel/src/memory/page_tables.rs | RootPageTableHolder, kernel mapping logic |
+| kernel/src/memory/page_table_entry.rs | Kernel-specific PTE extensions |
+| kernel/src/memory/heap.rs | Kernel global allocator setup |
 | kernel/src/memory/linker_information.rs | Linker symbols |
 | kernel/src/memory/runtime_mappings.rs | Runtime MMIO mappings |
 
