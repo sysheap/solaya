@@ -4,23 +4,19 @@ use core::mem::offset_of;
 
 use crate::klibc::runtime_initialized::RuntimeInitializedData;
 
-/// Mirror of the kernel's Cpu struct prefix — just enough fields to compute
-/// assembly-visible offsets. The kernel asserts these match at compile time.
 #[repr(C)]
-pub struct CpuLayout {
+pub struct CpuBase {
     pub kernel_page_tables_satp_value: usize,
     pub trap_frame: TrapFrame,
+    pub cpu_id: CpuId,
 }
 
-pub const TRAP_FRAME_OFFSET: usize = offset_of!(CpuLayout, trap_frame);
+pub const TRAP_FRAME_OFFSET: usize = offset_of!(CpuBase, trap_frame);
 pub const KERNEL_PAGE_TABLES_SATP_OFFSET: usize =
-    offset_of!(CpuLayout, kernel_page_tables_satp_value);
+    offset_of!(CpuBase, kernel_page_tables_satp_value);
+pub const CPU_ID_OFFSET: usize = offset_of!(CpuBase, cpu_id);
 
 pub static STARTING_CPU_ID: RuntimeInitializedData<CpuId> = RuntimeInitializedData::new();
-
-/// Byte offset of the cpu_id field within the kernel's per-CPU struct.
-/// Must be initialized by the kernel before any spinlock is acquired.
-pub static CPU_ID_OFFSET: RuntimeInitializedData<usize> = RuntimeInitializedData::new();
 
 /// Reads the current CPU ID.
 /// Before the per-CPU struct is set up, returns STARTING_CPU_ID.
@@ -31,10 +27,9 @@ pub fn cpu_id() -> CpuId {
     if ptr.is_null() {
         return *STARTING_CPU_ID;
     }
-    let offset = *CPU_ID_OFFSET;
     // SAFETY: The per-CPU struct is statically allocated via Box::leak.
-    // CPU_ID_OFFSET is set by the kernel to offset_of!(Cpu, cpu_id).
-    unsafe { *ptr.add(offset).cast::<CpuId>() }
+    // CPU_ID_OFFSET is a compile-time constant from offset_of!(CpuBase, cpu_id).
+    unsafe { *ptr.add(CPU_ID_OFFSET).cast::<CpuId>() }
 }
 
 #[cfg(any(not(target_arch = "riscv64"), miri))]
