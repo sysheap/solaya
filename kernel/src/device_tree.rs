@@ -11,6 +11,7 @@ use core::{
     mem::size_of,
     ops::Range,
 };
+use sys::klibc::validated_ptr::ValidatedPtr;
 
 const FDT_MAGIC: u32 = 0xd00dfeed;
 const FDT_VERSION: u32 = 17;
@@ -47,8 +48,8 @@ impl DeviceTree {
             "Device tree must be 4 byte aligned"
         );
         // Read just the header first to get totalsize.
-        let header_slice =
-            sys::memory::firmware_blob_as_slice(device_tree_pointer.cast(), size_of::<Header>());
+        let dt_ptr = ValidatedPtr::<u8>::from_trusted(device_tree_pointer.cast());
+        let header_slice = dt_ptr.as_static_slice(size_of::<Header>());
         let header: &Header = sys::klibc::util::ref_from_bytes(header_slice);
         assert_eq!(header.magic.get(), FDT_MAGIC);
         assert_eq!(
@@ -58,7 +59,7 @@ impl DeviceTree {
         );
         let total_size = header.totalsize.get() as usize;
         Self {
-            data: sys::memory::firmware_blob_as_slice(device_tree_pointer.cast(), total_size),
+            data: dt_ptr.as_static_slice(total_size),
         }
     }
 

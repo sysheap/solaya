@@ -12,6 +12,7 @@ use crate::{
 };
 use alloc::vec::Vec;
 use arch::backtrace::CalleeSavedRegs;
+use sys::klibc::validated_ptr::ValidatedPtr;
 
 #[allow(dead_code)]
 #[derive(Debug)]
@@ -53,10 +54,8 @@ impl<'a> Backtrace<'a> {
             eh_frame_start, eh_frame_size
         );
 
-        let eh_frame = sys::memory::linker_region_as_slice(
-            sys::memory::VirtAddr::new(eh_frame_start.as_usize()),
-            eh_frame_size,
-        );
+        let eh_frame = ValidatedPtr::<u8>::from_trusted(eh_frame_start.as_usize() as *const u8)
+            .as_static_slice(eh_frame_size);
 
         let eh_frame_parser = EhFrameParser::new(eh_frame);
         let eh_frames = eh_frame_parser.iter(eh_frame_start.as_usize());
@@ -101,7 +100,7 @@ impl<'a> Backtrace<'a> {
                 }
                 RegisterRule::Offset(offset) => {
                     let addr = crate::klibc::util::wrapping_add_signed(cfa, *offset);
-                    sys::memory::read_usize_from_address(addr)
+                    ValidatedPtr::<usize>::from_trusted(addr as *const usize).read()
                 }
             };
             new_regs[reg_index] = value;
@@ -165,7 +164,7 @@ fn scan_stack_for_return_addresses(sp: usize, counter: &mut u64) {
     let text_range = LinkerInformation::text_range();
     for i in 0..slots_to_scan {
         let slot_addr = sp.wrapping_add(i * size_of::<usize>());
-        let value = sys::memory::read_usize_from_address(slot_addr);
+        let value = ValidatedPtr::<usize>::from_trusted(slot_addr as *const usize).read();
         if text_range.contains(&VirtAddr::new(value)) {
             print_uncertain_stacktrace_frame(*counter, value);
             *counter += 1;
