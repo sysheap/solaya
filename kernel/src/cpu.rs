@@ -23,6 +23,11 @@ pub const TRAP_FRAME_OFFSET: usize = offset_of!(Cpu, trap_frame);
 pub const KERNEL_PAGE_TABLES_SATP_OFFSET: usize = offset_of!(Cpu, kernel_page_tables_satp_value);
 pub const CPU_ID_OFFSET: usize = offset_of!(Cpu, cpu_id);
 
+const _: () = {
+    assert!(TRAP_FRAME_OFFSET == sys::cpu::TRAP_FRAME_OFFSET);
+    assert!(KERNEL_PAGE_TABLES_SATP_OFFSET == sys::cpu::KERNEL_PAGE_TABLES_SATP_OFFSET);
+};
+
 // repr(C) is required: sys::cpu::CpuIdLayout reads cpu_id at a fixed offset
 // from the sscratch pointer, and assembly uses TRAP_FRAME_OFFSET /
 // KERNEL_PAGE_TABLES_SATP_OFFSET constants computed from this struct.

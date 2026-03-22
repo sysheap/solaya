@@ -104,7 +104,7 @@ mod test_entry_points {
     }
     #[unsafe(no_mangle)]
     fn asm_panic_rust() {
-        crate::asm::asm_panic_rust()
+        arch::cpu::asm_panic_rust()
     }
 }
 
