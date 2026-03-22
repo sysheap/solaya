@@ -228,7 +228,7 @@ pub const VIRTIO_PCI_CAP_PCI_CFG: u8 = 5;
 
 ## MMIO Utilities
 
-**File:** `kernel/src/klibc/mmio.rs`
+Core type in `sys/src/klibc/mmio.rs`, re-exported via `kernel/src/klibc/mmio.rs`.
 
 Memory-mapped I/O helper:
 
@@ -244,7 +244,9 @@ impl<T> MMIO<T> {
 
 ### mmio_struct! Macro
 
-Generates MMIO accessors for struct fields:
+**File:** `kernel/src/klibc/mmio.rs`
+
+Generates an extension trait with MMIO accessors for struct fields:
 
 ```rust
 mmio_struct! {
@@ -255,17 +257,36 @@ mmio_struct! {
     }
 }
 
-// Generates:
-impl MMIO<GeneralDevicePciHeader> {
-    pub fn vendor_id(&self) -> MMIO<u16>
-    pub fn device_id(&self) -> MMIO<u16>
+// Generates trait GeneralDevicePciHeaderFields:
+impl GeneralDevicePciHeaderFields for MMIO<GeneralDevicePciHeader> {
+    fn vendor_id(&self) -> MMIO<u16>
+    fn device_id(&self) -> MMIO<u16>
 }
 ```
+
+## Consolidated Driver Initialization
+
+**File:** `kernel/src/drivers/mod.rs`
+
+All PCI device initialization is consolidated in a single function:
+
+```rust
+pub fn init_all_pci_devices(pci_devices: Vec<PCIDevice>) {
+    init_network_device(&mut pci_devices);
+    init_block_devices(&mut pci_devices);
+    init_display_device(&mut pci_devices);
+    init_rng_device(&mut pci_devices);
+    init_input_device(&mut pci_devices);
+}
+```
+
+Called from `kernel_init()` after PCI enumeration. Each init function finds the relevant device by subsystem ID, initializes it, and registers it (interrupt handlers, devfs entries, etc.).
 
 ## Key Files
 
 | File | Purpose |
 |------|---------|
+| kernel/src/drivers/mod.rs | Consolidated driver init |
 | kernel/src/pci/mod.rs | PCI enumeration |
 | kernel/src/pci/allocator.rs | BAR space allocation |
 | kernel/src/pci/devic_tree_parser.rs | Device tree PCI info |
@@ -275,7 +296,8 @@ impl MMIO<GeneralDevicePciHeader> {
 | kernel/src/drivers/virtio/block.rs | VirtIO block driver |
 | kernel/src/drivers/virtio/virtqueue.rs | VirtQueue implementation (with descriptor chaining) |
 | kernel/src/drivers/virtio/capability.rs | Shared VirtIO constants and MMIO structs |
-| kernel/src/klibc/mmio.rs | MMIO utilities |
+| sys/src/klibc/mmio.rs | Core MMIO type |
+| kernel/src/klibc/mmio.rs | mmio_struct! macro, re-exports from sys |
 
 ## Adding a New VirtIO Driver
 

@@ -16,26 +16,39 @@ arch/src/              # Hardware abstraction layer (no_std crate)
   lib.rs               # cfg(target_arch) dispatch + CpuId type
   riscv64/
     cpu.rs             # CSR read/write, barriers, sfence
+    backtrace.rs       # CalleeSavedRegs, naked backtrace dispatch
+    linker_symbols.rs  # Linker symbol declarations (extern statics)
     sbi/               # SBI ecall + extensions (timer, IPI, hart state)
     timer.rs           # rdtime, CLINT constants
     trap_cause.rs      # Interrupt/exception cause constants
   stub/                # No-op stubs for non-riscv64 (Kani, miri)
 
-kernel/src/
-  main.rs              # Entry point, kernel_init
-  cpu.rs               # Per-CPU state (Cpu struct, scheduler, trap frame)
-  asm/                 # RISC-V assembly (context switch, traps)
-  memory/              # Page allocator, page tables, heap
+sys/src/               # Self-contained system library (no kernel deps)
+  cpu.rs               # CpuBase struct, per-CPU access helpers
+  asm/                 # Assembly (boot.S, trap.S, powersave.S, panic.S)
+  memory/              # PhysAddr, VirtAddr, Page, PageTable, page allocator, heap
+  klibc/               # Spinlock, MMIO, ValidatedPtr, array_vec, sizes, util
+  logging/             # Log macros and per-module configuration
+  io/                  # UART driver
+
+boot/src/
+  main.rs              # #[no_mangle] entry points (calls into kernel)
+
+kernel/src/            # Main kernel logic (#![forbid(unsafe_code)])
+  lib.rs               # kernel_init, prepare_for_scheduling
+  cpu.rs               # Cpu struct (embeds sys::cpu::CpuBase + scheduler)
+  asm/                 # Re-exports from arch
+  memory/              # RootPageTableHolder, linker info, runtime mappings
   processes/           # Process, thread, scheduler
   syscalls/            # Linux syscall handlers
   interrupts/          # Trap handling, PLIC
-  net/                 # UDP network stack
-  drivers/virtio/      # VirtIO drivers
-  io/                  # UART, TtyDevice (terminal subsystem)
+  net/                 # Network stack (UDP, TCP)
+  drivers/             # VirtIO drivers, consolidated init_all_pci_devices()
+  io/                  # UART extensions, TtyDevice (terminal subsystem)
   pci/                 # PCI enumeration
-  klibc/               # Kernel utilities
+  klibc/               # Re-exports from sys + kernel-specific utils
   debugging/           # Backtrace, symbols
-  logging/             # Log macros
+  logging/             # Re-exports from sys
 
 userspace/src/
   bin/                 # User programs (init, etc.)
@@ -44,11 +57,12 @@ userspace/src/
 
 ## Boot Sequence
 
-Entry: `kernel_init(hart_id, device_tree_pointer)` in `kernel/src/main.rs`
+Assembly calls `kernel_init()` in `boot/src/main.rs`, which delegates to `solaya::kernel_init()` in `kernel/src/lib.rs`.
 
 ```
-kernel_init()
+boot::kernel_init() -> solaya::kernel_init()
   |
+  +-> sys::cpu::STARTING_CPU_ID.init() # Store boot hart ID
   +-> QEMU_UART.init()              # Initialize serial output
   +-> sbi::base_extension::sbi_get_spec_version() # Check SBI version >= 0.2
   +-> sbi::hart_state_extension::get_number_of_harts() # Count CPUs
@@ -65,14 +79,13 @@ kernel_init()
   +-> Cpu::activate_kernel_page_table()
   +-> plic::init_uart_interrupt()   # Enable UART interrupts
   +-> enumerate_devices()           # Find PCI devices
-  +-> NetworkDevice::initialize()   # Init VirtIO network
-  +-> net::assign_network_device()  # Register network device
+  +-> drivers::init_all_pci_devices()  # Init all VirtIO drivers
   +-> kernel_tasks::create_worker_thread()  # Kernel async task executor
   +-> start_other_harts()           # Boot other CPUs
   +-> prepare_for_scheduling()      # Enter scheduler loop
 ```
 
-`prepare_for_scheduling()` in `kernel/src/main.rs`:
+`prepare_for_scheduling()` in `kernel/src/lib.rs`:
 ```
 prepare_for_scheduling()
   |
@@ -84,16 +97,24 @@ prepare_for_scheduling()
 
 ## CPU Structure
 
-Per-CPU state in `kernel/src/cpu.rs`:
+Per-CPU state split across `sys/src/cpu.rs` (base) and `kernel/src/cpu.rs` (full):
 
 ```rust
+// sys/src/cpu.rs - Fields accessed by assembly (offsets must be stable)
+#[repr(C)]
+pub struct CpuBase {
+    pub kernel_page_tables_satp_value: usize,  // Kernel SATP for trap entry
+    pub trap_frame: TrapFrame,                  // Saved registers on trap
+    pub cpu_id: CpuId,                          // Hart ID
+}
+
+// kernel/src/cpu.rs - Full per-CPU struct
+#[repr(C)]  // CpuBase must be first field for assembly offset compatibility
 pub struct Cpu {
-    kernel_page_tables_satp_value: usize,  # Kernel SATP for trap entry
-    trap_frame: TrapFrame,                  # Saved registers on trap
-    scheduler: Spinlock<CpuScheduler>,      # Per-CPU scheduler
-    cpu_id: CpuId,                          # Hart ID
-    kernel_page_tables: RootPageTableHolder,# Kernel page tables
-    number_cpus: usize,                     # Total CPU count
+    base: sys::cpu::CpuBase,                    // Assembly-visible fields
+    scheduler: Spinlock<CpuScheduler>,           // Per-CPU scheduler
+    kernel_page_tables: RootPageTableHolder,     // Kernel page tables
+    number_cpus: usize,                          // Total CPU count
 }
 ```
 
@@ -218,16 +239,20 @@ Key files:
 
 ## Key Files Quick Reference
 
-| Purpose | File:Line |
-|---------|-----------|
-| Kernel entry | kernel/src/main.rs |
-| CPU struct | kernel/src/cpu.rs |
+| Purpose | File |
+|---------|------|
+| Boot entry points | boot/src/main.rs |
+| Kernel init | kernel/src/lib.rs |
+| CPU struct (base) | sys/src/cpu.rs |
+| CPU struct (full) | kernel/src/cpu.rs |
 | CSR access | arch/src/riscv64/cpu.rs |
 | SBI calls | arch/src/riscv64/sbi/ |
-| Trap entry | kernel/src/asm/trap.s |
+| Assembly (boot, trap) | sys/src/asm/ |
 | Trap handler | kernel/src/interrupts/trap.rs |
 | Scheduler | kernel/src/processes/scheduler.rs |
 | Process struct | kernel/src/processes/process.rs |
 | Thread struct | kernel/src/processes/thread.rs |
 | Syscall dispatch | kernel/src/syscalls/handler.rs |
-| Page tables | kernel/src/memory/page_tables.rs |
+| Page table types | sys/src/memory/page_table.rs |
+| Page table mapping | kernel/src/memory/page_tables.rs |
+| Driver init | kernel/src/drivers/mod.rs |

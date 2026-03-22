@@ -4,19 +4,31 @@
 
 Root `Cargo.toml` defines workspace:
 ```
-members = ["common", "headers", "kernel", "userspace"]
-default-members = ["kernel"]
+members = ["arch", "boot", "common", "headers", "kernel", "sys", "userspace"]
+default-members = ["boot"]
 ```
 
 ### Workspace Crates
 
 | Crate | Target | Purpose |
 |-------|--------|---------|
-| kernel | riscv64gc-unknown-none-elf | Main OS kernel (no_std) |
+| boot | riscv64gc-unknown-none-elf | Entry point wrapper (`#[no_mangle]` functions called from assembly) |
+| kernel (solaya) | riscv64gc-unknown-none-elf | Main kernel logic (no_std, `#![forbid(unsafe_code)]`) |
+| sys | riscv64gc-unknown-none-elf | Self-contained system library (page allocator, heap, spinlock, MMIO, logging) |
+| arch | riscv64gc-unknown-none-elf | Hardware abstraction (CSR, SBI, backtrace, linker symbols) |
 | userspace | riscv64gc-unknown-linux-musl | User programs (musl libc) |
 | common | (inherited) | Shared no_std library |
 | headers | (inherited) | Linux Header C bindings via bindgen |
 | system-tests | x86_64-unknown-linux-gnu | Integration tests (separate workspace) |
+
+### Crate Dependency Graph
+
+```
+boot -> kernel (solaya) -> sys -> arch
+                        -> arch
+                        -> common
+                        -> headers
+```
 
 ### Release Profile
 ```toml
@@ -39,12 +51,12 @@ just build
   |     Output: kernel/compiled_userspace/*
   |
   +-> build-cargo
-  |     cargo build --release
-  |     Output: target/riscv64gc-unknown-none-elf/release/kernel
+  |     cargo build --release (builds boot crate, which links kernel+sys+arch)
+  |     Output: target/riscv64gc-unknown-none-elf/release/boot
   |
   +-> patch-symbols
-        Extract symbols, embed in kernel binary
-        Output: symbols file appended to kernel
+        Extract symbols, embed in boot binary
+        Output: symbols file appended to boot
 ```
 
 ### Userspace Embedding
@@ -92,7 +104,8 @@ riscv64-unknown-linux-musl-objcopy --update-section symbols=./symbols \
 target/
   riscv64gc-unknown-none-elf/
     release/
-      kernel              # Final kernel binary
+      boot                # Final kernel binary (entry point)
+      libsolaya.a         # Kernel library
 
 target-userspace/
   riscv64gc-unknown-linux-musl/
@@ -130,8 +143,12 @@ Automatically entered via direnv.
 |------|---------|
 | Cargo.toml | Workspace configuration |
 | justfile | Build commands |
-| kernel/Cargo.toml | Kernel package config |
+| boot/Cargo.toml | Boot crate config (default build target) |
+| boot/src/main.rs | Entry point wrapper |
+| kernel/Cargo.toml | Kernel library config |
 | kernel/build.rs | Userspace embedding |
 | kernel/qemu.ld | Kernel linker script |
+| sys/Cargo.toml | System library config |
+| arch/Cargo.toml | Architecture HAL config |
 | userspace/Cargo.toml | Userspace package config |
 | flake.nix | Nix development environment |

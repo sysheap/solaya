@@ -10,7 +10,7 @@ Debugging tools available:
 
 ## Logging Macros
 
-**File:** `kernel/src/logging/mod.rs`
+**File:** `sys/src/logging/mod.rs` (re-exported by kernel)
 
 ### info!
 
@@ -45,7 +45,7 @@ Direct output without metadata. Used for user-facing output.
 
 ## Enabling Debug Output
 
-**File:** `kernel/src/logging/configuration.rs`
+**File:** `sys/src/logging/configuration.rs`
 
 ```rust
 // Modules that should be logged (if empty, nothing logged by debug!)
@@ -321,10 +321,11 @@ python -m gdb_mcp_server
 
 | File | Purpose |
 |------|---------|
-| kernel/src/logging/mod.rs | Log macros |
-| kernel/src/logging/configuration.rs | Module log config |
+| sys/src/logging/mod.rs | Log macros (info!, debug!, warn!) |
+| sys/src/logging/configuration.rs | Module log config |
 | kernel/src/debugging/mod.rs | dump_current_state |
-| kernel/src/debugging/backtrace.rs | Stack unwinding |
+| kernel/src/debugging/backtrace.rs | Stack unwinding logic |
+| arch/src/riscv64/backtrace.rs | CalleeSavedRegs, naked backtrace dispatch |
 | kernel/src/debugging/symbols.rs | Symbol resolution |
 | kernel/src/debugging/unwinder.rs | DWARF unwinding |
 | kernel/src/panic.rs | Panic handler |

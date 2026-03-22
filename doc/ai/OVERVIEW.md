@@ -50,23 +50,36 @@ Quick reference to find detailed documentation. Each file covers a specific subs
 
 ```
 arch/src/          - Hardware abstraction layer (CSR, SBI, timer, trap causes)
-  riscv64/         - Real RISC-V implementations
+  riscv64/         - Real RISC-V implementations (+ backtrace, linker symbols)
   stub/            - No-op stubs for non-riscv64 targets (Kani, miri)
 
-kernel/src/
-  asm/           - RISC-V assembly (context switch, traps)
-  memory/        - Page allocator, page tables, heap
-  processes/     - Process, thread, scheduler, loader
-  syscalls/      - Syscall handlers and validation
-  interrupts/    - Trap handler, PLIC, timer
-  fs/            - VFS layer (tmpfs, procfs, devfs, open file tracking)
-  net/           - Network stack (UDP, TCP)
-  drivers/       - VirtIO drivers
-  io/            - UART, TtyDevice (terminal subsystem)
-  pci/           - PCI enumeration
-  klibc/         - Kernel utilities (spinlock, elf, etc.)
-  debugging/     - Backtrace, symbols, unwinder
-  logging/       - Log macros and configuration
+sys/src/           - Self-contained system library (no_std, no kernel deps)
+  cpu.rs           - CpuBase struct, per-CPU access via sscratch
+  asm/             - Assembly files (boot.S, trap.S, powersave.S, panic.S)
+  memory/          - PhysAddr, VirtAddr, Page, PageTable, page allocator, heap
+  klibc/           - Spinlock, MMIO, ValidatedPtr, runtime_initialized, sizes
+  logging/         - Log macros (info!, debug!, warn!) and configuration
+  io/              - UART driver
+
+boot/src/          - Thin entry point wrapper (#[no_mangle] functions)
+  main.rs          - Calls into kernel (solaya) crate
+
+kernel/src/        - Main kernel logic (library crate, #![forbid(unsafe_code)])
+  lib.rs           - kernel_init, prepare_for_scheduling
+  cpu.rs           - Cpu struct (embeds sys::cpu::CpuBase)
+  asm/             - Re-exports from arch
+  memory/          - RootPageTableHolder, linker info, runtime mappings
+  processes/       - Process, thread, scheduler, loader
+  syscalls/        - Syscall handlers and validation
+  interrupts/      - Trap handler, PLIC, timer
+  fs/              - VFS layer (tmpfs, procfs, devfs, open file tracking)
+  net/             - Network stack (UDP, TCP)
+  drivers/         - VirtIO drivers, consolidated init
+  io/              - UART extensions, TtyDevice (terminal subsystem)
+  pci/             - PCI enumeration
+  klibc/           - Re-exports from sys + kernel-specific utils (elf, mmio_struct!)
+  debugging/       - Backtrace, symbols, unwinder
+  logging/         - Re-exports from sys
 
 userspace/src/
   bin/           - Userspace programs
