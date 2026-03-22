@@ -1,7 +1,6 @@
-#![allow(unsafe_code)]
 use alloc::{boxed::Box, sync::Arc};
 use common::syscalls::trap_frame::TrapFrame;
-use core::{mem::offset_of, ptr::addr_of};
+use core::mem::offset_of;
 
 pub use arch::CpuId;
 
@@ -21,8 +20,8 @@ pub(crate) const KERNEL_STACK_SIZE: usize = KiB(512);
 pub static STARTING_CPU_ID: RuntimeInitializedData<CpuId> = RuntimeInitializedData::new();
 
 pub const TRAP_FRAME_OFFSET: usize = offset_of!(Cpu, trap_frame);
-
 pub const KERNEL_PAGE_TABLES_SATP_OFFSET: usize = offset_of!(Cpu, kernel_page_tables_satp_value);
+pub const CPU_ID_OFFSET: usize = offset_of!(Cpu, cpu_id);
 
 // repr(C) is required: sys::cpu::CpuIdLayout reads cpu_id at a fixed offset
 // from the sscratch pointer, and assembly uses TRAP_FRAME_OFFSET /
@@ -84,35 +83,16 @@ impl Cpu {
         Box::leak(cpu) as *const Cpu
     }
 
-    fn cpu_ptr() -> *mut Cpu {
-        let ptr = arch::cpu::read_sscratch() as *mut Self;
-        assert!(!ptr.is_null() && ptr.is_aligned());
-        ptr
-    }
-
     pub fn current() -> &'static Cpu {
-        // SAFETY: The pointer points to a static and is therefore always valid.
-        unsafe { &*Self::cpu_ptr() }
+        sys::cpu::per_cpu_ref::<Cpu>()
     }
 
     pub fn read_trap_frame() -> TrapFrame {
-        let cpu_ptr = Self::cpu_ptr();
-        // SAFETY: Cpu is statically allocated and offset
-        // is calculated by the actual field offset.
-        unsafe {
-            let trap_frame_ptr = cpu_ptr.byte_add(TRAP_FRAME_OFFSET).cast::<TrapFrame>();
-            trap_frame_ptr.read_volatile()
-        }
+        sys::cpu::per_cpu_volatile_read::<TrapFrame>(TRAP_FRAME_OFFSET)
     }
 
     pub fn write_trap_frame(trap_frame: TrapFrame) {
-        let cpu_ptr = Self::cpu_ptr();
-        // SAFETY: Cpu is statically allocated and offset
-        // is calculated by the actual field offset.
-        unsafe {
-            let trap_frame_ptr = cpu_ptr.byte_add(TRAP_FRAME_OFFSET).cast::<TrapFrame>();
-            trap_frame_ptr.write_volatile(trap_frame);
-        }
+        sys::cpu::per_cpu_volatile_write::<TrapFrame>(TRAP_FRAME_OFFSET, trap_frame);
     }
 
     pub fn with_scheduler<R>(f: impl FnOnce(SpinlockGuard<'_, CpuScheduler>) -> R) -> R {
@@ -134,23 +114,12 @@ impl Cpu {
     }
 
     pub fn maybe_kernel_page_tables() -> Option<&'static RootPageTableHolder> {
-        let ptr = arch::cpu::read_sscratch() as *mut Self;
-        if ptr.is_null() || !ptr.is_aligned() {
-            return None;
-        }
-        // SAFETY: We validate above that the pointer is non-null and aligned.
-        // The Cpu struct is statically allocated via Box::leak and never freed.
-        unsafe { Some(&(*ptr).kernel_page_tables) }
+        let cpu: &Cpu = sys::cpu::try_per_cpu_ref()?;
+        Some(&cpu.kernel_page_tables)
     }
 
     pub fn cpu_id() -> CpuId {
-        let ptr = arch::cpu::read_sscratch() as *mut Self;
-        if ptr.is_null() {
-            return *STARTING_CPU_ID;
-        }
-        // SAFETY: The Cpu struct is statically allocated via Box::leak; addr_of!
-        // reads the field without creating an intermediate reference.
-        unsafe { *addr_of!((*ptr).cpu_id) }
+        sys::cpu::cpu_id()
     }
 
     pub fn activate_kernel_page_table(&self) {

@@ -1,32 +1,78 @@
-use core::ptr::addr_of;
-
 pub use arch::CpuId;
 
 use crate::klibc::runtime_initialized::RuntimeInitializedData;
 
 pub static STARTING_CPU_ID: RuntimeInitializedData<CpuId> = RuntimeInitializedData::new();
 
+/// Byte offset of the cpu_id field within the kernel's per-CPU struct.
+/// Must be initialized by the kernel before any spinlock is acquired.
+pub static CPU_ID_OFFSET: RuntimeInitializedData<usize> = RuntimeInitializedData::new();
+
 /// Reads the current CPU ID.
 /// Before the per-CPU struct is set up, returns STARTING_CPU_ID.
 /// After setup, reads the cpu_id field from the per-CPU struct pointed to by sscratch.
-///
-/// This works because the kernel's Cpu struct starts with the same layout as
-/// what sys expects: the cpu_id field is at a known offset from the sscratch pointer.
-/// The kernel must ensure cpu_id is at `CPU_ID_OFFSET` bytes from the struct base.
 #[cfg(all(target_arch = "riscv64", not(miri)))]
 pub fn cpu_id() -> CpuId {
     let ptr = arch::cpu::read_sscratch() as *const u8;
     if ptr.is_null() {
         return *STARTING_CPU_ID;
     }
+    let offset = *CPU_ID_OFFSET;
     // SAFETY: The per-CPU struct is statically allocated via Box::leak.
-    // CPU_ID_OFFSET gives the correct byte offset of the cpu_id field.
-    unsafe { *addr_of!((*(ptr as *const CpuIdLayout)).cpu_id) }
+    // CPU_ID_OFFSET is set by the kernel to offset_of!(Cpu, cpu_id).
+    unsafe { *ptr.add(offset).cast::<CpuId>() }
 }
 
 #[cfg(any(not(target_arch = "riscv64"), miri))]
 pub fn cpu_id() -> CpuId {
     CpuId::from_hart_id(0)
+}
+
+/// Return a reference to the per-CPU struct pointed to by sscratch.
+/// Panics if sscratch is null or unaligned.
+pub fn per_cpu_ref<T>() -> &'static T {
+    let ptr = arch::cpu::read_sscratch() as *const T;
+    assert!(!ptr.is_null() && ptr.is_aligned());
+    // SAFETY: The per-CPU struct is statically allocated via Box::leak and
+    // never freed. Non-null and aligned checked above.
+    unsafe { &*ptr }
+}
+
+/// Return a reference to the per-CPU struct, or None if sscratch is null/unaligned.
+pub fn try_per_cpu_ref<T>() -> Option<&'static T> {
+    let ptr = arch::cpu::read_sscratch() as *const T;
+    if ptr.is_null() || !ptr.is_aligned() {
+        return None;
+    }
+    // SAFETY: Non-null and aligned checked above. Per-CPU struct is statically
+    // allocated via Box::leak and never freed.
+    Some(unsafe { &*ptr })
+}
+
+/// Read a field from the per-CPU struct using a volatile read.
+/// `offset` is the byte offset of the field from the struct start.
+pub fn per_cpu_volatile_read<T>(offset: usize) -> T {
+    let ptr = arch::cpu::read_sscratch() as *const u8;
+    assert!(!ptr.is_null());
+    // SAFETY: Per-CPU struct is statically allocated. The caller provides a
+    // valid offset (computed via offset_of!).
+    unsafe {
+        let field_ptr = ptr.add(offset).cast::<T>();
+        field_ptr.read_volatile()
+    }
+}
+
+/// Write a field in the per-CPU struct using a volatile write.
+/// `offset` is the byte offset of the field from the struct start.
+pub fn per_cpu_volatile_write<T>(offset: usize, value: T) {
+    let ptr = arch::cpu::read_sscratch() as *mut u8;
+    assert!(!ptr.is_null());
+    // SAFETY: Per-CPU struct is statically allocated. The caller provides a
+    // valid offset (computed via offset_of!).
+    unsafe {
+        let field_ptr = ptr.add(offset).cast::<T>();
+        field_ptr.write_volatile(value);
+    }
 }
 
 /// Disable interrupts and halt forever. Used for shutdown paths.
@@ -38,13 +84,4 @@ pub fn disable_interrupts_and_halt() -> ! {
     loop {
         arch::cpu::wait_for_interrupt();
     }
-}
-
-/// Layout prefix of the per-CPU struct. The kernel's Cpu struct must have
-/// these fields in exactly this order as its first fields (via #[repr(C)]).
-#[repr(C)]
-struct CpuIdLayout {
-    _kernel_page_tables_satp_value: usize,
-    _trap_frame: common::syscalls::trap_frame::TrapFrame,
-    cpu_id: CpuId,
 }
