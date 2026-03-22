@@ -1,121 +1,4 @@
-use core::{
-    fmt,
-    ops::{Add, AddAssign, Sub},
-};
-
-/// Physical memory address (zero-cost wrapper around usize)
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct PhysAddr(usize);
-
-/// Virtual memory address (zero-cost wrapper around usize)
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct VirtAddr(usize);
-
-impl PhysAddr {
-    pub const fn new(addr: usize) -> Self {
-        Self(addr)
-    }
-
-    pub const fn zero() -> Self {
-        Self(0)
-    }
-
-    pub const fn as_usize(self) -> usize {
-        self.0
-    }
-
-    pub const fn is_page_aligned(self) -> bool {
-        self.0 & 0xFFF == 0
-    }
-}
-
-impl VirtAddr {
-    pub const fn new(addr: usize) -> Self {
-        Self(addr)
-    }
-
-    pub const fn zero() -> Self {
-        Self(0)
-    }
-
-    pub const fn as_usize(self) -> usize {
-        self.0
-    }
-
-    pub const fn as_ptr<T>(self) -> *const T {
-        self.0 as *const T
-    }
-
-    pub const fn is_page_aligned(self) -> bool {
-        self.0 & 0xFFF == 0
-    }
-}
-
-impl Add<usize> for PhysAddr {
-    type Output = Self;
-    fn add(self, rhs: usize) -> Self {
-        Self(self.0 + rhs)
-    }
-}
-
-impl AddAssign<usize> for PhysAddr {
-    fn add_assign(&mut self, rhs: usize) {
-        self.0 += rhs;
-    }
-}
-
-impl Sub<usize> for PhysAddr {
-    type Output = Self;
-    fn sub(self, rhs: usize) -> Self {
-        Self(self.0 - rhs)
-    }
-}
-
-impl Sub for PhysAddr {
-    type Output = usize;
-    fn sub(self, rhs: Self) -> usize {
-        self.0 - rhs.0
-    }
-}
-
-impl Add<usize> for VirtAddr {
-    type Output = Self;
-    fn add(self, rhs: usize) -> Self {
-        Self(self.0 + rhs)
-    }
-}
-
-impl AddAssign<usize> for VirtAddr {
-    fn add_assign(&mut self, rhs: usize) {
-        self.0 += rhs;
-    }
-}
-
-impl Sub<usize> for VirtAddr {
-    type Output = Self;
-    fn sub(self, rhs: usize) -> Self {
-        Self(self.0 - rhs)
-    }
-}
-
-impl Sub for VirtAddr {
-    type Output = usize;
-    fn sub(self, rhs: Self) -> usize {
-        self.0 - rhs.0
-    }
-}
-
-impl fmt::Display for PhysAddr {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:#018x}", self.0)
-    }
-}
-
-impl fmt::Display for VirtAddr {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:#018x}", self.0)
-    }
-}
+pub use sys::memory::address::{PhysAddr, VirtAddr};
 
 #[cfg(kani)]
 mod kani_proofs {
@@ -166,52 +49,45 @@ mod kani_proofs {
 mod tests {
     use super::*;
 
-    // Test-only methods for PhysAddr
-    impl PhysAddr {
-        pub const fn from_page_number(ppn: usize) -> Self {
-            Self(ppn << 12)
-        }
-
-        pub const fn page_number(self) -> usize {
-            self.0 >> 12
-        }
-
-        pub const fn align_down(self) -> Self {
-            Self(self.0 & !0xFFF)
-        }
-
-        pub const fn align_up(self) -> Self {
-            Self((self.0 + 0xFFF) & !0xFFF)
-        }
+    fn phys_from_page_number(ppn: usize) -> PhysAddr {
+        PhysAddr::new(ppn << 12)
     }
 
-    // Test-only methods for VirtAddr
-    impl VirtAddr {
-        pub const fn from_page_number(vpn: usize) -> Self {
-            Self(vpn << 12)
-        }
+    fn phys_page_number(addr: PhysAddr) -> usize {
+        addr.as_usize() >> 12
+    }
 
-        pub const fn page_number(self) -> usize {
-            self.0 >> 12
-        }
+    fn phys_align_down(addr: PhysAddr) -> PhysAddr {
+        PhysAddr::new(addr.as_usize() & !0xFFF)
+    }
 
-        pub const fn align_down(self) -> Self {
-            Self(self.0 & !0xFFF)
-        }
+    fn phys_align_up(addr: PhysAddr) -> PhysAddr {
+        PhysAddr::new((addr.as_usize() + 0xFFF) & !0xFFF)
+    }
 
-        pub const fn align_up(self) -> Self {
-            Self((self.0 + 0xFFF) & !0xFFF)
-        }
+    fn virt_from_page_number(vpn: usize) -> VirtAddr {
+        VirtAddr::new(vpn << 12)
+    }
 
-        /// Sv39 VPN index for page table level 0, 1, or 2.
-        pub const fn vpn_level(self, level: u8) -> usize {
-            assert!(level < 3);
-            (self.0 >> (12 + level as usize * 9)) & 0x1FF
-        }
+    fn virt_page_number(addr: VirtAddr) -> usize {
+        addr.as_usize() >> 12
+    }
 
-        pub const fn page_offset(self) -> usize {
-            self.0 & 0xFFF
-        }
+    fn virt_align_down(addr: VirtAddr) -> VirtAddr {
+        VirtAddr::new(addr.as_usize() & !0xFFF)
+    }
+
+    fn virt_align_up(addr: VirtAddr) -> VirtAddr {
+        VirtAddr::new((addr.as_usize() + 0xFFF) & !0xFFF)
+    }
+
+    fn virt_vpn_level(addr: VirtAddr, level: u8) -> usize {
+        assert!(level < 3);
+        (addr.as_usize() >> (12 + level as usize * 9)) & 0x1FF
+    }
+
+    fn virt_page_offset(addr: VirtAddr) -> usize {
+        addr.as_usize() & 0xFFF
     }
 
     #[test_case]
@@ -230,26 +106,26 @@ mod tests {
 
     #[test_case]
     fn test_page_number_conversion() {
-        let addr = PhysAddr::from_page_number(0x8000);
+        let addr = phys_from_page_number(0x8000);
         assert_eq!(addr.as_usize(), 0x8000 << 12);
-        assert_eq!(addr.page_number(), 0x8000);
+        assert_eq!(phys_page_number(addr), 0x8000);
 
-        let vaddr = VirtAddr::from_page_number(0x1000);
+        let vaddr = virt_from_page_number(0x1000);
         assert_eq!(vaddr.as_usize(), 0x1000 << 12);
-        assert_eq!(vaddr.page_number(), 0x1000);
+        assert_eq!(virt_page_number(vaddr), 0x1000);
     }
 
     #[test_case]
     fn test_alignment() {
         let addr = PhysAddr::new(0x8000_1234);
         assert!(!addr.is_page_aligned());
-        assert_eq!(addr.align_down().as_usize(), 0x8000_1000);
-        assert_eq!(addr.align_up().as_usize(), 0x8000_2000);
+        assert_eq!(phys_align_down(addr).as_usize(), 0x8000_1000);
+        assert_eq!(phys_align_up(addr).as_usize(), 0x8000_2000);
 
         let aligned = PhysAddr::new(0x8000_0000);
         assert!(aligned.is_page_aligned());
-        assert_eq!(aligned.align_down().as_usize(), 0x8000_0000);
-        assert_eq!(aligned.align_up().as_usize(), 0x8000_0000);
+        assert_eq!(phys_align_down(aligned).as_usize(), 0x8000_0000);
+        assert_eq!(phys_align_up(aligned).as_usize(), 0x8000_0000);
     }
 
     #[test_case]
@@ -264,25 +140,24 @@ mod tests {
 
     #[test_case]
     fn test_vpn_level() {
-        // All 9-bit VPN fields set (bits 38..0 all ones)
         let addr = VirtAddr::new(0x0000_007F_FFFF_FFFF);
-        assert_eq!(addr.vpn_level(2), 0x1FF);
-        assert_eq!(addr.vpn_level(1), 0x1FF);
-        assert_eq!(addr.vpn_level(0), 0x1FF);
+        assert_eq!(virt_vpn_level(addr, 2), 0x1FF);
+        assert_eq!(virt_vpn_level(addr, 1), 0x1FF);
+        assert_eq!(virt_vpn_level(addr, 0), 0x1FF);
 
         let addr2 = VirtAddr::new(0x0000_0000_0040_1000);
-        assert_eq!(addr2.vpn_level(2), 0);
-        assert_eq!(addr2.vpn_level(1), 2);
-        assert_eq!(addr2.vpn_level(0), 1);
+        assert_eq!(virt_vpn_level(addr2, 2), 0);
+        assert_eq!(virt_vpn_level(addr2, 1), 2);
+        assert_eq!(virt_vpn_level(addr2, 0), 1);
     }
 
     #[test_case]
     fn test_page_offset() {
         let addr = VirtAddr::new(0x1234);
-        assert_eq!(addr.page_offset(), 0x234);
+        assert_eq!(virt_page_offset(addr), 0x234);
 
         let aligned = VirtAddr::new(0x1000);
-        assert_eq!(aligned.page_offset(), 0);
+        assert_eq!(virt_page_offset(aligned), 0);
     }
 
     #[test_case]

@@ -1,6 +1,8 @@
+#[cfg(test)]
+use core::ops::{BitAndAssign, BitOrAssign, Not, Shl, Shr};
 use core::{
     fmt::Display,
-    ops::{BitAnd, BitAndAssign, BitOrAssign, Not, Rem, Shl, Shr, Sub},
+    ops::{BitAnd, Rem, Sub},
 };
 
 use crate::memory::PAGE_SIZE;
@@ -115,6 +117,7 @@ where
     value % alignment == DataType::from(0)
 }
 
+#[cfg(test)]
 pub fn set_or_clear_bit<DataType>(
     data: &mut DataType,
     should_set_bit: bool,
@@ -136,6 +139,7 @@ where
     *data
 }
 
+#[cfg(test)]
 pub fn set_bit<DataType>(data: &mut DataType, bit_position: usize)
 where
     DataType: BitOrAssign + Not<Output = DataType> + From<u8> + Shl<usize, Output = DataType>,
@@ -143,6 +147,7 @@ where
     *data |= DataType::from(1) << bit_position
 }
 
+#[cfg(test)]
 pub fn clear_bit<DataType>(data: &mut DataType, bit_position: usize)
 where
     DataType: BitAndAssign + Not<Output = DataType> + From<u8> + Shl<usize, Output = DataType>,
@@ -150,6 +155,7 @@ where
     *data &= !(DataType::from(1) << bit_position)
 }
 
+#[cfg(test)]
 pub fn get_bit<DataType>(data: DataType, bit_position: usize) -> bool
 where
     DataType: Shr<usize, Output = DataType>
@@ -160,6 +166,7 @@ where
     ((data >> bit_position) & DataType::from(0x1)) == DataType::from(1)
 }
 
+#[cfg(test)]
 pub fn set_multiple_bits<DataType, ValueType>(
     data: &mut DataType,
     value: ValueType,
@@ -196,6 +203,7 @@ where
     *data
 }
 
+#[cfg(test)]
 pub fn get_multiple_bits<DataType, ValueType>(
     data: DataType,
     number_of_bits: usize,

@@ -2,6 +2,7 @@ pub mod address;
 pub mod heap;
 pub mod page;
 pub mod page_allocator;
+pub mod page_table;
 
 pub use address::{PhysAddr, VirtAddr};
 pub use page::{PAGE_SIZE, Page, Pages, PagesAsSlice, PinnedHeapPages};

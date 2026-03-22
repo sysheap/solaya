@@ -1,53 +1,8 @@
-use crate::klibc::{
-    elf,
-    util::{get_bit, get_multiple_bits, set_multiple_bits, set_or_clear_bit},
-};
+#[cfg(any(kani, test))]
+use sys::memory::page_table::PageTableEntry;
+pub use sys::memory::page_table::XWRMode;
 
-use super::address::PhysAddr;
-#[cfg(target_arch = "riscv64")]
-use super::page_tables::PageTable;
-
-#[cfg(not(target_arch = "riscv64"))]
-type PageTable = u8;
-
-#[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum XWRMode {
-    PointerToNextLevel = 0b000,
-    ReadOnly = 0b001,
-    ReadWrite = 0b011,
-    ExecuteOnly = 0b100,
-    ReadExecute = 0b101,
-    ReadWriteExecute = 0b111,
-}
-
-impl From<u8> for XWRMode {
-    fn from(value: u8) -> Self {
-        match value {
-            0b000 => Self::PointerToNextLevel,
-            0b001 => Self::ReadOnly,
-            0b011 => Self::ReadWrite,
-            0b100 => Self::ExecuteOnly,
-            0b101 => Self::ReadExecute,
-            0b111 => Self::ReadWriteExecute,
-            _ => panic!("Invalid XWR mode: {value:#05b}"),
-        }
-    }
-}
-
-impl XWRMode {
-    pub fn from_prot(prot: u32) -> Result<Self, headers::errno::Errno> {
-        use headers::syscall_types::{PROT_EXEC, PROT_NONE, PROT_READ, PROT_WRITE};
-        match prot {
-            PROT_NONE | PROT_READ => Ok(Self::ReadOnly),
-            PROT_EXEC => Ok(Self::ExecuteOnly),
-            x if x == (PROT_READ | PROT_WRITE) => Ok(Self::ReadWrite),
-            x if x == (PROT_READ | PROT_EXEC) => Ok(Self::ReadExecute),
-            x if x == (PROT_READ | PROT_WRITE | PROT_EXEC) => Ok(Self::ReadWriteExecute),
-            _ => Err(headers::errno::Errno::EINVAL),
-        }
-    }
-}
+use crate::klibc::elf;
 
 impl From<elf::ProgramHeaderFlags> for XWRMode {
     fn from(value: elf::ProgramHeaderFlags) -> Self {
@@ -63,109 +18,11 @@ impl From<elf::ProgramHeaderFlags> for XWRMode {
     }
 }
 
-#[repr(transparent)]
-#[derive(Debug, Clone, Copy)]
-pub(super) struct PageTableEntry(pub(super) *mut PageTable);
-
-impl PageTableEntry {
-    const VALID_BIT_POS: usize = 0;
-    const READ_BIT_POS: usize = 1;
-    #[allow(dead_code)]
-    const WRITE_BIT_POS: usize = 2;
-    #[allow(dead_code)]
-    const EXECUTE_BIT_POS: usize = 3;
-    const USER_MODE_ACCESSIBLE_BIT_POS: usize = 4;
-    const PHYSICAL_PAGE_BIT_POS: usize = 10;
-    const PHYSICAL_PAGE_BITS: usize = 0xfffffffffff;
-
-    pub(super) fn set_validity(&mut self, is_valid: bool) {
-        self.0 = self.0.map_addr(|mut addr| {
-            set_or_clear_bit(&mut addr, is_valid, PageTableEntry::VALID_BIT_POS)
-        });
-    }
-
-    pub(super) fn get_validity(&self) -> bool {
-        get_bit(self.0.addr(), PageTableEntry::VALID_BIT_POS)
-    }
-
-    pub(super) fn set_user_mode_accessible(&mut self, is_user_mode_accessible: bool) {
-        self.0 = self.0.map_addr(|mut addr| {
-            set_or_clear_bit(
-                &mut addr,
-                is_user_mode_accessible,
-                PageTableEntry::USER_MODE_ACCESSIBLE_BIT_POS,
-            )
-        });
-    }
-
-    pub(super) fn get_user_mode_accessible(&self) -> bool {
-        get_bit(self.0.addr(), PageTableEntry::USER_MODE_ACCESSIBLE_BIT_POS)
-    }
-
-    pub(super) fn set_xwr_mode(&mut self, mode: XWRMode) {
-        self.0 = self.0.map_addr(|mut addr| {
-            set_multiple_bits(&mut addr, mode as u8, 3, PageTableEntry::READ_BIT_POS)
-        });
-    }
-
-    pub(super) fn get_xwr_mode(&self) -> XWRMode {
-        let bits: u8 = u8::try_from(get_multiple_bits::<u64, u64>(
-            self.0.addr() as u64,
-            3,
-            PageTableEntry::READ_BIT_POS,
-        ))
-        .expect("3 bits fit in u8");
-        bits.into()
-    }
-
-    pub(super) fn is_leaf(&self) -> bool {
-        let mode = self.get_xwr_mode();
-        mode != XWRMode::PointerToNextLevel
-    }
-
-    pub(super) fn set_physical_address(&mut self, address: *mut PageTable) {
-        let mask: usize = !(Self::PHYSICAL_PAGE_BITS << Self::PHYSICAL_PAGE_BIT_POS);
-        self.0 = address.map_addr(|new_address| {
-            let mut original = self.0.addr();
-            original &= mask;
-            original |=
-                ((new_address >> 12) & Self::PHYSICAL_PAGE_BITS) << Self::PHYSICAL_PAGE_BIT_POS;
-            original
-        });
-    }
-
-    pub(super) fn set_leaf_address(&mut self, address: PhysAddr) {
-        assert!(
-            address.is_page_aligned(),
-            "Leaf address {} is not page-aligned",
-            address
-        );
-        let mask: usize = !(Self::PHYSICAL_PAGE_BITS << Self::PHYSICAL_PAGE_BIT_POS);
-        let address_usize = address.as_usize();
-        self.0 = self.0.map_addr(|mut original| {
-            original &= mask;
-            original |=
-                ((address_usize >> 12) & Self::PHYSICAL_PAGE_BITS) << Self::PHYSICAL_PAGE_BIT_POS;
-            original
-        });
-    }
-
-    pub(super) fn get_physical_address(&self) -> PhysAddr {
-        let addr = self.0.addr();
-        PhysAddr::new(((addr >> Self::PHYSICAL_PAGE_BIT_POS) & Self::PHYSICAL_PAGE_BITS) << 12)
-    }
-
-    pub(super) fn get_target_page_table(&self) -> *mut PageTable {
-        assert!(!self.is_leaf());
-        let addr = self.get_physical_address();
-        assert!(addr != PhysAddr::zero());
-        self.0.map_addr(|_| addr.as_usize())
-    }
-}
-
 #[cfg(kani)]
 mod kani_proofs {
     use super::*;
+    use sys::memory::address::PhysAddr;
+
     fn entry_from_bits(bits: usize) -> PageTableEntry {
         PageTableEntry(core::ptr::without_provenance_mut(bits))
     }
@@ -210,10 +67,6 @@ mod kani_proofs {
     #[kani::proof]
     fn leaf_address_roundtrip() {
         let ppn: usize = kani::any();
-        // CBMC limits pointer addresses to 48 bits. The internal
-        // representation stores PPN at bit offset 10, so we need
-        // ppn << 10 < 2^48, i.e. ppn < 2^38. This still covers
-        // 50-bit physical addresses (well beyond typical hardware).
         kani::assume(ppn <= 0x3FFFFFFFFF);
         let addr = PhysAddr::new(ppn << 12);
         let mut entry = entry_from_bits(0);
@@ -224,7 +77,6 @@ mod kani_proofs {
     #[kani::proof]
     fn set_leaf_address_preserves_low_bits() {
         let ppn: usize = kani::any();
-        // Same CBMC 48-bit pointer constraint as leaf_address_roundtrip.
         kani::assume(ppn <= 0x3FFFFFFFFF);
         let addr = PhysAddr::new(ppn << 12);
         let mut entry = entry_from_bits(0);
@@ -262,6 +114,7 @@ mod tests {
     use super::*;
     use crate::klibc::elf::ProgramHeaderFlags;
     use core::ptr::null_mut;
+    use sys::memory::address::PhysAddr;
 
     #[test_case]
     fn page_table_entry_validity_bit() {
