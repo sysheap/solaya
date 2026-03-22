@@ -8,7 +8,7 @@ use crate::{
     },
     info,
     klibc::{runtime_initialized::RuntimeInitializedData, util::UsizeExt},
-    memory::{address::VirtAddr, linker_information::LinkerInformation},
+    memory::{VirtAddr, linker_information::LinkerInformation},
 };
 use alloc::vec::Vec;
 use arch::backtrace::CalleeSavedRegs;

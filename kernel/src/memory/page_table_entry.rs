@@ -1,6 +1,6 @@
 #[cfg(any(kani, test))]
 use sys::memory::page_table::PageTableEntry;
-pub use sys::memory::page_table::XWRMode;
+use sys::memory::page_table::XWRMode;
 
 use crate::klibc::elf;
 

@@ -229,7 +229,7 @@ pub fn restore_signal_frame(thread: &mut Thread) -> Result<(), headers::errno::E
         .lock()
         .read_userspace_slice(&read_ptr, SIGNAL_FRAME_SIZE)?;
     assert!(bytes.len() == SIGNAL_FRAME_SIZE);
-    let frame: SignalFrame = crate::klibc::util::read_from_bytes(&bytes);
+    let frame: SignalFrame = sys::klibc::util::read_from_bytes(&bytes);
 
     *thread.get_register_state_mut().gp_registers_mut() = frame.saved_regs;
     *thread.get_register_state_mut().fp_registers_mut() = frame.saved_fregs;

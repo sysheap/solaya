@@ -2,28 +2,24 @@ use crate::klibc::Spinlock;
 #[cfg(target_arch = "riscv64")]
 use crate::{device_tree, info};
 
-use self::{
-    page::Page,
-    page_allocator::{MetadataPageAllocator, PageAllocator},
-};
 use core::{ops::Range, ptr::NonNull};
 #[cfg(target_arch = "riscv64")]
 use linker_information::LinkerInformation;
+use sys::memory::page_allocator::{MetadataPageAllocator, PageAllocator};
 
-pub mod address;
 pub mod heap;
 #[cfg(target_arch = "riscv64")]
 pub mod linker_information;
-pub mod page;
-mod page_allocator;
 pub mod page_table_entry;
 #[cfg(target_arch = "riscv64")]
 pub mod page_tables;
 #[cfg(target_arch = "riscv64")]
 mod runtime_mappings;
 
-pub use address::{PhysAddr, VirtAddr};
-pub use page::PAGE_SIZE;
+pub use sys::memory::{
+    address::{PhysAddr, VirtAddr},
+    page::{PAGE_SIZE, Page, Pages, PagesAsSlice, PinnedHeapPages},
+};
 
 #[cfg(target_arch = "riscv64")]
 pub use runtime_mappings::initialize_runtime_mappings;

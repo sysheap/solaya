@@ -306,7 +306,7 @@ impl InputDevice {
         for used in &received {
             let data = &used.buffers[0];
             if data.len() >= EVENT_SIZE {
-                let event: VirtioInputEvent = crate::klibc::util::read_from_bytes(data);
+                let event: VirtioInputEvent = sys::klibc::util::read_from_bytes(data);
                 if events.len() < MAX_BUFFERED_EVENTS {
                     events.push_back(event);
                 }

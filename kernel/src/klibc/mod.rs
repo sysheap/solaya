@@ -6,11 +6,9 @@ pub mod elf;
 pub mod leb128;
 pub mod mmio;
 pub mod non_empty_vec;
-pub mod runtime_initialized;
-pub use sys::klibc::sizes;
-pub mod spinlock;
+pub use sys::klibc::{runtime_initialized, sizes};
 pub mod util;
 pub mod writable_buffer;
 
 pub use mmio::MMIO;
-pub use spinlock::{Spinlock, SpinlockGuard};
+pub use sys::klibc::spinlock::{Spinlock, SpinlockGuard};

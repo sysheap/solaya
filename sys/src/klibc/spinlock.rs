@@ -168,3 +168,60 @@ impl<T: Debug> Debug for SpinlockGuard<'_, T> {
         unsafe { writeln!(f, "SpinlockGuard {{\n{:?}\n}}", *self.spinlock.data.get()) }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::Spinlock;
+    use alloc::format;
+
+    #[test]
+    fn with_lock() {
+        let spinlock = Spinlock::new(42);
+        let result = spinlock.with_lock(|mut d| {
+            *d = 45;
+            *d
+        });
+        assert_eq!(result, 45);
+        assert_eq!(spinlock.into_inner(), 45);
+    }
+
+    #[test]
+    fn check_lock_and_unlock() {
+        let spinlock = Spinlock::new(42);
+        {
+            let mut locked = spinlock.lock();
+            *locked = 1;
+        }
+        {
+            let mut locked = spinlock.lock();
+            assert_eq!(*locked, 1);
+            *locked = 42;
+            assert_eq!(*locked, 42);
+        }
+        assert_eq!(spinlock.into_inner(), 42);
+    }
+
+    #[test]
+    fn force_unlock_allows_reacquire() {
+        let spinlock = Spinlock::new(42);
+        let lock = spinlock.lock();
+        core::mem::forget(lock);
+        spinlock.panic_force_unlock();
+        let _lock2 = spinlock.lock();
+    }
+
+    #[test]
+    fn print_doesnt_deadlock() {
+        let spinlock = Spinlock::new(42);
+        let _ = format!("{spinlock:?}");
+        let spinlock_guard = spinlock.lock();
+        let _ = format!("{spinlock_guard:?}");
+    }
+
+    #[test]
+    fn try_with_lock_succeeds() {
+        let spinlock = Spinlock::new(42);
+        let result = spinlock.try_with_lock(|d| *d);
+        assert_eq!(result, Some(42));
+    }
+}

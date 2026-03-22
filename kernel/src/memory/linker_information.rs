@@ -27,9 +27,9 @@ macro_rules! count_idents {
 
 macro_rules! sections {
     ($($name:ident, $xwr:expr;)*) => {
-        use $crate::memory::address::VirtAddr;
+        use $crate::memory::VirtAddr;
         use $crate::memory::page_tables::MappingDescription;
-        use $crate::memory::page_table_entry::XWRMode;
+        use sys::memory::page_table::XWRMode;
         use $crate::memory::PAGE_SIZE;
         use $crate::debugging;
         use $crate::klibc::util::align_up;

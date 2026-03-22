@@ -56,7 +56,7 @@ impl fmt::Display for PciCpuAddr {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::memory::address::PhysAddr;
+    use crate::memory::PhysAddr;
 
     // Test-only methods for PciCpuAddr
     impl PciCpuAddr {
