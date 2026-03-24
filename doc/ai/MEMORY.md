@@ -216,6 +216,40 @@ Core allocator in `sys/src/memory/heap.rs`, kernel-specific setup in `kernel/src
 
 Global allocator implementation using the page allocator.
 
+## Copy-on-Write (CoW) Fork
+
+**Files:** `kernel/src/processes/process.rs`, `kernel/src/interrupts/trap.rs`
+
+When a process forks, pages are shared instead of copied. Writable pages are marked read-only in both parent and child page tables. When either process writes to a shared page, the hardware generates a Store/AMO page fault (RISC-V cause 15), which triggers CoW resolution.
+
+### Data Structures
+
+```rust
+// Per-page CoW tracking on Process
+struct CowPageInfo {
+    phys_addr: PhysAddr,              // Physical address of shared page
+    original_perm: XWRMode,           // Permission before CoW downgrade
+    _backing: Arc<PinnedHeapPages>,   // Shared ownership (freed when last ref drops)
+}
+
+// Process fields for page tracking:
+// allocated_pages: BTreeMap<VirtAddr, PinnedHeapPages>  -- privately owned pages
+// cow_pages: BTreeMap<VirtAddr, CowPageInfo>            -- CoW-shared pages
+```
+
+### CoW Resolution Flow
+
+1. Store page fault → `handle_store_page_fault()` in `trap.rs`
+2. Looks up faulting VA in process's `cow_pages`
+3. Allocates new `PinnedHeapPages(1)`, copies 4K via `page_slice_at_phys()`
+4. Remaps PTE to new physical page with original writable permissions
+5. Moves entry from `cow_pages` to `allocated_pages`
+6. TLB flushed automatically on trap return (`sfence.vma` in `trap.S`)
+
+### Kernel Writes to CoW Pages
+
+`write_userspace_ptr/slice` (which take `&mut self`) resolve CoW for writable pages via `ensure_cow_resolved_for_write()` before the write validation, preventing EFAULT on read-only CoW pages.
+
 ## Memory Layout
 
 ### Kernel Space
