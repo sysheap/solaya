@@ -6,7 +6,11 @@ use crate::{
     processes::{task::Task, thread::ThreadState, timer, waker::ThreadWaker},
     syscalls::linux::LinuxSyscallHandler,
 };
-use arch::trap_cause::{InterruptCause, exception::ENVIRONMENT_CALL_FROM_U_MODE, interrupt};
+use arch::trap_cause::{
+    InterruptCause,
+    exception::{ENVIRONMENT_CALL_FROM_U_MODE, STORE_AMO_PAGE_FAULT},
+    interrupt,
+};
 use common::syscalls::trap_frame::{Register, TrapFrame};
 use core::{
     panic,
@@ -245,11 +249,21 @@ fn handle_unhandled_exception() {
     panic!("{}", message);
 }
 
+fn handle_store_page_fault() {
+    let stval = arch::cpu::read_stval();
+    let process = Cpu::with_scheduler(|s| s.get_current_process());
+    let resolved = process.with_lock(|mut p| p.resolve_cow_page(VirtAddr::new(stval)));
+    if !resolved {
+        handle_unhandled_exception();
+    }
+}
+
 fn handle_exception() {
     let cause = InterruptCause::from_scause();
     let code = cause.get_exception_code();
     match code {
         ENVIRONMENT_CALL_FROM_U_MODE => handle_syscall(),
+        STORE_AMO_PAGE_FAULT => handle_store_page_fault(),
         _ => handle_unhandled_exception(),
     }
 

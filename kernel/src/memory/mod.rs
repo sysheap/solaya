@@ -18,7 +18,7 @@ mod runtime_mappings;
 
 pub use sys::memory::{
     address::{PhysAddr, VirtAddr},
-    page::{PAGE_SIZE, Page, Pages, PagesAsSlice, PinnedHeapPages},
+    page::{PAGE_SIZE, Page, Pages, PagesAsSlice, PinnedHeapPages, page_slice_at_phys},
 };
 
 #[cfg(target_arch = "riscv64")]

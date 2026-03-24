@@ -1,4 +1,4 @@
-use alloc::{string::String, sync::Arc};
+use alloc::{collections::BTreeMap, string::String, sync::Arc};
 use core::ffi::{c_int, c_ulong};
 use headers::{
     errno::Errno,
@@ -39,12 +39,12 @@ impl LinuxSyscallHandler {
 
         let child_tid = get_next_tid();
 
-        let forked = parent_process.with_lock(|p| p.fork_address_space());
+        let forked = parent_process.with_lock(|mut p| p.fork_address_space());
 
         let child_process = Arc::new(Spinlock::new(Process::new(
             child_name.clone(),
             forked.page_table,
-            forked.allocated_pages,
+            BTreeMap::new(),
             forked.brk,
             child_tid,
             parent_pgid,
@@ -58,7 +58,7 @@ impl LinuxSyscallHandler {
             child.set_fd_table(parent_fd_table);
             child.set_cwd(parent_cwd);
             child.set_umask(parent_umask);
-            child.set_mmap_state(forked.mmap_allocations, forked.free_mmap_address);
+            child.set_fork_state(forked.cow_pages, forked.free_mmap_address);
         }
 
         let mut child_regs = parent_regs;
