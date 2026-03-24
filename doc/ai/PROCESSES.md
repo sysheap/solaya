@@ -16,7 +16,9 @@ Process management consists of:
 pub struct Process {
     name: Arc<String>,
     page_table: RootPageTableHolder,           // Virtual address space
-    allocated_pages: Vec<PinnedHeapPages>,     // Physical memory
+    allocated_pages: BTreeMap<VirtAddr, PinnedHeapPages>,  // Privately owned pages
+    mmap_allocations: BTreeMap<VirtAddr, PinnedHeapPages>, // mmap'd pages
+    cow_pages: BTreeMap<VirtAddr, CowPageInfo>,            // CoW-shared pages (see MEMORY.md)
     free_mmap_address: VirtAddr,               // Next mmap VA (starts 0x2000000000)
     fd_table: Arc<Spinlock<FdTable>>,          // File descriptor table (shared across vfork)
     threads: BTreeMap<Tid, ThreadWeakRef>,
@@ -24,7 +26,6 @@ pub struct Process {
     pgid: Tid,                                 // Process group ID
     sid: Tid,                                  // Session ID
     brk: Brk,                                  // Heap break manager
-    vfork_parent: Option<ProcessRef>,          // Parent process ref during vfork
     umask: u32,                                // File creation mask (default 0o022)
     cwd: String,                               // Current working directory (default "/")
 }
@@ -41,9 +42,9 @@ impl Process {
 
     // Userspace pointer access
     fn read_userspace_ptr<T>(&self, ptr: &UserspacePtr<*const T>) -> Result<T, Errno>
-    fn write_userspace_ptr<T>(&self, ptr: &UserspacePtr<*mut T>, value: T) -> Result<(), Errno>
+    fn write_userspace_ptr<T>(&mut self, ptr: &UserspacePtr<*mut T>, value: T) -> Result<(), Errno>
     fn read_userspace_slice<T>(&self, ptr: &UserspacePtr<*const T>, len: usize) -> Result<Vec<T>, Errno>
-    fn write_userspace_slice<T>(&self, ptr: &UserspacePtr<*mut T>, data: &[T]) -> Result<(), Errno>
+    fn write_userspace_slice<T>(&mut self, ptr: &UserspacePtr<*mut T>, data: &[T]) -> Result<(), Errno>
 
     // File descriptor table
     fn fd_table(&self) -> SpinlockGuard<'_, FdTable>
