@@ -20,10 +20,15 @@ use sys::klibc::validated_ptr::ValidatedPtr;
 
 pub const POWERSAVE_TID: Tid = Tid::new(0);
 
+pub struct CowPageInfo {
+    pub phys_addr: PhysAddr,
+    pub original_perm: XWRMode,
+    _backing: Arc<PinnedHeapPages>,
+}
+
 pub struct ForkedAddressSpace {
     pub page_table: RootPageTableHolder,
-    pub allocated_pages: BTreeMap<VirtAddr, PinnedHeapPages>,
-    pub mmap_allocations: BTreeMap<VirtAddr, PinnedHeapPages>,
+    pub cow_pages: BTreeMap<VirtAddr, CowPageInfo>,
     pub brk: Brk,
     pub free_mmap_address: VirtAddr,
 }
@@ -37,6 +42,7 @@ pub struct Process {
     page_table: RootPageTableHolder,
     allocated_pages: BTreeMap<VirtAddr, PinnedHeapPages>,
     mmap_allocations: BTreeMap<VirtAddr, PinnedHeapPages>,
+    cow_pages: BTreeMap<VirtAddr, CowPageInfo>,
     free_mmap_address: VirtAddr,
     fd_table: Arc<Spinlock<FdTable>>,
     threads: BTreeMap<Tid, ThreadWeakRef>,
@@ -79,6 +85,7 @@ impl Process {
             page_table,
             allocated_pages,
             mmap_allocations: BTreeMap::new(),
+            cow_pages: BTreeMap::new(),
             free_mmap_address: VirtAddr::new(FREE_MMAP_START_ADDRESS),
             fd_table: Arc::new(Spinlock::new(FdTable::new())),
             threads: BTreeMap::new(),
@@ -261,7 +268,7 @@ impl Process {
         self.threads.keys().copied().collect()
     }
 
-    pub fn fork_address_space(&self) -> ForkedAddressSpace {
+    pub fn fork_address_space(&mut self) -> ForkedAddressSpace {
         use super::signal;
 
         let mut child_pt = RootPageTableHolder::new_with_kernel_mapping(&[]);
@@ -274,55 +281,132 @@ impl Process {
             "Signal trampoline".into(),
         );
 
-        let copy_pages = |pages_map: &BTreeMap<VirtAddr, PinnedHeapPages>,
-                          pt: &mut RootPageTableHolder,
-                          parent_pt: &RootPageTableHolder|
-         -> BTreeMap<VirtAddr, PinnedHeapPages> {
-            let mut child_map = BTreeMap::new();
-            for (&va, parent_pages) in pages_map {
-                let mut child_pages = PinnedHeapPages::new(parent_pages.len());
-                for (dst, src) in child_pages.iter_mut().zip(parent_pages.iter()) {
-                    let dst_slice: &mut [u8] = &mut **dst;
-                    let src_slice: &[u8] = &**src;
-                    dst_slice.copy_from_slice(src_slice);
-                }
-                for i in 0..parent_pages.len() {
-                    let page_va = va + i * PAGE_SIZE;
-                    let Some(perm) = parent_pt.get_userspace_permissions(page_va) else {
-                        continue;
-                    };
-                    pt.map_userspace(
-                        page_va,
-                        PhysAddr::new(child_pages.addr() + i * PAGE_SIZE),
-                        PAGE_SIZE,
-                        perm,
-                        "fork".into(),
-                    );
-                }
-                child_map.insert(va, child_pages);
-            }
-            child_map
-        };
+        let mut parent_cow = BTreeMap::new();
+        let mut child_cow = BTreeMap::new();
 
-        let allocated_pages = copy_pages(&self.allocated_pages, &mut child_pt, &self.page_table);
-        let mmap_allocations = copy_pages(&self.mmap_allocations, &mut child_pt, &self.page_table);
+        let share_pages =
+            |pages_map: &mut BTreeMap<VirtAddr, PinnedHeapPages>,
+             child_pt: &mut RootPageTableHolder,
+             parent_pt: &mut RootPageTableHolder,
+             parent_cow: &mut BTreeMap<VirtAddr, CowPageInfo>,
+             child_cow: &mut BTreeMap<VirtAddr, CowPageInfo>| {
+                for (va, pages) in core::mem::take(pages_map) {
+                    let backing = Arc::new(pages);
+                    for i in 0..backing.len() {
+                        let page_va = va + i * PAGE_SIZE;
+                        let Some(perm) = parent_pt.get_userspace_permissions(page_va) else {
+                            continue;
+                        };
+                        let phys_addr = PhysAddr::new(backing.addr() + i * PAGE_SIZE);
+                        let child_perm = if perm.is_writable() {
+                            parent_pt.remap_page(page_va, phys_addr, perm.as_readonly());
+                            perm.as_readonly()
+                        } else {
+                            perm
+                        };
+                        child_pt.map_userspace(
+                            page_va,
+                            phys_addr,
+                            PAGE_SIZE,
+                            child_perm,
+                            "fork-cow".into(),
+                        );
+                        parent_cow.insert(
+                            page_va,
+                            CowPageInfo {
+                                phys_addr,
+                                original_perm: perm,
+                                _backing: Arc::clone(&backing),
+                            },
+                        );
+                        child_cow.insert(
+                            page_va,
+                            CowPageInfo {
+                                phys_addr,
+                                original_perm: perm,
+                                _backing: Arc::clone(&backing),
+                            },
+                        );
+                    }
+                }
+            };
+
+        share_pages(
+            &mut self.allocated_pages,
+            &mut child_pt,
+            &mut self.page_table,
+            &mut parent_cow,
+            &mut child_cow,
+        );
+        share_pages(
+            &mut self.mmap_allocations,
+            &mut child_pt,
+            &mut self.page_table,
+            &mut parent_cow,
+            &mut child_cow,
+        );
+
+        // Also share pages that are already CoW from a previous fork.
+        // For writable CoW pages that haven't been resolved yet, they're
+        // already read-only in the parent's page table. For non-writable
+        // pages, permissions are unchanged. Just clone the Arc for the child.
+        for (&page_va, cow_info) in &self.cow_pages {
+            let current_perm = self
+                .page_table
+                .get_userspace_permissions(page_va)
+                .expect("cow_pages entry must be mapped");
+            child_pt.map_userspace(
+                page_va,
+                cow_info.phys_addr,
+                PAGE_SIZE,
+                current_perm,
+                "fork-cow".into(),
+            );
+            child_cow.insert(
+                page_va,
+                CowPageInfo {
+                    phys_addr: cow_info.phys_addr,
+                    original_perm: cow_info.original_perm,
+                    _backing: Arc::clone(&cow_info._backing),
+                },
+            );
+        }
+
+        self.cow_pages.append(&mut parent_cow);
 
         ForkedAddressSpace {
             page_table: child_pt,
-            allocated_pages,
-            mmap_allocations,
+            cow_pages: child_cow,
             brk: self.brk.clone(),
             free_mmap_address: self.free_mmap_address,
         }
     }
 
-    pub fn set_mmap_state(
+    pub fn set_fork_state(
         &mut self,
-        mmap_allocations: BTreeMap<VirtAddr, PinnedHeapPages>,
+        cow_pages: BTreeMap<VirtAddr, CowPageInfo>,
         free_mmap_address: VirtAddr,
     ) {
-        self.mmap_allocations = mmap_allocations;
+        self.cow_pages = cow_pages;
         self.free_mmap_address = free_mmap_address;
+    }
+
+    pub fn resolve_cow_page(&mut self, faulting_va: VirtAddr) -> bool {
+        use crate::memory::page_slice_at_phys;
+
+        let page_va = VirtAddr::new(faulting_va.as_usize() & !(PAGE_SIZE - 1));
+        let Some(cow_info) = self.cow_pages.remove(&page_va) else {
+            return false;
+        };
+
+        let mut new_page = PinnedHeapPages::new(1);
+        let src = page_slice_at_phys(cow_info.phys_addr);
+        new_page[0].copy_from_slice(src);
+        let new_phys = PhysAddr::new(new_page.addr());
+        self.page_table
+            .remap_page(page_va, new_phys, cow_info.original_perm);
+        self.allocated_pages.insert(page_va, new_page);
+        true
     }
 }
 

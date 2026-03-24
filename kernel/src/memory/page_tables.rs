@@ -464,7 +464,6 @@ impl RootPageTableHolder {
         true
     }
 
-    #[expect(dead_code, reason = "will be used by CoW fork in next commit")]
     pub fn remap_page(&mut self, va: VirtAddr, new_phys: PhysAddr, new_mode: XWRMode) {
         assert!(va.is_page_aligned());
         let pte = self
