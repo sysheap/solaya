@@ -119,10 +119,11 @@ impl Process {
     }
 
     pub fn write_userspace_slice<T: Copy>(
-        &self,
+        &mut self,
         ptr: &UserspacePtr<*mut T>,
         data: &[T],
     ) -> Result<(), Errno> {
+        self.ensure_cow_resolved_for_write(ptr.get() as usize, core::mem::size_of_val(data));
         let validated =
             ValidatedPtr::<T>::from_userspace(ptr.get(), data.len(), self.get_page_table())?;
         validated.write_slice(data);
@@ -135,10 +136,11 @@ impl Process {
     }
 
     pub fn write_userspace_ptr<T>(
-        &self,
+        &mut self,
         ptr: &UserspacePtr<*mut T>,
         value: T,
     ) -> Result<(), Errno> {
+        self.ensure_cow_resolved_for_write(ptr.get() as usize, core::mem::size_of::<T>());
         let validated = ValidatedPtr::<T>::from_userspace(ptr.get(), 1, self.get_page_table())?;
         validated.write(value);
         Ok(())
@@ -407,6 +409,25 @@ impl Process {
             .remap_page(page_va, new_phys, cow_info.original_perm);
         self.allocated_pages.insert(page_va, new_page);
         true
+    }
+
+    fn ensure_cow_resolved_for_write(&mut self, addr: usize, len: usize) {
+        if len == 0 || self.cow_pages.is_empty() {
+            return;
+        }
+        let start_page = addr & !(PAGE_SIZE - 1);
+        let end_page = (addr + len - 1) & !(PAGE_SIZE - 1);
+        let num_pages = (end_page - start_page) / PAGE_SIZE + 1;
+        for i in 0..num_pages {
+            let va = VirtAddr::new(start_page + i * PAGE_SIZE);
+            if self
+                .cow_pages
+                .get(&va)
+                .is_some_and(|c| c.original_perm.is_writable())
+            {
+                self.resolve_cow_page(va);
+            }
+        }
     }
 }
 

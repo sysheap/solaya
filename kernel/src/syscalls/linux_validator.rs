@@ -63,7 +63,7 @@ impl<T: Copy> LinuxUserspaceArg<*mut T> {
     }
     pub fn write_slice(&self, values: &[T]) -> Result<(), Errno> {
         self.process
-            .with_lock(|p| p.write_userspace_slice(&self.into(), values))?;
+            .with_lock(|mut p| p.write_userspace_slice(&self.into(), values))?;
         Ok(())
     }
 }
@@ -74,7 +74,7 @@ impl<T: Clone> LinuxUserspaceArg<Option<*mut T>> {
             return Ok(None);
         }
         self.process
-            .with_lock(|p| p.write_userspace_ptr(&self.into(), value))?;
+            .with_lock(|mut p| p.write_userspace_ptr(&self.into(), value))?;
         Ok(Some(()))
     }
 }
