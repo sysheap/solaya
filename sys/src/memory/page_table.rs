@@ -30,6 +30,18 @@ impl From<u8> for XWRMode {
 }
 
 impl XWRMode {
+    pub fn is_writable(self) -> bool {
+        matches!(self, Self::ReadWrite | Self::ReadWriteExecute)
+    }
+
+    pub fn as_readonly(self) -> Self {
+        match self {
+            Self::ReadWrite => Self::ReadOnly,
+            Self::ReadWriteExecute => Self::ReadExecute,
+            other => other,
+        }
+    }
+
     pub fn from_prot(prot: u32) -> Result<Self, headers::errno::Errno> {
         use headers::syscall_types::{PROT_EXEC, PROT_NONE, PROT_READ, PROT_WRITE};
         match prot {

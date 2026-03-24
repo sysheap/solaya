@@ -5,7 +5,7 @@ pub mod page_allocator;
 pub mod page_table;
 
 pub use address::{PhysAddr, VirtAddr};
-pub use page::{PAGE_SIZE, Page, Pages, PagesAsSlice, PinnedHeapPages};
+pub use page::{PAGE_SIZE, Page, Pages, PagesAsSlice, PinnedHeapPages, page_slice_at_phys};
 
 use core::mem::MaybeUninit;
 

@@ -78,6 +78,16 @@ impl PagesAsSlice for [Page] {
     }
 }
 
+/// Returns a reference to the 4K page at the given physical address.
+/// Works because the kernel identity-maps all physical memory.
+pub fn page_slice_at_phys(addr: super::PhysAddr) -> &'static [u8; PAGE_SIZE] {
+    assert!(addr.is_page_aligned());
+    // SAFETY: The kernel identity-maps all physical RAM, so the physical
+    // address equals the virtual address. The returned reference is valid
+    // for the lifetime of the kernel (physical pages are never moved).
+    unsafe { &*(addr.as_usize() as *const [u8; PAGE_SIZE]) }
+}
+
 #[derive(Debug)]
 pub struct PinnedHeapPages {
     allocation: Box<[Page]>,
