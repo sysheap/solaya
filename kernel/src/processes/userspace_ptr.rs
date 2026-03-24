@@ -24,7 +24,7 @@ impl<PTR: Pointer> UserspacePtr<PTR> {
 impl<T> UserspacePtr<*mut T> {
     pub fn write_with_process_lock(
         &self,
-        process_lock: &SpinlockGuard<'_, Process>,
+        process_lock: &mut SpinlockGuard<'_, Process>,
         value: T,
     ) -> Result<(), Errno> {
         process_lock.write_userspace_ptr(self, value)
