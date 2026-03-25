@@ -32,6 +32,14 @@ impl VfsOpenFileInner {
         Ok(n)
     }
 
+    pub fn pread(&self, offset: usize, buf: &mut [u8]) -> Result<usize, Errno> {
+        self.node.read(offset, buf)
+    }
+
+    pub fn pwrite(&self, offset: usize, data: &[u8]) -> Result<usize, Errno> {
+        self.node.write(offset, data)
+    }
+
     pub fn write(&mut self, data: &[u8]) -> Result<usize, Errno> {
         use headers::syscall_types::O_APPEND;
         if (self.flags.cast_unsigned() & O_APPEND) != 0 {

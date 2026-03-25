@@ -117,6 +117,44 @@ impl LinuxSyscallHandler {
         Ok(len as isize)
     }
 
+    pub(super) async fn do_pread64(
+        &mut self,
+        fd: c_int,
+        buf: LinuxUserspaceArg<*mut u8>,
+        count: usize,
+        offset: isize,
+    ) -> Result<isize, Errno> {
+        if offset < 0 {
+            return Err(Errno::EINVAL);
+        }
+        let file = self
+            .current_process
+            .with_lock(|p| p.fd_table().get_vfs_file(fd))?;
+        let mut tmp = alloc::vec![0u8; count];
+        let n = file.lock().pread(offset.cast_unsigned(), &mut tmp)?;
+        tmp.truncate(n);
+        buf.write_slice(&tmp)?;
+        Ok(n as isize)
+    }
+
+    pub(super) async fn do_pwrite64(
+        &mut self,
+        fd: c_int,
+        buf: LinuxUserspaceArg<*const u8>,
+        count: usize,
+        offset: isize,
+    ) -> Result<isize, Errno> {
+        if offset < 0 {
+            return Err(Errno::EINVAL);
+        }
+        let file = self
+            .current_process
+            .with_lock(|p| p.fd_table().get_vfs_file(fd))?;
+        let data = buf.validate_slice(count)?;
+        let n = file.lock().pwrite(offset.cast_unsigned(), &data)?;
+        Ok(n as isize)
+    }
+
     pub(super) fn do_pipe2(&self, fds: LinuxUserspaceArg<*mut c_int>) -> Result<isize, Errno> {
         let (reader, writer) = pipe::new_pipe();
         let (read_fd, write_fd) = self.current_process.with_lock(|p| {

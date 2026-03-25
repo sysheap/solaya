@@ -100,6 +100,14 @@ async fn ls_dev() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
+async fn pread_pwrite() -> anyhow::Result<()> {
+    let mut solaya = QemuInstance::start().await?;
+    let output = solaya.run_prog("pread-test").await?;
+    assert_eq!(output, "pread_pwrite: OK\n");
+    Ok(())
+}
+
+#[tokio::test]
 async fn ls_dev_with_block() -> anyhow::Result<()> {
     let dir = tempfile::tempdir()?;
     let disk_path = dir.path().join("disk.img");
