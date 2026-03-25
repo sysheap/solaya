@@ -71,6 +71,8 @@ linux_syscalls! {
     SYSCALL_NR_PIPE2 => pipe2(fds: *mut c_int, flags: c_int);
     SYSCALL_NR_PPOLL => ppoll(fds: *mut pollfd, n: c_uint, to: Option<*const timespec>, mask: Option<*const sigset_t>);
     SYSCALL_NR_PRCTL => prctl();
+    SYSCALL_NR_PREAD64 => pread64(fd: c_int, buf: *mut u8, count: usize, offset: isize);
+    SYSCALL_NR_PWRITE64 => pwrite64(fd: c_int, buf: *const u8, count: usize, offset: isize);
     SYSCALL_NR_READ => read(fd: c_int, buf: *mut u8, count: usize);
     SYSCALL_NR_READV => readv(fd: c_int, iov: *const iovec, iovcnt: c_int);
     SYSCALL_NR_READLINKAT => readlinkat(dirfd: c_int, pathname: *const u8, buf: *mut u8, bufsiz: usize);
@@ -148,6 +150,26 @@ impl LinuxSyscalls for LinuxSyscallHandler {
         iovcnt: c_int,
     ) -> Result<isize, Errno> {
         self.do_writev(fd, iov, iovcnt).await
+    }
+
+    async fn pread64(
+        &mut self,
+        fd: c_int,
+        buf: LinuxUserspaceArg<*mut u8>,
+        count: usize,
+        offset: isize,
+    ) -> Result<isize, Errno> {
+        self.do_pread64(fd, buf, count, offset).await
+    }
+
+    async fn pwrite64(
+        &mut self,
+        fd: c_int,
+        buf: LinuxUserspaceArg<*const u8>,
+        count: usize,
+        offset: isize,
+    ) -> Result<isize, Errno> {
+        self.do_pwrite64(fd, buf, count, offset).await
     }
 
     async fn close(&mut self, fd: c_int) -> Result<isize, Errno> {
