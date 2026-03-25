@@ -232,18 +232,18 @@ struct CowPageInfo {
     _backing: Arc<PinnedHeapPages>,   // Shared ownership (freed when last ref drops)
 }
 
-// Process fields for page tracking:
-// allocated_pages: BTreeMap<VirtAddr, PinnedHeapPages>  -- privately owned pages
-// cow_pages: BTreeMap<VirtAddr, CowPageInfo>            -- CoW-shared pages
+// All page mappings are in a single unified map:
+// mappings: BTreeMap<VirtAddr, Mapping>
+// where Mapping is Allocated(PinnedHeapPages) | Mmap(PinnedHeapPages) | Cow(CowPageInfo)
 ```
 
 ### CoW Resolution Flow
 
 1. Store page fault → `handle_store_page_fault()` in `trap.rs`
-2. Looks up faulting VA in process's `cow_pages`
+2. Looks up faulting VA in process's `mappings`, matches `Mapping::Cow`
 3. Allocates new `PinnedHeapPages(1)`, copies 4K via `page_slice_at_phys()`
 4. Remaps PTE to new physical page with original writable permissions
-5. Moves entry from `cow_pages` to `allocated_pages`
+5. Replaces `Mapping::Cow` entry with `Mapping::Allocated` in `mappings`
 6. TLB flushed automatically on trap return (`sfence.vma` in `trap.S`)
 
 ### Kernel Writes to CoW Pages
