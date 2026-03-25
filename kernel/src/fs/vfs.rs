@@ -29,6 +29,7 @@ pub fn alloc_ino() -> u64 {
 pub enum NodeType {
     File,
     Directory,
+    Symlink,
 }
 
 impl NodeType {
@@ -36,6 +37,7 @@ impl NodeType {
         match self {
             NodeType::File => headers::fs::S_IFREG | 0o644,
             NodeType::Directory => headers::fs::S_IFDIR | 0o755,
+            NodeType::Symlink => headers::fs::S_IFLNK | 0o777,
         }
     }
 }
@@ -160,24 +162,24 @@ pub trait VfsNode: Send + Sync {
         Err(Errno::ENOTDIR)
     }
 
+    fn readlink(&self) -> Result<String, Errno> {
+        Err(Errno::EINVAL)
+    }
+
+    fn link(&self, _name: &str, _node: VfsNodeRef) -> Result<(), Errno> {
+        Err(Errno::ENOTDIR)
+    }
+
+    fn remove_child(&self, _name: &str) -> Result<VfsNodeRef, Errno> {
+        Err(Errno::ENOTDIR)
+    }
+
+    fn inc_nlink(&self) {}
+    #[allow(dead_code)]
+    fn dec_nlink(&self) {}
+
     fn block_device_index(&self) -> Option<usize> {
         None
-    }
-
-    fn mode(&self) -> u32 {
-        self.node_type().stat_mode()
-    }
-
-    fn uid(&self) -> u32 {
-        0
-    }
-
-    fn gid(&self) -> u32 {
-        0
-    }
-
-    fn nlink(&self) -> u32 {
-        1
     }
 
     fn atime(&self) -> (i64, u32) {
@@ -200,6 +202,10 @@ pub fn mount(path: &str, root: VfsNodeRef) {
 }
 
 pub fn resolve_path(path: &str) -> Result<VfsNodeRef, Errno> {
+    resolve_path_with_depth(path, 0)
+}
+
+fn resolve_path_with_depth(path: &str, depth: u32) -> Result<VfsNodeRef, Errno> {
     if path == "." || path == "/" {
         let table = MOUNT_TABLE.lock();
         let (_, node) = find_mount(&table, "/")?;
@@ -207,13 +213,18 @@ pub fn resolve_path(path: &str) -> Result<VfsNodeRef, Errno> {
     }
     if !path.starts_with('/') {
         let abs = alloc::format!("/{path}");
-        return resolve_path(&abs);
+        return resolve_path_with_depth(&abs, depth);
     }
     let table = MOUNT_TABLE.lock();
     let (mount_path, node) = find_mount(&table, path)?;
     let remainder = &path[mount_path.len()..];
     drop(table);
-    walk(node, remainder)
+    walk_with_depth(node, remainder, depth)
+}
+
+pub fn resolve_path_nofollow(path: &str) -> Result<VfsNodeRef, Errno> {
+    let (parent, name) = resolve_parent(path)?;
+    parent.lookup(name)
 }
 
 pub fn resolve_parent(path: &str) -> Result<(VfsNodeRef, &str), Errno> {
@@ -256,12 +267,27 @@ fn find_mount<'a>(
 }
 
 pub fn resolve_relative(base: VfsNodeRef, path: &str) -> Result<VfsNodeRef, Errno> {
-    walk(base, path)
+    walk_with_depth(base, path, 0)
 }
 
-fn walk(mut node: VfsNodeRef, path: &str) -> Result<VfsNodeRef, Errno> {
+const MAX_SYMLINK_DEPTH: u32 = 8;
+
+fn walk_with_depth(mut node: VfsNodeRef, path: &str, mut depth: u32) -> Result<VfsNodeRef, Errno> {
     for component in path.split('/').filter(|c| !c.is_empty() && *c != ".") {
-        node = node.lookup(component)?;
+        let parent = node.clone();
+        node = parent.lookup(component)?;
+        if node.node_type() == NodeType::Symlink {
+            if depth >= MAX_SYMLINK_DEPTH {
+                return Err(Errno::ELOOP);
+            }
+            depth += 1;
+            let target = node.readlink()?;
+            if target.starts_with('/') {
+                node = resolve_path_with_depth(&target, depth)?;
+            } else {
+                node = walk_with_depth(parent, &target, depth)?;
+            }
+        }
     }
     Ok(node)
 }

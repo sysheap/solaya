@@ -3,11 +3,14 @@ pub mod devfs;
 pub mod ext2;
 pub mod open_file;
 mod procfs;
-mod tmpfs;
+pub(crate) mod tmpfs;
 pub mod vfs;
 
 pub use open_file::VfsOpenFile;
-pub use vfs::{resolve_parent, resolve_path, resolve_relative, stat_from_node, statx_from_node};
+pub use vfs::{
+    resolve_parent, resolve_path, resolve_path_nofollow, resolve_relative, stat_from_node,
+    statx_from_node,
+};
 
 pub fn init() {
     vfs::mount("/", vfs::RootDir::new());

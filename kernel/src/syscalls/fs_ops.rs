@@ -107,6 +107,7 @@ impl LinuxSyscallHandler {
         pathname: &LinuxUserspaceArg<*const u8>,
         flags: c_int,
     ) -> Result<fs::vfs::VfsNodeRef, Errno> {
+        let nofollow = (flags & headers::fs::AT_SYMLINK_NOFOLLOW) != 0;
         if (flags & headers::fs::AT_EMPTY_PATH) != 0 && !pathname.arg_nonzero() {
             let file = self
                 .current_process
@@ -120,10 +121,29 @@ impl LinuxSyscallHandler {
             Ok(file.lock().node().clone())
         } else if dirfd == headers::fs::AT_FDCWD {
             let path = self.read_path(pathname)?;
-            fs::resolve_path(&path)
+            if nofollow {
+                fs::resolve_path_nofollow(&path)
+            } else {
+                fs::resolve_path(&path)
+            }
         } else {
             let path = self.read_cstring(pathname)?;
-            fs::resolve_relative(self.resolve_dirfd_node(dirfd)?, &path)
+            if nofollow {
+                let base = self.resolve_dirfd_node(dirfd)?;
+                let (parent_part, name) = if let Some(slash) = path.rfind('/') {
+                    (Some(&path[..slash]), &path[slash + 1..])
+                } else {
+                    (None, path.as_str())
+                };
+                let parent = if let Some(pp) = parent_part {
+                    fs::resolve_relative(base, pp)?
+                } else {
+                    base
+                };
+                parent.lookup(name)
+            } else {
+                fs::resolve_relative(self.resolve_dirfd_node(dirfd)?, &path)
+            }
         }
     }
 
@@ -193,6 +213,7 @@ impl LinuxSyscallHandler {
             let d_type = match entry.node_type {
                 fs::vfs::NodeType::File => headers::fs::DT_REG,
                 fs::vfs::NodeType::Directory => headers::fs::DT_DIR,
+                fs::vfs::NodeType::Symlink => headers::fs::DT_LNK,
             };
 
             entry_idx += 1;
@@ -433,5 +454,72 @@ impl LinuxSyscallHandler {
             let path = self.read_cstring(pathname)?;
             fs::resolve_relative(self.resolve_dirfd_node(dirfd)?, &path)
         }
+    }
+
+    pub(super) fn do_readlinkat(
+        &self,
+        _dirfd: c_int,
+        pathname: LinuxUserspaceArg<*const u8>,
+        buf: LinuxUserspaceArg<*mut u8>,
+        bufsiz: usize,
+    ) -> Result<isize, Errno> {
+        let path = self.read_path(&pathname)?;
+        let node = fs::resolve_path_nofollow(&path)?;
+        let target = node.readlink()?;
+        let bytes = target.as_bytes();
+        let n = bytes.len().min(bufsiz);
+        buf.write_slice(&bytes[..n])?;
+        Ok(n as isize)
+    }
+
+    pub(super) fn do_symlinkat(
+        &self,
+        target: LinuxUserspaceArg<*const u8>,
+        linkpath: LinuxUserspaceArg<*const u8>,
+    ) -> Result<isize, Errno> {
+        let target_str = self.read_cstring(&target)?;
+        let link_path = self.read_path(&linkpath)?;
+        let (parent, name) = fs::resolve_parent(&link_path)?;
+        let symlink = crate::fs::tmpfs::TmpfsSymlink::new(target_str);
+        parent.link(name, symlink)?;
+        Ok(0)
+    }
+
+    pub(super) fn do_linkat(
+        &self,
+        oldpath: LinuxUserspaceArg<*const u8>,
+        newpath: LinuxUserspaceArg<*const u8>,
+    ) -> Result<isize, Errno> {
+        let old_path = self.read_path(&oldpath)?;
+        let target_node = fs::resolve_path(&old_path)?;
+        if target_node.node_type() == fs::vfs::NodeType::Directory {
+            return Err(Errno::EPERM);
+        }
+        let new_path = self.read_path(&newpath)?;
+        let (new_parent, new_name) = fs::resolve_parent(&new_path)?;
+        new_parent.link(new_name, target_node.clone())?;
+        target_node.inc_nlink();
+        Ok(0)
+    }
+
+    pub(super) fn do_renameat2(
+        &self,
+        oldpath: LinuxUserspaceArg<*const u8>,
+        newpath: LinuxUserspaceArg<*const u8>,
+        flags: c_uint,
+    ) -> Result<isize, Errno> {
+        let old_path_str = self.read_path(&oldpath)?;
+        let new_path_str = self.read_path(&newpath)?;
+        let (old_parent, old_name) = fs::resolve_parent(&old_path_str)?;
+        let (new_parent, new_name) = fs::resolve_parent(&new_path_str)?;
+
+        if (flags & 1) != 0 && new_parent.lookup(new_name).is_ok() {
+            return Err(Errno::EEXIST);
+        }
+
+        let node = old_parent.remove_child(old_name)?;
+        let _ = new_parent.remove_child(new_name);
+        new_parent.link(new_name, node)?;
+        Ok(0)
     }
 }

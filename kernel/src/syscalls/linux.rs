@@ -28,11 +28,15 @@ impl ByteInterpretable for headers::sysinfo_types::rusage {}
 impl ByteInterpretable for headers::sysinfo_types::rlimit {}
 
 linux_syscalls! {
+    SYSCALL_NR_ACCEPT4 => accept4(fd: c_int, addr: Option<*mut u8>, addrlen: Option<*mut c_uint>, flags: c_int);
     SYSCALL_NR_BIND => bind(fd: c_int, addr: *const u8, addrlen: c_uint);
     SYSCALL_NR_BRK => brk(brk: c_ulong);
     SYSCALL_NR_CHDIR => chdir(pathname: *const u8);
     SYSCALL_NR_CLONE => clone(flags: c_ulong, stack: usize, ptid: Option<*mut c_int>, tls: c_ulong, ctid: Option<*mut c_int>);
+    SYSCALL_NR_CLOCK_GETTIME => clock_gettime(clockid: c_int, tp: *mut timespec);
+    SYSCALL_NR_CLOCK_NANOSLEEP => clock_nanosleep(clockid: c_int, flags: c_int, request: *const timespec, remain: Option<*mut timespec>);
     SYSCALL_NR_CLOSE => close(fd: c_int);
+    SYSCALL_NR_CONNECT => connect(fd: c_int, addr: *const u8, addrlen: c_uint);
     SYSCALL_NR_DUP => dup(oldfd: c_int);
     SYSCALL_NR_DUP3 => dup3(oldfd: c_int, newfd: c_int, flags: c_int);
     SYSCALL_NR_EXECVE => execve(filename: usize, argv: usize, envp: usize);
@@ -53,21 +57,26 @@ linux_syscalls! {
     SYSCALL_NR_GETCWD => getcwd(buf: *mut u8, size: usize);
     SYSCALL_NR_GETDENTS64 => getdents64(fd: c_int, dirp: *mut u8, count: usize);
     SYSCALL_NR_GETEGID => getegid();
-    SYSCALL_NR_GETGROUPS => getgroups(size: c_int, list: *mut u8);
-    SYSCALL_NR_GETRANDOM => getrandom(buf: *mut u8, buflen: usize, flags: c_uint);
     SYSCALL_NR_GETEUID => geteuid();
     SYSCALL_NR_GETGID => getgid();
+    SYSCALL_NR_GETGROUPS => getgroups(size: c_int, list: *mut u8);
+    SYSCALL_NR_GETPEERNAME => getpeername(fd: c_int, addr: *mut u8, addrlen: *mut c_uint);
     SYSCALL_NR_GETPGID => getpgid(pid: c_int);
     SYSCALL_NR_GETPID => getpid();
-    SYSCALL_NR_GETRLIMIT => getrlimit(resource: c_uint, rlim: *mut u8);
-    SYSCALL_NR_GETRUSAGE => getrusage(who: c_int, usage: *mut u8);
     SYSCALL_NR_GETPPID => getppid();
+    SYSCALL_NR_GETRANDOM => getrandom(buf: *mut u8, buflen: usize, flags: c_uint);
     SYSCALL_NR_GETRESGID => getresgid(rgid: *mut u8, egid: *mut u8, sgid: *mut u8);
     SYSCALL_NR_GETRESUID => getresuid(ruid: *mut u8, euid: *mut u8, suid: *mut u8);
+    SYSCALL_NR_GETRLIMIT => getrlimit(resource: c_uint, rlim: *mut u8);
+    SYSCALL_NR_GETRUSAGE => getrusage(who: c_int, usage: *mut u8);
     SYSCALL_NR_GETSID => getsid(pid: c_int);
+    SYSCALL_NR_GETSOCKNAME => getsockname(fd: c_int, addr: *mut u8, addrlen: *mut c_uint);
     SYSCALL_NR_GETTID => gettid();
     SYSCALL_NR_GETUID => getuid();
     SYSCALL_NR_IOCTL => ioctl(fd: c_int, op: c_uint, arg: usize);
+    SYSCALL_NR_KILL => kill(pid: c_int, sig: c_int);
+    SYSCALL_NR_LINKAT => linkat(olddirfd: c_int, oldpath: *const u8, newdirfd: c_int, newpath: *const u8, flags: c_int);
+    SYSCALL_NR_LISTEN => listen(fd: c_int, backlog: c_int);
     SYSCALL_NR_LISTXATTR => listxattr(pathname: *const u8, list: *mut u8, size: usize);
     SYSCALL_NR_LLISTXATTR => llistxattr(pathname: *const u8, list: *mut u8, size: usize);
     SYSCALL_NR_LSEEK => lseek(fd: c_int, offset: isize, whence: c_int);
@@ -76,8 +85,6 @@ linux_syscalls! {
     SYSCALL_NR_MMAP => mmap(addr: usize, length: usize, prot: c_uint, flags: c_uint, fd: c_int, offset: isize);
     SYSCALL_NR_MPROTECT => mprotect(addr: usize, len: usize, prot: c_int);
     SYSCALL_NR_MUNMAP => munmap(addr: usize, length: usize);
-    SYSCALL_NR_CLOCK_GETTIME => clock_gettime(clockid: c_int, tp: *mut timespec);
-    SYSCALL_NR_CLOCK_NANOSLEEP => clock_nanosleep(clockid: c_int, flags: c_int, request: *const timespec, remain: Option<*mut timespec>);
     SYSCALL_NR_NANOSLEEP => nanosleep(duration: *const timespec, rem: Option<*const timespec>);
     SYSCALL_NR_NEWFSTATAT => newfstatat(dirfd: c_int, pathname: *const u8, statbuf: *mut u8, flags: c_int);
     SYSCALL_NR_OPENAT => openat(dirfd: c_int, pathname: *const u8, flags: c_int, mode: c_uint);
@@ -88,9 +95,10 @@ linux_syscalls! {
     SYSCALL_NR_PRLIMIT64 => prlimit64(pid: c_int, resource: c_uint, new_limit: Option<*const u8>, old_limit: Option<*mut u8>);
     SYSCALL_NR_PWRITE64 => pwrite64(fd: c_int, buf: *const u8, count: usize, offset: isize);
     SYSCALL_NR_READ => read(fd: c_int, buf: *mut u8, count: usize);
-    SYSCALL_NR_READV => readv(fd: c_int, iov: *const iovec, iovcnt: c_int);
     SYSCALL_NR_READLINKAT => readlinkat(dirfd: c_int, pathname: *const u8, buf: *mut u8, bufsiz: usize);
+    SYSCALL_NR_READV => readv(fd: c_int, iov: *const iovec, iovcnt: c_int);
     SYSCALL_NR_RECVFROM => recvfrom(fd: c_int, buf: *mut u8, len: usize, flags: c_int, src_addr: Option<*mut u8>, addrlen: Option<*mut c_uint>);
+    SYSCALL_NR_RENAMEAT2 => renameat2(olddirfd: c_int, oldpath: *const u8, newdirfd: c_int, newpath: *const u8, flags: c_uint);
     SYSCALL_NR_RT_SIGACTION => rt_sigaction(sig: c_uint, act: Option<*const sigaction>, oact: Option<*mut sigaction>, sigsetsize: usize);
     SYSCALL_NR_RT_SIGPROCMASK => rt_sigprocmask(how: c_uint, set: Option<*const sigset_t>, oldset: Option<*mut sigset_t>, sigsetsize: usize);
     SYSCALL_NR_RT_SIGRETURN => rt_sigreturn();
@@ -108,19 +116,15 @@ linux_syscalls! {
     SYSCALL_NR_SETUID => setuid(uid: c_uint);
     SYSCALL_NR_SET_ROBUST_LIST => set_robust_list(head: usize, len: usize);
     SYSCALL_NR_SET_TID_ADDRESS => set_tid_address(tidptr: *mut c_int);
-    SYSCALL_NR_SIGALTSTACK => sigaltstack(uss: Option<*const stack_t>, uoss: Option<*mut stack_t>);
     SYSCALL_NR_SETSOCKOPT => setsockopt(fd: c_int, level: c_int, optname: c_int, optval: *const u8, optlen: c_uint);
-    SYSCALL_NR_GETSOCKNAME => getsockname(fd: c_int, addr: *mut u8, addrlen: *mut c_uint);
-    SYSCALL_NR_GETPEERNAME => getpeername(fd: c_int, addr: *mut u8, addrlen: *mut c_uint);
-    SYSCALL_NR_CONNECT => connect(fd: c_int, addr: *const u8, addrlen: c_uint);
-    SYSCALL_NR_LISTEN => listen(fd: c_int, backlog: c_int);
-    SYSCALL_NR_ACCEPT4 => accept4(fd: c_int, addr: Option<*mut u8>, addrlen: Option<*mut c_uint>, flags: c_int);
     SYSCALL_NR_SHUTDOWN => shutdown(fd: c_int, how: c_int);
+    SYSCALL_NR_SIGALTSTACK => sigaltstack(uss: Option<*const stack_t>, uoss: Option<*mut stack_t>);
     SYSCALL_NR_SOCKET => socket(domain: c_int, typ: c_int, protocol: c_int);
+    SYSCALL_NR_SPLICE => splice(fd_in: c_int, off_in: usize, fd_out: c_int, off_out: usize, len: usize, flags: c_uint);
     SYSCALL_NR_STATFS => statfs(pathname: *const u8, buf: *mut u8);
     SYSCALL_NR_STATX => statx(dirfd: c_int, pathname: *const u8, flags: c_int, mask: c_uint, statxbuf: *mut u8);
+    SYSCALL_NR_SYMLINKAT => symlinkat(target: *const u8, newdirfd: c_int, linkpath: *const u8);
     SYSCALL_NR_SYSINFO => sysinfo(info: *mut u8);
-    SYSCALL_NR_KILL => kill(pid: c_int, sig: c_int);
     SYSCALL_NR_TGKILL => tgkill(tgid: c_int, tid: c_int, sig: c_int);
     SYSCALL_NR_TKILL => tkill(tid: c_int, sig: c_int);
     SYSCALL_NR_TRUNCATE => truncate(pathname: *const u8, length: isize);
@@ -129,9 +133,8 @@ linux_syscalls! {
     SYSCALL_NR_UNLINKAT => unlinkat(dirfd: c_int, pathname: *const u8, flags: c_int);
     SYSCALL_NR_UTIMENSAT => utimensat(dirfd: c_int, pathname: *const u8, times: usize, flags: c_int);
     SYSCALL_NR_WAIT4 => wait4(pid: c_int, status: Option<*mut c_int>, options: c_int, rusage: usize);
-    SYSCALL_NR_WRITEV => writev(fd: c_int, iov: *const iovec, iovcnt: c_int);
-    SYSCALL_NR_SPLICE => splice(fd_in: c_int, off_in: usize, fd_out: c_int, off_out: usize, len: usize, flags: c_uint);
     SYSCALL_NR_WRITE => write(fd: c_int, buf: *const u8, count: usize);
+    SYSCALL_NR_WRITEV => writev(fd: c_int, iov: *const iovec, iovcnt: c_int);
 }
 
 pub struct LinuxSyscallHandler {
@@ -855,12 +858,43 @@ impl LinuxSyscalls for LinuxSyscallHandler {
 
     async fn readlinkat(
         &mut self,
-        _dirfd: c_int,
-        _pathname: LinuxUserspaceArg<*const u8>,
-        _buf: LinuxUserspaceArg<*mut u8>,
-        _bufsiz: usize,
+        dirfd: c_int,
+        pathname: LinuxUserspaceArg<*const u8>,
+        buf: LinuxUserspaceArg<*mut u8>,
+        bufsiz: usize,
     ) -> Result<isize, Errno> {
-        Err(Errno::EINVAL)
+        self.do_readlinkat(dirfd, pathname, buf, bufsiz)
+    }
+
+    async fn symlinkat(
+        &mut self,
+        target: LinuxUserspaceArg<*const u8>,
+        _newdirfd: c_int,
+        linkpath: LinuxUserspaceArg<*const u8>,
+    ) -> Result<isize, Errno> {
+        self.do_symlinkat(target, linkpath)
+    }
+
+    async fn linkat(
+        &mut self,
+        _olddirfd: c_int,
+        oldpath: LinuxUserspaceArg<*const u8>,
+        _newdirfd: c_int,
+        newpath: LinuxUserspaceArg<*const u8>,
+        _flags: c_int,
+    ) -> Result<isize, Errno> {
+        self.do_linkat(oldpath, newpath)
+    }
+
+    async fn renameat2(
+        &mut self,
+        _olddirfd: c_int,
+        oldpath: LinuxUserspaceArg<*const u8>,
+        _newdirfd: c_int,
+        newpath: LinuxUserspaceArg<*const u8>,
+        flags: c_uint,
+    ) -> Result<isize, Errno> {
+        self.do_renameat2(oldpath, newpath, flags)
     }
 
     async fn getuid(&mut self) -> Result<isize, Errno> {
