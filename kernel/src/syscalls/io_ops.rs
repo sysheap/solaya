@@ -155,6 +155,61 @@ impl LinuxSyscallHandler {
         Ok(n as isize)
     }
 
+    pub(super) async fn do_sendfile(
+        &mut self,
+        out_fd: c_int,
+        in_fd: c_int,
+        offset: LinuxUserspaceArg<Option<*mut isize>>,
+        count: usize,
+    ) -> Result<isize, Errno> {
+        let in_file = self
+            .current_process
+            .with_lock(|p| p.fd_table().get_vfs_file(in_fd))?;
+        let out_desc = self
+            .current_process
+            .with_lock(|p| p.fd_table().get_descriptor(out_fd))?;
+
+        let mut total = 0usize;
+        let buf_size = count.min(4096);
+        let mut buf = alloc::vec![0u8; buf_size];
+
+        if offset.raw_arg() != 0 {
+            let offset_ptr =
+                LinuxUserspaceArg::<*mut isize>::new(offset.raw_arg(), self.get_process());
+            let mut off = offset_ptr.validate_slice(1)?[0];
+            if off < 0 {
+                return Err(Errno::EINVAL);
+            }
+
+            while total < count {
+                let chunk = (count - total).min(buf_size);
+                let n = in_file
+                    .lock()
+                    .pread(off.cast_unsigned(), &mut buf[..chunk])?;
+                if n == 0 {
+                    break;
+                }
+                out_desc.write(&buf[..n]).await?;
+                off += n as isize;
+                total += n;
+            }
+
+            offset_ptr.write_slice(&[off])?;
+        } else {
+            while total < count {
+                let chunk = (count - total).min(buf_size);
+                let n = in_file.lock().read(&mut buf[..chunk])?;
+                if n == 0 {
+                    break;
+                }
+                out_desc.write(&buf[..n]).await?;
+                total += n;
+            }
+        }
+
+        Ok(total as isize)
+    }
+
     pub(super) fn do_pipe2(&self, fds: LinuxUserspaceArg<*mut c_int>) -> Result<isize, Errno> {
         let (reader, writer) = pipe::new_pipe();
         let (read_fd, write_fd) = self.current_process.with_lock(|p| {

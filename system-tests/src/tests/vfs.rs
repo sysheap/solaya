@@ -1,6 +1,14 @@
 use crate::infra::qemu::{QemuInstance, QemuOptions};
 
 #[tokio::test]
+async fn sendfile() -> anyhow::Result<()> {
+    let mut solaya = QemuInstance::start().await?;
+    let output = solaya.run_prog("sendfile-test").await?;
+    assert_eq!(output, "sendfile: OK\n");
+    Ok(())
+}
+
+#[tokio::test]
 async fn cat_proc_version() -> anyhow::Result<()> {
     let mut solaya = QemuInstance::start().await?;
     let output = solaya.run_prog("cat /proc/version").await?;

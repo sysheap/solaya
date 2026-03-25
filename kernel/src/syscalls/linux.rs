@@ -86,6 +86,7 @@ linux_syscalls! {
     SYSCALL_NR_RT_SIGACTION => rt_sigaction(sig: c_uint, act: Option<*const sigaction>, oact: Option<*mut sigaction>, sigsetsize: usize);
     SYSCALL_NR_RT_SIGPROCMASK => rt_sigprocmask(how: c_uint, set: Option<*const sigset_t>, oldset: Option<*mut sigset_t>, sigsetsize: usize);
     SYSCALL_NR_RT_SIGRETURN => rt_sigreturn();
+    SYSCALL_NR_SENDFILE => sendfile(out_fd: c_int, in_fd: c_int, offset: Option<*mut isize>, count: usize);
     SYSCALL_NR_SENDTO => sendto(fd: c_int, buf: *const u8, len: usize, flags: c_int, dest_addr: *const u8, addrlen: c_uint);
     SYSCALL_NR_SETGID => setgid(gid: c_uint);
     SYSCALL_NR_SETGROUPS => setgroups(size: c_int, list: *const u8);
@@ -471,6 +472,16 @@ impl LinuxSyscalls for LinuxSyscallHandler {
         addrlen: c_uint,
     ) -> Result<isize, Errno> {
         self.do_bind(fd, addr, addrlen)
+    }
+
+    async fn sendfile(
+        &mut self,
+        out_fd: c_int,
+        in_fd: c_int,
+        offset: LinuxUserspaceArg<Option<*mut isize>>,
+        count: usize,
+    ) -> Result<isize, Errno> {
+        self.do_sendfile(out_fd, in_fd, offset, count).await
     }
 
     async fn sendto(
