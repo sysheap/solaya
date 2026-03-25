@@ -38,7 +38,7 @@ impl LinuxSyscallHandler {
                     return Err(Errno::EEXIST);
                 }
                 if (flags_u32 & O_TRUNC) != 0 {
-                    n.truncate()?;
+                    n.truncate(0)?;
                 }
                 n
             }
@@ -335,5 +335,103 @@ impl LinuxSyscallHandler {
             .with_lock(|p| p.fd_table().get_vfs_file(fd))?;
         buf.write_slice(Self::make_statfs_reply().as_slice())?;
         Ok(0)
+    }
+
+    pub(super) fn do_truncate(
+        &self,
+        pathname: LinuxUserspaceArg<*const u8>,
+        length: isize,
+    ) -> Result<isize, Errno> {
+        if length < 0 {
+            return Err(Errno::EINVAL);
+        }
+        let path = self.read_path(&pathname)?;
+        let node = fs::resolve_path(&path)?;
+        node.truncate(length.cast_unsigned())?;
+        Ok(0)
+    }
+
+    pub(super) fn do_ftruncate(&self, fd: c_int, length: isize) -> Result<isize, Errno> {
+        if length < 0 {
+            return Err(Errno::EINVAL);
+        }
+        let file = self
+            .current_process
+            .with_lock(|p| p.fd_table().get_vfs_file(fd))?;
+        file.lock().node().truncate(length.cast_unsigned())?;
+        Ok(0)
+    }
+
+    pub(super) fn do_fchmod(&self, fd: c_int, mode: c_uint) -> Result<isize, Errno> {
+        let file = self
+            .current_process
+            .with_lock(|p| p.fd_table().get_vfs_file(fd))?;
+        let node = file.lock().node().clone();
+        let current = node.mode();
+        node.set_mode((current & !0o7777) | (mode & 0o7777))?;
+        Ok(0)
+    }
+
+    pub(super) fn do_fchmodat(
+        &self,
+        dirfd: c_int,
+        pathname: LinuxUserspaceArg<*const u8>,
+        mode: c_uint,
+    ) -> Result<isize, Errno> {
+        let node = self.resolve_path_from_dirfd(dirfd, &pathname)?;
+        let current = node.mode();
+        node.set_mode((current & !0o7777) | (mode & 0o7777))?;
+        Ok(0)
+    }
+
+    pub(super) fn do_fchown(&self, fd: c_int, uid: c_uint, gid: c_uint) -> Result<isize, Errno> {
+        let file = self
+            .current_process
+            .with_lock(|p| p.fd_table().get_vfs_file(fd))?;
+        let node = file.lock().node().clone();
+        let mut actual_uid = node.uid();
+        let mut actual_gid = node.gid();
+        if uid != u32::MAX {
+            actual_uid = uid;
+        }
+        if gid != u32::MAX {
+            actual_gid = gid;
+        }
+        node.set_owner(actual_uid, actual_gid)?;
+        Ok(0)
+    }
+
+    pub(super) fn do_fchownat(
+        &self,
+        dirfd: c_int,
+        pathname: LinuxUserspaceArg<*const u8>,
+        uid: c_uint,
+        gid: c_uint,
+    ) -> Result<isize, Errno> {
+        let node = self.resolve_path_from_dirfd(dirfd, &pathname)?;
+        let mut actual_uid = node.uid();
+        let mut actual_gid = node.gid();
+        if uid != u32::MAX {
+            actual_uid = uid;
+        }
+        if gid != u32::MAX {
+            actual_gid = gid;
+        }
+        node.set_owner(actual_uid, actual_gid)?;
+        Ok(0)
+    }
+
+    fn resolve_path_from_dirfd(
+        &self,
+        dirfd: c_int,
+        pathname: &LinuxUserspaceArg<*const u8>,
+    ) -> Result<fs::vfs::VfsNodeRef, Errno> {
+        if dirfd == headers::fs::AT_FDCWD {
+            let path = self.read_path(pathname)?;
+            fs::resolve_path(&path)
+        } else {
+            let path = self.read_cstring(pathname)?;
+            fs::resolve_relative(self.resolve_dirfd_node(dirfd)?, &path)
+        }
     }
 }

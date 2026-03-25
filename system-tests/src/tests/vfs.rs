@@ -140,3 +140,15 @@ async fn vfs_metadata() -> anyhow::Result<()> {
     assert_eq!(output, "metadata: OK\n");
     Ok(())
 }
+
+#[tokio::test]
+async fn file_metadata_ops() -> anyhow::Result<()> {
+    let mut solaya = QemuInstance::start().await?;
+    let output = solaya.run_prog("fmeta-test").await?;
+    assert!(output.contains("OK ftruncate_grow"));
+    assert!(output.contains("OK ftruncate_shrink"));
+    assert!(output.contains("OK fchmod"));
+    assert!(output.contains("OK fchown"));
+    assert!(output.contains("OK fchown_partial"));
+    Ok(())
+}

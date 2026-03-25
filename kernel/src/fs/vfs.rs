@@ -116,8 +116,32 @@ pub trait VfsNode: Send + Sync {
         Err(Errno::EISDIR)
     }
 
-    fn truncate(&self) -> Result<(), Errno> {
+    fn truncate(&self, _length: usize) -> Result<(), Errno> {
         Err(Errno::EISDIR)
+    }
+
+    fn mode(&self) -> u32 {
+        self.node_type().stat_mode()
+    }
+
+    fn uid(&self) -> u32 {
+        0
+    }
+
+    fn gid(&self) -> u32 {
+        0
+    }
+
+    fn nlink(&self) -> u32 {
+        1
+    }
+
+    fn set_mode(&self, _mode: u32) -> Result<(), Errno> {
+        Err(Errno::EPERM)
+    }
+
+    fn set_owner(&self, _uid: u32, _gid: u32) -> Result<(), Errno> {
+        Err(Errno::EPERM)
     }
 
     fn lookup(&self, _name: &str) -> Result<VfsNodeRef, Errno> {

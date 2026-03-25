@@ -46,7 +46,7 @@ impl VfsNode for Ext2File {
         Err(Errno::EROFS)
     }
 
-    fn truncate(&self) -> Result<(), Errno> {
+    fn truncate(&self, _length: usize) -> Result<(), Errno> {
         Err(Errno::EROFS)
     }
 }

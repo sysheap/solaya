@@ -39,10 +39,16 @@ linux_syscalls! {
     SYSCALL_NR_EXIT => exit(status: c_int);
     SYSCALL_NR_EXIT_GROUP => exit_group(status: c_int);
     SYSCALL_NR_FACCESSAT => faccessat(dirfd: c_int, pathname: *const u8, mode: c_int);
+    SYSCALL_NR_FACCESSAT2 => faccessat2(dirfd: c_int, pathname: *const u8, mode: c_int, flags: c_int);
     SYSCALL_NR_FADVISE64 => fadvise64(fd: c_int, offset: isize, len: isize, advice: c_int);
+    SYSCALL_NR_FCHMOD => fchmod(fd: c_int, mode: c_uint);
+    SYSCALL_NR_FCHMODAT => fchmodat(dirfd: c_int, pathname: *const u8, mode: c_uint);
+    SYSCALL_NR_FCHOWN => fchown(fd: c_int, uid: c_uint, gid: c_uint);
+    SYSCALL_NR_FCHOWNAT => fchownat(dirfd: c_int, pathname: *const u8, uid: c_uint, gid: c_uint, flags: c_int);
     SYSCALL_NR_FCNTL => fcntl(fd: c_int, cmd: c_int, arg: c_ulong);
     SYSCALL_NR_FSTAT => fstat(fd: c_int, statbuf: *mut u8);
     SYSCALL_NR_FSTATFS => fstatfs(fd: c_int, buf: *mut u8);
+    SYSCALL_NR_FTRUNCATE => ftruncate(fd: c_int, length: isize);
     SYSCALL_NR_FUTEX => futex(uaddr: usize, op: c_int, val: c_uint, timeout: usize, uaddr2: usize, val3: c_uint);
     SYSCALL_NR_GETCWD => getcwd(buf: *mut u8, size: usize);
     SYSCALL_NR_GETDENTS64 => getdents64(fd: c_int, dirp: *mut u8, count: usize);
@@ -117,6 +123,7 @@ linux_syscalls! {
     SYSCALL_NR_KILL => kill(pid: c_int, sig: c_int);
     SYSCALL_NR_TGKILL => tgkill(tgid: c_int, tid: c_int, sig: c_int);
     SYSCALL_NR_TKILL => tkill(tid: c_int, sig: c_int);
+    SYSCALL_NR_TRUNCATE => truncate(pathname: *const u8, length: isize);
     SYSCALL_NR_UMASK => umask(mask: c_uint);
     SYSCALL_NR_UNAME => uname(buf: *mut u8);
     SYSCALL_NR_UNLINKAT => unlinkat(dirfd: c_int, pathname: *const u8, flags: c_int);
@@ -305,6 +312,48 @@ impl LinuxSyscalls for LinuxSyscallHandler {
         self.do_faccessat(dirfd, pathname, mode)
     }
 
+    async fn faccessat2(
+        &mut self,
+        dirfd: c_int,
+        pathname: LinuxUserspaceArg<*const u8>,
+        mode: c_int,
+        _flags: c_int,
+    ) -> Result<isize, Errno> {
+        self.do_faccessat(dirfd, pathname, mode)
+    }
+
+    async fn fchmod(&mut self, fd: c_int, mode: c_uint) -> Result<isize, Errno> {
+        self.do_fchmod(fd, mode)
+    }
+
+    async fn fchmodat(
+        &mut self,
+        dirfd: c_int,
+        pathname: LinuxUserspaceArg<*const u8>,
+        mode: c_uint,
+    ) -> Result<isize, Errno> {
+        self.do_fchmodat(dirfd, pathname, mode)
+    }
+
+    async fn fchown(&mut self, fd: c_int, uid: c_uint, gid: c_uint) -> Result<isize, Errno> {
+        self.do_fchown(fd, uid, gid)
+    }
+
+    async fn fchownat(
+        &mut self,
+        dirfd: c_int,
+        pathname: LinuxUserspaceArg<*const u8>,
+        uid: c_uint,
+        gid: c_uint,
+        _flags: c_int,
+    ) -> Result<isize, Errno> {
+        self.do_fchownat(dirfd, pathname, uid, gid)
+    }
+
+    async fn ftruncate(&mut self, fd: c_int, length: isize) -> Result<isize, Errno> {
+        self.do_ftruncate(fd, length)
+    }
+
     async fn mkdirat(
         &mut self,
         dirfd: c_int,
@@ -478,6 +527,14 @@ impl LinuxSyscalls for LinuxSyscallHandler {
 
     async fn tkill(&mut self, tid: c_int, sig: c_int) -> Result<isize, Errno> {
         self.tgkill(0, tid, sig).await
+    }
+
+    async fn truncate(
+        &mut self,
+        pathname: LinuxUserspaceArg<*const u8>,
+        length: isize,
+    ) -> Result<isize, Errno> {
+        self.do_truncate(pathname, length)
     }
 
     async fn socket(&mut self, domain: c_int, typ: c_int, protocol: c_int) -> Result<isize, Errno> {
