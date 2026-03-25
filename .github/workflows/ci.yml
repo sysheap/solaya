@@ -20,9 +20,7 @@ jobs:
       - uses: nix-community/cache-nix-action@v7
         with:
           primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.lock', 'rust-toolchain') }}
-          restore-prefixes-first-match: |
-            nix-${{ runner.os }}-
-          save-always: true
+          restore-prefixes-all-matches: nix-${{ runner.os }}-
 
       - uses: nicknovitski/nix-develop@v1
         with:
