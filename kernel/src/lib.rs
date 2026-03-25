@@ -61,6 +61,7 @@ mod cpu;
 #[cfg(target_arch = "riscv64")]
 mod debugging;
 mod device_tree;
+#[cfg(target_arch = "riscv64")]
 mod drivers;
 mod fs;
 #[cfg(target_arch = "riscv64")]
@@ -69,6 +70,7 @@ mod io;
 mod klibc;
 mod logging;
 mod memory;
+#[cfg(target_arch = "riscv64")]
 mod net;
 #[cfg(all(target_arch = "riscv64", not(miri)))]
 pub mod panic;
