@@ -24,6 +24,7 @@ impl ByteInterpretable for headers::syscall_types::termios {}
 impl ByteInterpretable for headers::sysinfo_types::utsname {}
 impl ByteInterpretable for headers::sysinfo_types::sysinfo {}
 impl ByteInterpretable for headers::sysinfo_types::rusage {}
+impl ByteInterpretable for headers::sysinfo_types::rlimit {}
 
 linux_syscalls! {
     SYSCALL_NR_BIND => bind(fd: c_int, addr: *const u8, addrlen: c_uint);
@@ -49,6 +50,7 @@ linux_syscalls! {
     SYSCALL_NR_GETGID => getgid();
     SYSCALL_NR_GETPGID => getpgid(pid: c_int);
     SYSCALL_NR_GETPID => getpid();
+    SYSCALL_NR_GETRLIMIT => getrlimit(resource: c_uint, rlim: *mut u8);
     SYSCALL_NR_GETRUSAGE => getrusage(who: c_int, usage: *mut u8);
     SYSCALL_NR_GETPPID => getppid();
     SYSCALL_NR_GETSID => getsid(pid: c_int);
@@ -72,6 +74,7 @@ linux_syscalls! {
     SYSCALL_NR_PPOLL => ppoll(fds: *mut pollfd, n: c_uint, to: Option<*const timespec>, mask: Option<*const sigset_t>);
     SYSCALL_NR_PRCTL => prctl();
     SYSCALL_NR_PREAD64 => pread64(fd: c_int, buf: *mut u8, count: usize, offset: isize);
+    SYSCALL_NR_PRLIMIT64 => prlimit64(pid: c_int, resource: c_uint, new_limit: Option<*const u8>, old_limit: Option<*mut u8>);
     SYSCALL_NR_PWRITE64 => pwrite64(fd: c_int, buf: *const u8, count: usize, offset: isize);
     SYSCALL_NR_READ => read(fd: c_int, buf: *mut u8, count: usize);
     SYSCALL_NR_READV => readv(fd: c_int, iov: *const iovec, iovcnt: c_int);
@@ -82,6 +85,7 @@ linux_syscalls! {
     SYSCALL_NR_RT_SIGRETURN => rt_sigreturn();
     SYSCALL_NR_SENDTO => sendto(fd: c_int, buf: *const u8, len: usize, flags: c_int, dest_addr: *const u8, addrlen: c_uint);
     SYSCALL_NR_SETPGID => setpgid(pid: c_int, pgid: c_int);
+    SYSCALL_NR_SETRLIMIT => setrlimit(resource: c_uint, rlim: *const u8);
     SYSCALL_NR_SETSID => setsid();
     SYSCALL_NR_SET_ROBUST_LIST => set_robust_list(head: usize, len: usize);
     SYSCALL_NR_SET_TID_ADDRESS => set_tid_address(tidptr: *mut c_int);
@@ -601,6 +605,14 @@ impl LinuxSyscalls for LinuxSyscallHandler {
         self.do_setpgid(pid, pgid)
     }
 
+    async fn setrlimit(
+        &mut self,
+        _resource: c_uint,
+        _rlim: LinuxUserspaceArg<*const u8>,
+    ) -> Result<isize, Errno> {
+        Ok(0)
+    }
+
     async fn setsid(&mut self) -> Result<isize, Errno> {
         self.current_process.with_lock(|mut p| {
             let main_tid = p.main_tid();
@@ -641,6 +653,14 @@ impl LinuxSyscalls for LinuxSyscallHandler {
 
     async fn sysinfo(&mut self, info: LinuxUserspaceArg<*mut u8>) -> Result<isize, Errno> {
         self.do_sysinfo(info)
+    }
+
+    async fn getrlimit(
+        &mut self,
+        resource: c_uint,
+        rlim: LinuxUserspaceArg<*mut u8>,
+    ) -> Result<isize, Errno> {
+        self.do_getrlimit(resource, rlim)
     }
 
     async fn getrusage(
@@ -717,6 +737,16 @@ impl LinuxSyscalls for LinuxSyscallHandler {
 
     async fn prctl(&mut self) -> Result<isize, Errno> {
         Err(Errno::EINVAL)
+    }
+
+    async fn prlimit64(
+        &mut self,
+        pid: c_int,
+        resource: c_uint,
+        _new_limit: LinuxUserspaceArg<Option<*const u8>>,
+        old_limit: LinuxUserspaceArg<Option<*mut u8>>,
+    ) -> Result<isize, Errno> {
+        self.do_prlimit64(pid, resource, old_limit)
     }
 
     async fn readlinkat(
