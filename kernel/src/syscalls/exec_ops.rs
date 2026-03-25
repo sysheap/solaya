@@ -84,8 +84,14 @@ impl LinuxSyscallHandler {
 
         let process_name = Arc::new(String::from(name));
         let old_process = self.get_process();
-        let (old_pgid, old_sid, old_cwd) =
-            old_process.with_lock(|p| (p.pgid(), p.sid(), String::from(p.cwd())));
+        let (old_pgid, old_sid, old_cwd, old_creds) = old_process.with_lock(|p| {
+            (
+                p.pgid(),
+                p.sid(),
+                String::from(p.cwd()),
+                p.credentials().clone(),
+            )
+        });
         let new_process = Arc::new(crate::klibc::Spinlock::new(Process::new(
             process_name.clone(),
             loaded.page_tables,
@@ -102,6 +108,7 @@ impl LinuxSyscallHandler {
             let mut np = new_process.lock();
             np.set_fd_table(inherited_fd_table);
             np.set_cwd(old_cwd);
+            np.set_credentials(old_creds);
         }
 
         let current_thread = self.current_thread.clone();

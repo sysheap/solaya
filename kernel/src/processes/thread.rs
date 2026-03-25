@@ -106,6 +106,7 @@ pub struct Thread {
     registers_replaced: bool,
     pub stopped_notified: bool,
     pub stop_signal: u32,
+    thread_name: Option<String>,
 }
 
 impl core::fmt::Display for Thread {
@@ -250,11 +251,24 @@ impl Thread {
             registers_replaced: false,
             stopped_notified: false,
             stop_signal: 0,
+            thread_name: None,
         }))
     }
 
     pub fn get_name(&self) -> &str {
         &self.process_name
+    }
+
+    pub fn process_name(&self) -> &str {
+        &self.process_name
+    }
+
+    pub fn thread_name(&self) -> Option<&str> {
+        self.thread_name.as_deref()
+    }
+
+    pub fn set_thread_name(&mut self, name: String) {
+        self.thread_name = Some(name);
     }
 
     pub fn set_syscall_task_and_suspend(&mut self, task: SyscallTask) {
