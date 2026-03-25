@@ -2,7 +2,7 @@ use alloc::{string::String, vec};
 use core::ffi::{c_int, c_uint};
 use headers::{
     errno::Errno,
-    syscall_types::{O_CREAT, O_DIRECTORY, O_TRUNC},
+    syscall_types::{O_CREAT, O_DIRECTORY, O_EXCL, O_TRUNC},
 };
 
 use crate::{
@@ -34,6 +34,9 @@ impl LinuxSyscallHandler {
 
         let node = match resolve(&raw_path) {
             Ok(n) => {
+                if (flags_u32 & O_EXCL) != 0 && (flags_u32 & O_CREAT) != 0 {
+                    return Err(Errno::EEXIST);
+                }
                 if (flags_u32 & O_TRUNC) != 0 {
                     n.truncate()?;
                 }
@@ -299,5 +302,38 @@ impl LinuxSyscallHandler {
         bytes.push(0);
         buf.write_slice(&bytes)?;
         Ok(needed as isize)
+    }
+
+    fn make_statfs_reply() -> headers::fs::statfs {
+        headers::fs::statfs {
+            f_type: 0x01021994, // TMPFS_MAGIC
+            f_bsize: 4096,
+            f_namelen: 255,
+            f_frsize: 4096,
+            ..headers::fs::statfs::default()
+        }
+    }
+
+    pub(super) fn do_statfs(
+        &self,
+        pathname: LinuxUserspaceArg<*const u8>,
+        buf: LinuxUserspaceArg<*mut u8>,
+    ) -> Result<isize, Errno> {
+        let path = self.read_path(&pathname)?;
+        let _node = fs::resolve_path(&path)?;
+        buf.write_slice(Self::make_statfs_reply().as_slice())?;
+        Ok(0)
+    }
+
+    pub(super) fn do_fstatfs(
+        &self,
+        fd: c_int,
+        buf: LinuxUserspaceArg<*mut u8>,
+    ) -> Result<isize, Errno> {
+        let _file = self
+            .current_process
+            .with_lock(|p| p.fd_table().get_vfs_file(fd))?;
+        buf.write_slice(Self::make_statfs_reply().as_slice())?;
+        Ok(0)
     }
 }

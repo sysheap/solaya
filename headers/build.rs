@@ -239,11 +239,13 @@ fn generate_fs_types(out_path: &Path) -> Result<(), Box<dyn std::error::Error>> 
     // Invocation 1: Linux kernel headers for stat, statx, S_IF*, AT_*, SEEK_*
     let bindings = default_bindgen_builder()
         .header("linux_headers/include/asm-generic/stat.h")
+        .header("linux_headers/include/asm-generic/statfs.h")
         .header("linux_headers/include/linux/stat.h")
         .header("linux_headers/include/linux/fcntl.h")
         .header("linux_headers/include/linux/fs.h")
         .parse_callbacks(Box::new(FsConstantCallback))
         .allowlist_type("^stat$")
+        .allowlist_type("^statfs$")
         .allowlist_type("statx$")
         .allowlist_type("statx_timestamp")
         .allowlist_var("S_IF.*")
