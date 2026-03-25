@@ -134,6 +134,7 @@ impl<T, const N: usize> InBytes for [T; N] {
 mod kani_proofs {
     use super::*;
     use crate::memory::PAGE_SIZE;
+    use sys::klibc::util::{clear_bit, get_multiple_bits, set_bit, set_multiple_bits};
 
     #[kani::proof]
     fn align_up_is_at_least_input() {
