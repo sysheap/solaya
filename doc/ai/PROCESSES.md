@@ -16,9 +16,7 @@ Process management consists of:
 pub struct Process {
     name: Arc<String>,
     page_table: RootPageTableHolder,           // Virtual address space
-    allocated_pages: BTreeMap<VirtAddr, PinnedHeapPages>,  // Privately owned pages
-    mmap_allocations: BTreeMap<VirtAddr, PinnedHeapPages>, // mmap'd pages
-    cow_pages: BTreeMap<VirtAddr, CowPageInfo>,            // CoW-shared pages (see MEMORY.md)
+    mappings: BTreeMap<VirtAddr, Mapping>,      // All page mappings (see Mapping enum)
     free_mmap_address: VirtAddr,               // Next mmap VA (starts 0x2000000000)
     fd_table: Arc<Spinlock<FdTable>>,          // File descriptor table (shared across vfork)
     threads: BTreeMap<Tid, ThreadWeakRef>,
@@ -28,6 +26,12 @@ pub struct Process {
     brk: Brk,                                  // Heap break manager
     umask: u32,                                // File creation mask (default 0o022)
     cwd: String,                               // Current working directory (default "/")
+}
+
+pub enum Mapping {
+    Allocated(PinnedHeapPages),   // ELF-loaded, brk, resolved CoW pages
+    Mmap(PinnedHeapPages),        // mmap'd pages
+    Cow(CowPageInfo),             // CoW-shared pages (see MEMORY.md)
 }
 ```
 

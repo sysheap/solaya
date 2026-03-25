@@ -26,6 +26,12 @@ pub struct CowPageInfo {
     _backing: Arc<PinnedHeapPages>,
 }
 
+pub enum Mapping {
+    Allocated(PinnedHeapPages),
+    Mmap(PinnedHeapPages),
+    Cow(CowPageInfo),
+}
+
 pub struct ForkedAddressSpace {
     pub page_table: RootPageTableHolder,
     pub cow_pages: BTreeMap<VirtAddr, CowPageInfo>,
@@ -40,9 +46,7 @@ pub type ProcessRef = Arc<Spinlock<Process>>;
 pub struct Process {
     name: Arc<String>,
     page_table: RootPageTableHolder,
-    allocated_pages: BTreeMap<VirtAddr, PinnedHeapPages>,
-    mmap_allocations: BTreeMap<VirtAddr, PinnedHeapPages>,
-    cow_pages: BTreeMap<VirtAddr, CowPageInfo>,
+    mappings: BTreeMap<VirtAddr, Mapping>,
     free_mmap_address: VirtAddr,
     fd_table: Arc<Spinlock<FdTable>>,
     threads: BTreeMap<Tid, ThreadWeakRef>,
@@ -60,11 +64,11 @@ impl Debug for Process {
             f,
             "Process [
             Page Table: {:?},
-            Number of allocated page groups: {},
+            Number of mappings: {},
             Threads: {:?}
         ]",
             self.page_table,
-            self.allocated_pages.len(),
+            self.mappings.len(),
             self.threads,
         )
     }
@@ -80,12 +84,14 @@ impl Process {
         pgid: Tid,
         sid: Tid,
     ) -> Self {
+        let mappings = allocated_pages
+            .into_iter()
+            .map(|(va, pages)| (va, Mapping::Allocated(pages)))
+            .collect();
         Self {
             name,
             page_table,
-            allocated_pages,
-            mmap_allocations: BTreeMap::new(),
-            cow_pages: BTreeMap::new(),
+            mappings,
             free_mmap_address: VirtAddr::new(FREE_MMAP_START_ADDRESS),
             fd_table: Arc::new(Spinlock::new(FdTable::new())),
             threads: BTreeMap::new(),
@@ -164,7 +170,7 @@ impl Process {
             permission,
             "mmap".into(),
         );
-        self.mmap_allocations.insert(addr, pages);
+        self.mappings.insert(addr, Mapping::Mmap(pages));
         core::ptr::without_provenance_mut(addr.as_usize())
     }
 
@@ -179,15 +185,19 @@ impl Process {
             permission,
             "mmap".to_string(),
         );
-        self.mmap_allocations.insert(addr, pages);
+        self.mappings.insert(addr, Mapping::Mmap(pages));
         self.free_mmap_address += length;
         core::ptr::without_provenance_mut(addr.as_usize())
     }
 
     pub fn munmap_pages(&mut self, addr: VirtAddr, length: usize) -> Result<(), Errno> {
-        let pages = self.mmap_allocations.remove(&addr).ok_or(Errno::EINVAL)?;
+        let entry = self.mappings.remove(&addr).ok_or(Errno::EINVAL)?;
+        let Mapping::Mmap(pages) = entry else {
+            self.mappings.insert(addr, entry);
+            return Err(Errno::EINVAL);
+        };
         if pages.size() != length {
-            self.mmap_allocations.insert(addr, pages);
+            self.mappings.insert(addr, Mapping::Mmap(pages));
             return Err(Errno::EINVAL);
         }
         self.page_table.unmap_userspace(addr, length);
@@ -286,22 +296,19 @@ impl Process {
         let mut parent_cow = BTreeMap::new();
         let mut child_cow = BTreeMap::new();
 
-        let share_pages =
-            |pages_map: &mut BTreeMap<VirtAddr, PinnedHeapPages>,
-             child_pt: &mut RootPageTableHolder,
-             parent_pt: &mut RootPageTableHolder,
-             parent_cow: &mut BTreeMap<VirtAddr, CowPageInfo>,
-             child_cow: &mut BTreeMap<VirtAddr, CowPageInfo>| {
-                for (va, pages) in core::mem::take(pages_map) {
+        for (va, mapping) in core::mem::take(&mut self.mappings) {
+            match mapping {
+                Mapping::Allocated(pages) | Mapping::Mmap(pages) => {
                     let backing = Arc::new(pages);
                     for i in 0..backing.len() {
                         let page_va = va + i * PAGE_SIZE;
-                        let Some(perm) = parent_pt.get_userspace_permissions(page_va) else {
+                        let Some(perm) = self.page_table.get_userspace_permissions(page_va) else {
                             continue;
                         };
                         let phys_addr = PhysAddr::new(backing.addr() + i * PAGE_SIZE);
                         let child_perm = if perm.is_writable() {
-                            parent_pt.remap_page(page_va, phys_addr, perm.as_readonly());
+                            self.page_table
+                                .remap_page(page_va, phys_addr, perm.as_readonly());
                             perm.as_readonly()
                         } else {
                             perm
@@ -313,14 +320,11 @@ impl Process {
                             child_perm,
                             "fork-cow".into(),
                         );
-                        parent_cow.insert(
-                            page_va,
-                            CowPageInfo {
-                                phys_addr,
-                                original_perm: perm,
-                                _backing: Arc::clone(&backing),
-                            },
-                        );
+                        let cow_info = CowPageInfo {
+                            phys_addr,
+                            original_perm: perm,
+                            _backing: Arc::clone(&backing),
+                        };
                         child_cow.insert(
                             page_va,
                             CowPageInfo {
@@ -329,52 +333,38 @@ impl Process {
                                 _backing: Arc::clone(&backing),
                             },
                         );
+                        parent_cow.insert(page_va, cow_info);
                     }
                 }
-            };
-
-        share_pages(
-            &mut self.allocated_pages,
-            &mut child_pt,
-            &mut self.page_table,
-            &mut parent_cow,
-            &mut child_cow,
-        );
-        share_pages(
-            &mut self.mmap_allocations,
-            &mut child_pt,
-            &mut self.page_table,
-            &mut parent_cow,
-            &mut child_cow,
-        );
-
-        // Also share pages that are already CoW from a previous fork.
-        // For writable CoW pages that haven't been resolved yet, they're
-        // already read-only in the parent's page table. For non-writable
-        // pages, permissions are unchanged. Just clone the Arc for the child.
-        for (&page_va, cow_info) in &self.cow_pages {
-            let current_perm = self
-                .page_table
-                .get_userspace_permissions(page_va)
-                .expect("cow_pages entry must be mapped");
-            child_pt.map_userspace(
-                page_va,
-                cow_info.phys_addr,
-                PAGE_SIZE,
-                current_perm,
-                "fork-cow".into(),
-            );
-            child_cow.insert(
-                page_va,
-                CowPageInfo {
-                    phys_addr: cow_info.phys_addr,
-                    original_perm: cow_info.original_perm,
-                    _backing: Arc::clone(&cow_info._backing),
-                },
-            );
+                Mapping::Cow(cow_info) => {
+                    let current_perm = self
+                        .page_table
+                        .get_userspace_permissions(va)
+                        .expect("cow_pages entry must be mapped");
+                    child_pt.map_userspace(
+                        va,
+                        cow_info.phys_addr,
+                        PAGE_SIZE,
+                        current_perm,
+                        "fork-cow".into(),
+                    );
+                    child_cow.insert(
+                        va,
+                        CowPageInfo {
+                            phys_addr: cow_info.phys_addr,
+                            original_perm: cow_info.original_perm,
+                            _backing: Arc::clone(&cow_info._backing),
+                        },
+                    );
+                    parent_cow.insert(va, cow_info);
+                }
+            }
         }
 
-        self.cow_pages.append(&mut parent_cow);
+        self.mappings = parent_cow
+            .into_iter()
+            .map(|(va, info)| (va, Mapping::Cow(info)))
+            .collect();
 
         ForkedAddressSpace {
             page_table: child_pt,
@@ -389,7 +379,10 @@ impl Process {
         cow_pages: BTreeMap<VirtAddr, CowPageInfo>,
         free_mmap_address: VirtAddr,
     ) {
-        self.cow_pages = cow_pages;
+        self.mappings = cow_pages
+            .into_iter()
+            .map(|(va, info)| (va, Mapping::Cow(info)))
+            .collect();
         self.free_mmap_address = free_mmap_address;
     }
 
@@ -397,7 +390,11 @@ impl Process {
         use crate::memory::page_slice_at_phys;
 
         let page_va = VirtAddr::new(faulting_va.as_usize() & !(PAGE_SIZE - 1));
-        let Some(cow_info) = self.cow_pages.remove(&page_va) else {
+        let Some(mapping) = self.mappings.remove(&page_va) else {
+            return false;
+        };
+        let Mapping::Cow(cow_info) = mapping else {
+            self.mappings.insert(page_va, mapping);
             return false;
         };
 
@@ -407,12 +404,12 @@ impl Process {
         let new_phys = PhysAddr::new(new_page.addr());
         self.page_table
             .remap_page(page_va, new_phys, cow_info.original_perm);
-        self.allocated_pages.insert(page_va, new_page);
+        self.mappings.insert(page_va, Mapping::Allocated(new_page));
         true
     }
 
     fn ensure_cow_resolved_for_write(&mut self, addr: usize, len: usize) {
-        if len == 0 || self.cow_pages.is_empty() {
+        if len == 0 {
             return;
         }
         let start_page = addr & !(PAGE_SIZE - 1);
@@ -420,11 +417,11 @@ impl Process {
         let num_pages = (end_page - start_page) / PAGE_SIZE + 1;
         for i in 0..num_pages {
             let va = VirtAddr::new(start_page + i * PAGE_SIZE);
-            if self
-                .cow_pages
-                .get(&va)
-                .is_some_and(|c| c.original_perm.is_writable())
-            {
+            let is_writable_cow = matches!(
+                self.mappings.get(&va),
+                Some(Mapping::Cow(c)) if c.original_perm.is_writable()
+            );
+            if is_writable_cow {
                 self.resolve_cow_page(va);
             }
         }
@@ -444,8 +441,9 @@ impl core::fmt::Display for Process {
 impl Drop for Process {
     fn drop(&mut self) {
         debug!(
-            "Drop process (MAIN_TID: {}) (Allocated pages: {:?})",
-            self.main_tid, self.allocated_pages
+            "Drop process (MAIN_TID: {}) (Mappings: {})",
+            self.main_tid,
+            self.mappings.len()
         );
     }
 }
