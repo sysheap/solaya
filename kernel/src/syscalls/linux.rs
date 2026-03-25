@@ -3,7 +3,7 @@ use crate::{
     debug, fs,
     klibc::util::{ByteInterpretable, UsizeExt},
     memory::{PAGE_SIZE, VirtAddr},
-    processes::{process::ProcessRef, process_table, thread::ThreadRef},
+    processes::{fd_table::FdFlags, process::ProcessRef, process_table, thread::ThreadRef},
     syscalls::macros::linux_syscalls,
 };
 use common::{
@@ -31,6 +31,7 @@ linux_syscalls! {
     SYSCALL_NR_CHDIR => chdir(pathname: *const u8);
     SYSCALL_NR_CLONE => clone(flags: c_ulong, stack: usize, ptid: Option<*mut c_int>, tls: c_ulong, ctid: Option<*mut c_int>);
     SYSCALL_NR_CLOSE => close(fd: c_int);
+    SYSCALL_NR_DUP => dup(oldfd: c_int);
     SYSCALL_NR_DUP3 => dup3(oldfd: c_int, newfd: c_int, flags: c_int);
     SYSCALL_NR_EXECVE => execve(filename: usize, argv: usize, envp: usize);
     SYSCALL_NR_EXIT => exit(status: c_int);
@@ -152,6 +153,13 @@ impl LinuxSyscalls for LinuxSyscallHandler {
     async fn close(&mut self, fd: c_int) -> Result<isize, Errno> {
         self.current_process.with_lock(|p| p.fd_table().close(fd))?;
         Ok(0)
+    }
+
+    async fn dup(&mut self, oldfd: c_int) -> Result<isize, Errno> {
+        let new_fd = self
+            .current_process
+            .with_lock(|p| p.fd_table().dup_from(oldfd, 0, FdFlags::default()))?;
+        Ok(new_fd as isize)
     }
 
     async fn dup3(&mut self, oldfd: c_int, newfd: c_int, flags: c_int) -> Result<isize, Errno> {
