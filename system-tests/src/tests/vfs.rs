@@ -132,3 +132,11 @@ async fn ls_dev_with_block() -> anyhow::Result<()> {
     );
     Ok(())
 }
+
+#[tokio::test]
+async fn vfs_metadata() -> anyhow::Result<()> {
+    let mut solaya = QemuInstance::start().await?;
+    let output = solaya.run_prog("metadata-test").await?;
+    assert_eq!(output, "metadata: OK\n");
+    Ok(())
+}

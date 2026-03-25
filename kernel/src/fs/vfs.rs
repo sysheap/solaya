@@ -41,25 +41,55 @@ impl NodeType {
 }
 
 pub fn stat_from_node(node: &VfsNodeRef) -> headers::fs::stat {
+    let (atime_sec, atime_nsec) = node.atime();
+    let (mtime_sec, mtime_nsec) = node.mtime();
+    let (ctime_sec, ctime_nsec) = node.ctime();
     headers::fs::stat {
         st_ino: node.ino(),
-        st_mode: node.node_type().stat_mode(),
-        st_nlink: 1,
+        st_mode: node.mode(),
+        st_nlink: node.nlink(),
+        st_uid: node.uid(),
+        st_gid: node.gid(),
         st_size: node.size() as i64,
         st_blksize: 4096,
+        st_atime: atime_sec,
+        st_atime_nsec: atime_nsec as u64,
+        st_mtime: mtime_sec,
+        st_mtime_nsec: mtime_nsec as u64,
+        st_ctime: ctime_sec,
+        st_ctime_nsec: ctime_nsec as u64,
         ..headers::fs::stat::default()
     }
 }
 
 pub fn statx_from_node(node: &VfsNodeRef) -> headers::fs::statx {
-    let mode = node.node_type().stat_mode() as u16;
+    let (atime_sec, atime_nsec) = node.atime();
+    let (mtime_sec, mtime_nsec) = node.mtime();
+    let (ctime_sec, ctime_nsec) = node.ctime();
     headers::fs::statx {
         stx_mask: 0x7ff,
         stx_blksize: 4096,
-        stx_nlink: 1,
-        stx_mode: mode,
+        stx_nlink: node.nlink(),
+        stx_uid: node.uid(),
+        stx_gid: node.gid(),
+        stx_mode: node.mode() as u16,
         stx_ino: node.ino(),
         stx_size: node.size() as u64,
+        stx_atime: headers::fs::statx_timestamp {
+            tv_sec: atime_sec,
+            tv_nsec: atime_nsec,
+            __reserved: 0,
+        },
+        stx_mtime: headers::fs::statx_timestamp {
+            tv_sec: mtime_sec,
+            tv_nsec: mtime_nsec,
+            __reserved: 0,
+        },
+        stx_ctime: headers::fs::statx_timestamp {
+            tv_sec: ctime_sec,
+            tv_nsec: ctime_nsec,
+            __reserved: 0,
+        },
         ..headers::fs::statx::default()
     }
 }
@@ -108,6 +138,34 @@ pub trait VfsNode: Send + Sync {
 
     fn block_device_index(&self) -> Option<usize> {
         None
+    }
+
+    fn mode(&self) -> u32 {
+        self.node_type().stat_mode()
+    }
+
+    fn uid(&self) -> u32 {
+        0
+    }
+
+    fn gid(&self) -> u32 {
+        0
+    }
+
+    fn nlink(&self) -> u32 {
+        1
+    }
+
+    fn atime(&self) -> (i64, u32) {
+        (0, 0)
+    }
+
+    fn mtime(&self) -> (i64, u32) {
+        (0, 0)
+    }
+
+    fn ctime(&self) -> (i64, u32) {
+        (0, 0)
     }
 }
 

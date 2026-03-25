@@ -19,6 +19,7 @@ use headers::{
 
 impl ByteInterpretable for sockaddr_in {}
 impl ByteInterpretable for headers::fs::stat {}
+impl ByteInterpretable for headers::fs::statfs {}
 impl ByteInterpretable for headers::fs::statx {}
 impl ByteInterpretable for headers::syscall_types::termios {}
 impl ByteInterpretable for headers::sysinfo_types::utsname {}
@@ -41,6 +42,7 @@ linux_syscalls! {
     SYSCALL_NR_FADVISE64 => fadvise64(fd: c_int, offset: isize, len: isize, advice: c_int);
     SYSCALL_NR_FCNTL => fcntl(fd: c_int, cmd: c_int, arg: c_ulong);
     SYSCALL_NR_FSTAT => fstat(fd: c_int, statbuf: *mut u8);
+    SYSCALL_NR_FSTATFS => fstatfs(fd: c_int, buf: *mut u8);
     SYSCALL_NR_FUTEX => futex(uaddr: usize, op: c_int, val: c_uint, timeout: usize, uaddr2: usize, val3: c_uint);
     SYSCALL_NR_GETCWD => getcwd(buf: *mut u8, size: usize);
     SYSCALL_NR_GETDENTS64 => getdents64(fd: c_int, dirp: *mut u8, count: usize);
@@ -109,6 +111,7 @@ linux_syscalls! {
     SYSCALL_NR_ACCEPT4 => accept4(fd: c_int, addr: Option<*mut u8>, addrlen: Option<*mut c_uint>, flags: c_int);
     SYSCALL_NR_SHUTDOWN => shutdown(fd: c_int, how: c_int);
     SYSCALL_NR_SOCKET => socket(domain: c_int, typ: c_int, protocol: c_int);
+    SYSCALL_NR_STATFS => statfs(pathname: *const u8, buf: *mut u8);
     SYSCALL_NR_STATX => statx(dirfd: c_int, pathname: *const u8, flags: c_int, mask: c_uint, statxbuf: *mut u8);
     SYSCALL_NR_SYSINFO => sysinfo(info: *mut u8);
     SYSCALL_NR_KILL => kill(pid: c_int, sig: c_int);
@@ -247,6 +250,14 @@ impl LinuxSyscalls for LinuxSyscallHandler {
         self.do_fstat(fd, statbuf)
     }
 
+    async fn fstatfs(
+        &mut self,
+        fd: c_int,
+        buf: LinuxUserspaceArg<*mut u8>,
+    ) -> Result<isize, Errno> {
+        self.do_fstatfs(fd, buf)
+    }
+
     async fn newfstatat(
         &mut self,
         dirfd: c_int,
@@ -255,6 +266,14 @@ impl LinuxSyscalls for LinuxSyscallHandler {
         flags: c_int,
     ) -> Result<isize, Errno> {
         self.do_newfstatat(dirfd, pathname, statbuf, flags)
+    }
+
+    async fn statfs(
+        &mut self,
+        pathname: LinuxUserspaceArg<*const u8>,
+        buf: LinuxUserspaceArg<*mut u8>,
+    ) -> Result<isize, Errno> {
+        self.do_statfs(pathname, buf)
     }
 
     async fn statx(
