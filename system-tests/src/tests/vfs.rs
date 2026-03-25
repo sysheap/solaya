@@ -133,6 +133,7 @@ async fn ls_dev_with_block() -> anyhow::Result<()> {
     Ok(())
 }
 
+
 #[tokio::test]
 async fn vfs_metadata() -> anyhow::Result<()> {
     let mut solaya = QemuInstance::start().await?;
@@ -150,5 +151,13 @@ async fn file_metadata_ops() -> anyhow::Result<()> {
     assert!(output.contains("OK fchmod"));
     assert!(output.contains("OK fchown"));
     assert!(output.contains("OK fchown_partial"));
+    Ok(())
+}
+
+#[tokio::test]
+async fn symlinks_and_links() -> anyhow::Result<()> {
+    let mut solaya = QemuInstance::start().await?;
+    let output = solaya.run_prog("symlink-test").await?;
+    assert_eq!(output, "symlink_test: OK\n");
     Ok(())
 }

@@ -252,6 +252,7 @@ fn generate_fs_types(out_path: &Path) -> Result<(), Box<dyn std::error::Error>> 
         .allowlist_var("AT_FDCWD")
         .allowlist_var("AT_REMOVEDIR")
         .allowlist_var("AT_EMPTY_PATH")
+        .allowlist_var("AT_SYMLINK_NOFOLLOW")
         .allowlist_var("SEEK_SET")
         .allowlist_var("SEEK_CUR")
         .allowlist_var("SEEK_END")
