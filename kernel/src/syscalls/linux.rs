@@ -45,6 +45,7 @@ linux_syscalls! {
     SYSCALL_NR_GETCWD => getcwd(buf: *mut u8, size: usize);
     SYSCALL_NR_GETDENTS64 => getdents64(fd: c_int, dirp: *mut u8, count: usize);
     SYSCALL_NR_GETEGID => getegid();
+    SYSCALL_NR_GETGROUPS => getgroups(size: c_int, list: *mut u8);
     SYSCALL_NR_GETRANDOM => getrandom(buf: *mut u8, buflen: usize, flags: c_uint);
     SYSCALL_NR_GETEUID => geteuid();
     SYSCALL_NR_GETGID => getgid();
@@ -53,6 +54,8 @@ linux_syscalls! {
     SYSCALL_NR_GETRLIMIT => getrlimit(resource: c_uint, rlim: *mut u8);
     SYSCALL_NR_GETRUSAGE => getrusage(who: c_int, usage: *mut u8);
     SYSCALL_NR_GETPPID => getppid();
+    SYSCALL_NR_GETRESGID => getresgid(rgid: *mut u8, egid: *mut u8, sgid: *mut u8);
+    SYSCALL_NR_GETRESUID => getresuid(ruid: *mut u8, euid: *mut u8, suid: *mut u8);
     SYSCALL_NR_GETSID => getsid(pid: c_int);
     SYSCALL_NR_GETTID => gettid();
     SYSCALL_NR_GETUID => getuid();
@@ -72,7 +75,7 @@ linux_syscalls! {
     SYSCALL_NR_OPENAT => openat(dirfd: c_int, pathname: *const u8, flags: c_int, mode: c_uint);
     SYSCALL_NR_PIPE2 => pipe2(fds: *mut c_int, flags: c_int);
     SYSCALL_NR_PPOLL => ppoll(fds: *mut pollfd, n: c_uint, to: Option<*const timespec>, mask: Option<*const sigset_t>);
-    SYSCALL_NR_PRCTL => prctl();
+    SYSCALL_NR_PRCTL => prctl(option: c_int, arg2: c_ulong, arg3: c_ulong, arg4: c_ulong, arg5: c_ulong);
     SYSCALL_NR_PREAD64 => pread64(fd: c_int, buf: *mut u8, count: usize, offset: isize);
     SYSCALL_NR_PRLIMIT64 => prlimit64(pid: c_int, resource: c_uint, new_limit: Option<*const u8>, old_limit: Option<*mut u8>);
     SYSCALL_NR_PWRITE64 => pwrite64(fd: c_int, buf: *const u8, count: usize, offset: isize);
@@ -84,9 +87,16 @@ linux_syscalls! {
     SYSCALL_NR_RT_SIGPROCMASK => rt_sigprocmask(how: c_uint, set: Option<*const sigset_t>, oldset: Option<*mut sigset_t>, sigsetsize: usize);
     SYSCALL_NR_RT_SIGRETURN => rt_sigreturn();
     SYSCALL_NR_SENDTO => sendto(fd: c_int, buf: *const u8, len: usize, flags: c_int, dest_addr: *const u8, addrlen: c_uint);
+    SYSCALL_NR_SETGID => setgid(gid: c_uint);
+    SYSCALL_NR_SETGROUPS => setgroups(size: c_int, list: *const u8);
     SYSCALL_NR_SETPGID => setpgid(pid: c_int, pgid: c_int);
+    SYSCALL_NR_SETREGID => setregid(rgid: c_uint, egid: c_uint);
+    SYSCALL_NR_SETRESGID => setresgid(rgid: c_uint, egid: c_uint, sgid: c_uint);
+    SYSCALL_NR_SETRESUID => setresuid(ruid: c_uint, euid: c_uint, suid: c_uint);
+    SYSCALL_NR_SETREUID => setreuid(ruid: c_uint, euid: c_uint);
     SYSCALL_NR_SETRLIMIT => setrlimit(resource: c_uint, rlim: *const u8);
     SYSCALL_NR_SETSID => setsid();
+    SYSCALL_NR_SETUID => setuid(uid: c_uint);
     SYSCALL_NR_SET_ROBUST_LIST => set_robust_list(head: usize, len: usize);
     SYSCALL_NR_SET_TID_ADDRESS => set_tid_address(tidptr: *mut c_int);
     SYSCALL_NR_SIGALTSTACK => sigaltstack(uss: Option<*const stack_t>, uoss: Option<*mut stack_t>);
@@ -735,8 +745,15 @@ impl LinuxSyscalls for LinuxSyscallHandler {
         Ok(0)
     }
 
-    async fn prctl(&mut self) -> Result<isize, Errno> {
-        Err(Errno::EINVAL)
+    async fn prctl(
+        &mut self,
+        option: c_int,
+        arg2: c_ulong,
+        arg3: c_ulong,
+        arg4: c_ulong,
+        arg5: c_ulong,
+    ) -> Result<isize, Errno> {
+        self.do_prctl(option, arg2, arg3, arg4, arg5)
     }
 
     async fn prlimit64(
@@ -760,19 +777,87 @@ impl LinuxSyscalls for LinuxSyscallHandler {
     }
 
     async fn getuid(&mut self) -> Result<isize, Errno> {
-        Ok(0)
+        Ok(self.current_process.with_lock(|p| p.credentials().uid) as isize)
     }
 
     async fn geteuid(&mut self) -> Result<isize, Errno> {
-        Ok(0)
+        Ok(self.current_process.with_lock(|p| p.credentials().euid) as isize)
     }
 
     async fn getgid(&mut self) -> Result<isize, Errno> {
-        Ok(0)
+        Ok(self.current_process.with_lock(|p| p.credentials().gid) as isize)
     }
 
     async fn getegid(&mut self) -> Result<isize, Errno> {
-        Ok(0)
+        Ok(self.current_process.with_lock(|p| p.credentials().egid) as isize)
+    }
+
+    async fn setuid(&mut self, uid: c_uint) -> Result<isize, Errno> {
+        self.do_setuid(uid)
+    }
+
+    async fn setgid(&mut self, gid: c_uint) -> Result<isize, Errno> {
+        self.do_setgid(gid)
+    }
+
+    async fn setreuid(&mut self, ruid: c_uint, euid: c_uint) -> Result<isize, Errno> {
+        self.do_setreuid(ruid, euid)
+    }
+
+    async fn setregid(&mut self, rgid: c_uint, egid: c_uint) -> Result<isize, Errno> {
+        self.do_setregid(rgid, egid)
+    }
+
+    async fn setresuid(
+        &mut self,
+        ruid: c_uint,
+        euid: c_uint,
+        suid: c_uint,
+    ) -> Result<isize, Errno> {
+        self.do_setresuid(ruid, euid, suid)
+    }
+
+    async fn setresgid(
+        &mut self,
+        rgid: c_uint,
+        egid: c_uint,
+        sgid: c_uint,
+    ) -> Result<isize, Errno> {
+        self.do_setresgid(rgid, egid, sgid)
+    }
+
+    async fn getresuid(
+        &mut self,
+        ruid: LinuxUserspaceArg<*mut u8>,
+        euid: LinuxUserspaceArg<*mut u8>,
+        suid: LinuxUserspaceArg<*mut u8>,
+    ) -> Result<isize, Errno> {
+        self.do_getresuid(ruid, euid, suid)
+    }
+
+    async fn getresgid(
+        &mut self,
+        rgid: LinuxUserspaceArg<*mut u8>,
+        egid: LinuxUserspaceArg<*mut u8>,
+        sgid: LinuxUserspaceArg<*mut u8>,
+    ) -> Result<isize, Errno> {
+        self.do_getresgid(rgid, egid, sgid)
+    }
+
+    async fn getgroups(
+        &mut self,
+        size: c_int,
+        list: LinuxUserspaceArg<*mut u8>,
+    ) -> Result<isize, Errno> {
+        self.do_getgroups(size, list)
+    }
+
+    async fn setgroups(
+        &mut self,
+        size: c_int,
+        list: LinuxUserspaceArg<*const u8>,
+    ) -> Result<isize, Errno> {
+        self.do_setgroups(size, list)
     }
 
     async fn splice(

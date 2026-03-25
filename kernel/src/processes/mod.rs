@@ -1,4 +1,5 @@
 pub(crate) mod brk;
+pub mod credentials;
 pub mod fd_table;
 pub mod futex;
 pub mod kernel_tasks;

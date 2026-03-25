@@ -71,6 +71,21 @@ async fn execute_different_programs() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
+async fn credential_syscalls() -> anyhow::Result<()> {
+    let mut solaya = QemuInstance::start().await?;
+    let output = solaya.run_prog("cred-test").await?;
+    assert!(
+        output.contains("child-ok"),
+        "child should inherit creds: {output}"
+    );
+    assert!(
+        output.contains("cred_test: OK"),
+        "credential test failed: {output}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
 async fn unimplemented_syscall_kills_process_not_kernel() -> anyhow::Result<()> {
     let mut solaya = QemuInstance::start().await?;
 
