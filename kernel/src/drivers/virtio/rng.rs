@@ -72,7 +72,7 @@ pub fn register_devfs_node() {
         fn write(&self, _offset: usize, data: &[u8]) -> Result<usize, Errno> {
             Ok(data.len())
         }
-        fn truncate(&self) -> Result<(), Errno> {
+        fn truncate(&self, _length: usize) -> Result<(), Errno> {
             Ok(())
         }
     }

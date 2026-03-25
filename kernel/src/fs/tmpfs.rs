@@ -51,6 +51,30 @@ impl VfsNode for TmpfsFile {
         self.data.lock().len()
     }
 
+    fn mode(&self) -> u32 {
+        self.metadata.lock().mode
+    }
+
+    fn uid(&self) -> u32 {
+        self.metadata.lock().uid
+    }
+
+    fn gid(&self) -> u32 {
+        self.metadata.lock().gid
+    }
+
+    fn set_mode(&self, mode: u32) -> Result<(), Errno> {
+        self.metadata.lock().mode = mode;
+        Ok(())
+    }
+
+    fn set_owner(&self, uid: u32, gid: u32) -> Result<(), Errno> {
+        let mut meta = self.metadata.lock();
+        meta.uid = uid;
+        meta.gid = gid;
+        Ok(())
+    }
+
     fn read(&self, offset: usize, buf: &mut [u8]) -> Result<usize, Errno> {
         let data = self.data.lock();
         if offset >= data.len() {
@@ -72,8 +96,8 @@ impl VfsNode for TmpfsFile {
         Ok(data.len())
     }
 
-    fn truncate(&self) -> Result<(), Errno> {
-        self.data.lock().clear();
+    fn truncate(&self, length: usize) -> Result<(), Errno> {
+        self.data.lock().resize(length, 0);
         Ok(())
     }
 
@@ -126,6 +150,30 @@ impl VfsNode for TmpfsDir {
 
     fn size(&self) -> usize {
         0
+    }
+
+    fn mode(&self) -> u32 {
+        self.metadata.lock().mode
+    }
+
+    fn uid(&self) -> u32 {
+        self.metadata.lock().uid
+    }
+
+    fn gid(&self) -> u32 {
+        self.metadata.lock().gid
+    }
+
+    fn set_mode(&self, mode: u32) -> Result<(), Errno> {
+        self.metadata.lock().mode = mode;
+        Ok(())
+    }
+
+    fn set_owner(&self, uid: u32, gid: u32) -> Result<(), Errno> {
+        let mut meta = self.metadata.lock();
+        meta.uid = uid;
+        meta.gid = gid;
+        Ok(())
     }
 
     fn lookup(&self, name: &str) -> Result<VfsNodeRef, Errno> {
