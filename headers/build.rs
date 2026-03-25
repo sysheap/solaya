@@ -301,6 +301,9 @@ fn generate_sysinfo_types(out_path: &Path) -> Result<(), Box<dyn std::error::Err
         .allowlist_type("utsname")
         .allowlist_type("sysinfo")
         .allowlist_type("rusage")
+        .allowlist_type("rlimit")
+        .allowlist_var("RLIMIT_.*")
+        .allowlist_var("RLIM_INFINITY")
         .derive_copy(true)
         .derive_default(true)
         .generate()?;
