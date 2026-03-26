@@ -128,8 +128,11 @@ impl LinuxSyscallHandler {
             }
         } else {
             let path = self.read_cstring(pathname)?;
+            let base = self.resolve_dirfd_node(dirfd)?;
+            if path == "." || path == ".." {
+                return Ok(base);
+            }
             if nofollow {
-                let base = self.resolve_dirfd_node(dirfd)?;
                 let (parent_part, name) = if let Some(slash) = path.rfind('/') {
                     (Some(&path[..slash]), &path[slash + 1..])
                 } else {
@@ -142,7 +145,7 @@ impl LinuxSyscallHandler {
                 };
                 parent.lookup(name)
             } else {
-                fs::resolve_relative(self.resolve_dirfd_node(dirfd)?, &path)
+                fs::resolve_relative(base, &path)
             }
         }
     }

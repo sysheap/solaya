@@ -223,7 +223,17 @@ fn resolve_path_with_depth(path: &str, depth: u32) -> Result<VfsNodeRef, Errno> 
 }
 
 pub fn resolve_path_nofollow(path: &str) -> Result<VfsNodeRef, Errno> {
+    if path == "." || path == "/" || path == ".." {
+        return resolve_path(path);
+    }
+    if !path.starts_with('/') {
+        let abs = alloc::format!("/{path}");
+        return resolve_path_nofollow(&abs);
+    }
     let (parent, name) = resolve_parent(path)?;
+    if name == "." || name == ".." {
+        return resolve_path(path);
+    }
     parent.lookup(name)
 }
 
@@ -273,7 +283,10 @@ pub fn resolve_relative(base: VfsNodeRef, path: &str) -> Result<VfsNodeRef, Errn
 const MAX_SYMLINK_DEPTH: u32 = 8;
 
 fn walk_with_depth(mut node: VfsNodeRef, path: &str, mut depth: u32) -> Result<VfsNodeRef, Errno> {
-    for component in path.split('/').filter(|c| !c.is_empty() && *c != ".") {
+    for component in path
+        .split('/')
+        .filter(|c| !c.is_empty() && *c != "." && *c != "..")
+    {
         let parent = node.clone();
         node = parent.lookup(component)?;
         if node.node_type() == NodeType::Symlink {
