@@ -29,6 +29,7 @@ pub fn alloc_ino() -> u64 {
 pub enum NodeType {
     File,
     Directory,
+    Symlink,
 }
 
 impl NodeType {
@@ -36,30 +37,61 @@ impl NodeType {
         match self {
             NodeType::File => headers::fs::S_IFREG | 0o644,
             NodeType::Directory => headers::fs::S_IFDIR | 0o755,
+            NodeType::Symlink => headers::fs::S_IFLNK | 0o777,
         }
     }
 }
 
 pub fn stat_from_node(node: &VfsNodeRef) -> headers::fs::stat {
+    let (atime_sec, atime_nsec) = node.atime();
+    let (mtime_sec, mtime_nsec) = node.mtime();
+    let (ctime_sec, ctime_nsec) = node.ctime();
     headers::fs::stat {
         st_ino: node.ino(),
-        st_mode: node.node_type().stat_mode(),
-        st_nlink: 1,
+        st_mode: node.mode(),
+        st_nlink: node.nlink(),
+        st_uid: node.uid(),
+        st_gid: node.gid(),
         st_size: node.size() as i64,
         st_blksize: 4096,
+        st_atime: atime_sec,
+        st_atime_nsec: atime_nsec as u64,
+        st_mtime: mtime_sec,
+        st_mtime_nsec: mtime_nsec as u64,
+        st_ctime: ctime_sec,
+        st_ctime_nsec: ctime_nsec as u64,
         ..headers::fs::stat::default()
     }
 }
 
 pub fn statx_from_node(node: &VfsNodeRef) -> headers::fs::statx {
-    let mode = node.node_type().stat_mode() as u16;
+    let (atime_sec, atime_nsec) = node.atime();
+    let (mtime_sec, mtime_nsec) = node.mtime();
+    let (ctime_sec, ctime_nsec) = node.ctime();
     headers::fs::statx {
         stx_mask: 0x7ff,
         stx_blksize: 4096,
-        stx_nlink: 1,
-        stx_mode: mode,
+        stx_nlink: node.nlink(),
+        stx_uid: node.uid(),
+        stx_gid: node.gid(),
+        stx_mode: node.mode() as u16,
         stx_ino: node.ino(),
         stx_size: node.size() as u64,
+        stx_atime: headers::fs::statx_timestamp {
+            tv_sec: atime_sec,
+            tv_nsec: atime_nsec,
+            __reserved: 0,
+        },
+        stx_mtime: headers::fs::statx_timestamp {
+            tv_sec: mtime_sec,
+            tv_nsec: mtime_nsec,
+            __reserved: 0,
+        },
+        stx_ctime: headers::fs::statx_timestamp {
+            tv_sec: ctime_sec,
+            tv_nsec: ctime_nsec,
+            __reserved: 0,
+        },
         ..headers::fs::statx::default()
     }
 }
@@ -86,8 +118,32 @@ pub trait VfsNode: Send + Sync {
         Err(Errno::EISDIR)
     }
 
-    fn truncate(&self) -> Result<(), Errno> {
+    fn truncate(&self, _length: usize) -> Result<(), Errno> {
         Err(Errno::EISDIR)
+    }
+
+    fn mode(&self) -> u32 {
+        self.node_type().stat_mode()
+    }
+
+    fn uid(&self) -> u32 {
+        0
+    }
+
+    fn gid(&self) -> u32 {
+        0
+    }
+
+    fn nlink(&self) -> u32 {
+        1
+    }
+
+    fn set_mode(&self, _mode: u32) -> Result<(), Errno> {
+        Err(Errno::EPERM)
+    }
+
+    fn set_owner(&self, _uid: u32, _gid: u32) -> Result<(), Errno> {
+        Err(Errno::EPERM)
     }
 
     fn lookup(&self, _name: &str) -> Result<VfsNodeRef, Errno> {
@@ -106,8 +162,36 @@ pub trait VfsNode: Send + Sync {
         Err(Errno::ENOTDIR)
     }
 
+    fn readlink(&self) -> Result<String, Errno> {
+        Err(Errno::EINVAL)
+    }
+
+    fn link(&self, _name: &str, _node: VfsNodeRef) -> Result<(), Errno> {
+        Err(Errno::ENOTDIR)
+    }
+
+    fn remove_child(&self, _name: &str) -> Result<VfsNodeRef, Errno> {
+        Err(Errno::ENOTDIR)
+    }
+
+    fn inc_nlink(&self) {}
+    #[allow(dead_code)]
+    fn dec_nlink(&self) {}
+
     fn block_device_index(&self) -> Option<usize> {
         None
+    }
+
+    fn atime(&self) -> (i64, u32) {
+        (0, 0)
+    }
+
+    fn mtime(&self) -> (i64, u32) {
+        (0, 0)
+    }
+
+    fn ctime(&self) -> (i64, u32) {
+        (0, 0)
     }
 }
 
@@ -118,6 +202,10 @@ pub fn mount(path: &str, root: VfsNodeRef) {
 }
 
 pub fn resolve_path(path: &str) -> Result<VfsNodeRef, Errno> {
+    resolve_path_with_depth(path, 0)
+}
+
+fn resolve_path_with_depth(path: &str, depth: u32) -> Result<VfsNodeRef, Errno> {
     if path == "." || path == "/" {
         let table = MOUNT_TABLE.lock();
         let (_, node) = find_mount(&table, "/")?;
@@ -125,13 +213,28 @@ pub fn resolve_path(path: &str) -> Result<VfsNodeRef, Errno> {
     }
     if !path.starts_with('/') {
         let abs = alloc::format!("/{path}");
-        return resolve_path(&abs);
+        return resolve_path_with_depth(&abs, depth);
     }
     let table = MOUNT_TABLE.lock();
     let (mount_path, node) = find_mount(&table, path)?;
     let remainder = &path[mount_path.len()..];
     drop(table);
-    walk(node, remainder)
+    walk_with_depth(node, remainder, depth)
+}
+
+pub fn resolve_path_nofollow(path: &str) -> Result<VfsNodeRef, Errno> {
+    if path == "." || path == "/" || path == ".." {
+        return resolve_path(path);
+    }
+    if !path.starts_with('/') {
+        let abs = alloc::format!("/{path}");
+        return resolve_path_nofollow(&abs);
+    }
+    let (parent, name) = resolve_parent(path)?;
+    if name == "." || name == ".." {
+        return resolve_path(path);
+    }
+    parent.lookup(name)
 }
 
 pub fn resolve_parent(path: &str) -> Result<(VfsNodeRef, &str), Errno> {
@@ -174,12 +277,30 @@ fn find_mount<'a>(
 }
 
 pub fn resolve_relative(base: VfsNodeRef, path: &str) -> Result<VfsNodeRef, Errno> {
-    walk(base, path)
+    walk_with_depth(base, path, 0)
 }
 
-fn walk(mut node: VfsNodeRef, path: &str) -> Result<VfsNodeRef, Errno> {
-    for component in path.split('/').filter(|c| !c.is_empty() && *c != ".") {
-        node = node.lookup(component)?;
+const MAX_SYMLINK_DEPTH: u32 = 8;
+
+fn walk_with_depth(mut node: VfsNodeRef, path: &str, mut depth: u32) -> Result<VfsNodeRef, Errno> {
+    for component in path
+        .split('/')
+        .filter(|c| !c.is_empty() && *c != "." && *c != "..")
+    {
+        let parent = node.clone();
+        node = parent.lookup(component)?;
+        if node.node_type() == NodeType::Symlink {
+            if depth >= MAX_SYMLINK_DEPTH {
+                return Err(Errno::ELOOP);
+            }
+            depth += 1;
+            let target = node.readlink()?;
+            if target.starts_with('/') {
+                node = resolve_path_with_depth(&target, depth)?;
+            } else {
+                node = walk_with_depth(parent, &target, depth)?;
+            }
+        }
     }
     Ok(node)
 }

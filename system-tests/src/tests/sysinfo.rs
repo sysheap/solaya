@@ -16,3 +16,11 @@ async fn test_sysinfo_syscalls() -> anyhow::Result<()> {
     assert!(output.contains("OK getrusage"), "getrusage test failed");
     Ok(())
 }
+
+#[tokio::test]
+async fn rlimit() -> anyhow::Result<()> {
+    let mut solaya = QemuInstance::start().await?;
+    let output = solaya.run_prog("rlimit-test").await?;
+    assert_eq!(output, "rlimit: OK\n");
+    Ok(())
+}

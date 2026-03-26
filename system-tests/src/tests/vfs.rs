@@ -1,6 +1,14 @@
 use crate::infra::qemu::{QemuInstance, QemuOptions};
 
 #[tokio::test]
+async fn sendfile() -> anyhow::Result<()> {
+    let mut solaya = QemuInstance::start().await?;
+    let output = solaya.run_prog("sendfile-test").await?;
+    assert_eq!(output, "sendfile: OK\n");
+    Ok(())
+}
+
+#[tokio::test]
 async fn cat_proc_version() -> anyhow::Result<()> {
     let mut solaya = QemuInstance::start().await?;
     let output = solaya.run_prog("cat /proc/version").await?;
@@ -100,6 +108,14 @@ async fn ls_dev() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
+async fn pread_pwrite() -> anyhow::Result<()> {
+    let mut solaya = QemuInstance::start().await?;
+    let output = solaya.run_prog("pread-test").await?;
+    assert_eq!(output, "pread_pwrite: OK\n");
+    Ok(())
+}
+
+#[tokio::test]
 async fn ls_dev_with_block() -> anyhow::Result<()> {
     let dir = tempfile::tempdir()?;
     let disk_path = dir.path().join("disk.img");
@@ -114,5 +130,44 @@ async fn ls_dev_with_block() -> anyhow::Result<()> {
         output.contains("vda"),
         "/dev/vda should appear with --block"
     );
+    Ok(())
+}
+
+#[tokio::test]
+async fn vfs_metadata() -> anyhow::Result<()> {
+    let mut solaya = QemuInstance::start().await?;
+    let output = solaya.run_prog("metadata-test").await?;
+    assert_eq!(output, "metadata: OK\n");
+    Ok(())
+}
+
+#[tokio::test]
+async fn file_metadata_ops() -> anyhow::Result<()> {
+    let mut solaya = QemuInstance::start().await?;
+    let output = solaya.run_prog("fmeta-test").await?;
+    assert!(output.contains("OK ftruncate_grow"));
+    assert!(output.contains("OK ftruncate_shrink"));
+    assert!(output.contains("OK fchmod"));
+    assert!(output.contains("OK fchown"));
+    assert!(output.contains("OK fchown_partial"));
+    Ok(())
+}
+
+#[tokio::test]
+async fn ls_long_format() -> anyhow::Result<()> {
+    let mut solaya = QemuInstance::start().await?;
+    let output = solaya.run_prog("ls -alh /tmp").await?;
+    assert!(
+        !output.contains("No such file"),
+        "ls -alh should not fail: {output}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn symlinks_and_links() -> anyhow::Result<()> {
+    let mut solaya = QemuInstance::start().await?;
+    let output = solaya.run_prog("symlink-test").await?;
+    assert_eq!(output, "symlink_test: OK\n");
     Ok(())
 }

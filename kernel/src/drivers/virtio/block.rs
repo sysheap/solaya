@@ -190,7 +190,7 @@ pub fn register_devfs_node(index: usize) {
         fn size(&self) -> usize {
             capacity(self.index) as usize
         }
-        fn truncate(&self) -> Result<(), headers::errno::Errno> {
+        fn truncate(&self, _length: usize) -> Result<(), headers::errno::Errno> {
             Err(headers::errno::Errno::EINVAL)
         }
         fn block_device_index(&self) -> Option<usize> {

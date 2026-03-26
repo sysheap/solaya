@@ -5,7 +5,10 @@ use crate::{
         PAGE_SIZE, Pages, PhysAddr, PinnedHeapPages, VirtAddr,
         page_tables::{RootPageTableHolder, XWRMode},
     },
-    processes::{brk::Brk, fd_table::FdTable, thread::ThreadWeakRef, userspace_ptr::UserspacePtr},
+    processes::{
+        brk::Brk, credentials::Credentials, fd_table::FdTable, thread::ThreadWeakRef,
+        userspace_ptr::UserspacePtr,
+    },
 };
 use alloc::{
     collections::BTreeMap,
@@ -56,6 +59,7 @@ pub struct Process {
     brk: Brk,
     umask: u32,
     cwd: String,
+    credentials: Credentials,
 }
 
 impl Debug for Process {
@@ -101,6 +105,7 @@ impl Process {
             sid,
             umask: 0o022,
             cwd: String::from("/"),
+            credentials: Credentials::root(),
         }
     }
 
@@ -250,6 +255,18 @@ impl Process {
 
     pub fn set_cwd(&mut self, cwd: String) {
         self.cwd = cwd;
+    }
+
+    pub fn credentials(&self) -> &Credentials {
+        &self.credentials
+    }
+
+    pub fn credentials_mut(&mut self) -> &mut Credentials {
+        &mut self.credentials
+    }
+
+    pub fn set_credentials(&mut self, creds: Credentials) {
+        self.credentials = creds;
     }
 
     pub fn fd_table(&self) -> crate::klibc::SpinlockGuard<'_, FdTable> {

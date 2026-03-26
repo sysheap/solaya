@@ -33,7 +33,7 @@ impl VfsNode for DevNull {
         Ok(data.len())
     }
 
-    fn truncate(&self) -> Result<(), Errno> {
+    fn truncate(&self, _length: usize) -> Result<(), Errno> {
         Ok(())
     }
 }
@@ -64,7 +64,7 @@ impl VfsNode for DevZero {
         Ok(data.len())
     }
 
-    fn truncate(&self) -> Result<(), Errno> {
+    fn truncate(&self, _length: usize) -> Result<(), Errno> {
         Ok(())
     }
 }
@@ -106,7 +106,7 @@ impl VfsNode for DevConsole {
         Ok(data.len())
     }
 
-    fn truncate(&self) -> Result<(), Errno> {
+    fn truncate(&self, _length: usize) -> Result<(), Errno> {
         Ok(())
     }
 }

@@ -123,7 +123,7 @@ pub fn register_devfs_node() {
             arch::cpu::memory_fence();
             Ok(len)
         }
-        fn truncate(&self) -> Result<(), Errno> {
+        fn truncate(&self, _length: usize) -> Result<(), Errno> {
             Ok(())
         }
     }

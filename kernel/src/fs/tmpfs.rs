@@ -10,9 +10,17 @@ use crate::klibc::Spinlock;
 
 use super::vfs::{DirEntry, NodeType, VfsNode, VfsNodeRef, alloc_ino};
 
+struct TmpfsMetadata {
+    mode: u32,
+    uid: u32,
+    gid: u32,
+    nlink: u32,
+}
+
 pub struct TmpfsFile {
     ino: u64,
     data: Spinlock<Vec<u8>>,
+    metadata: Spinlock<TmpfsMetadata>,
 }
 
 impl TmpfsFile {
@@ -20,6 +28,12 @@ impl TmpfsFile {
         Arc::new(Self {
             ino: alloc_ino(),
             data: Spinlock::new(Vec::new()),
+            metadata: Spinlock::new(TmpfsMetadata {
+                mode: headers::fs::S_IFREG | 0o644,
+                uid: 0,
+                gid: 0,
+                nlink: 1,
+            }),
         })
     }
 }
@@ -35,6 +49,42 @@ impl VfsNode for TmpfsFile {
 
     fn size(&self) -> usize {
         self.data.lock().len()
+    }
+
+    fn mode(&self) -> u32 {
+        self.metadata.lock().mode
+    }
+
+    fn uid(&self) -> u32 {
+        self.metadata.lock().uid
+    }
+
+    fn gid(&self) -> u32 {
+        self.metadata.lock().gid
+    }
+
+    fn nlink(&self) -> u32 {
+        self.metadata.lock().nlink
+    }
+
+    fn set_mode(&self, mode: u32) -> Result<(), Errno> {
+        self.metadata.lock().mode = mode;
+        Ok(())
+    }
+
+    fn set_owner(&self, uid: u32, gid: u32) -> Result<(), Errno> {
+        let mut meta = self.metadata.lock();
+        meta.uid = uid;
+        meta.gid = gid;
+        Ok(())
+    }
+
+    fn inc_nlink(&self) {
+        self.metadata.lock().nlink += 1;
+    }
+
+    fn dec_nlink(&self) {
+        self.metadata.lock().nlink -= 1;
     }
 
     fn read(&self, offset: usize, buf: &mut [u8]) -> Result<usize, Errno> {
@@ -58,8 +108,8 @@ impl VfsNode for TmpfsFile {
         Ok(data.len())
     }
 
-    fn truncate(&self) -> Result<(), Errno> {
-        self.data.lock().clear();
+    fn truncate(&self, length: usize) -> Result<(), Errno> {
+        self.data.lock().resize(length, 0);
         Ok(())
     }
 }
@@ -67,6 +117,7 @@ impl VfsNode for TmpfsFile {
 pub struct TmpfsDir {
     ino: u64,
     children: Spinlock<BTreeMap<String, VfsNodeRef>>,
+    metadata: Spinlock<TmpfsMetadata>,
 }
 
 impl TmpfsDir {
@@ -74,6 +125,12 @@ impl TmpfsDir {
         Arc::new(Self {
             ino: alloc_ino(),
             children: Spinlock::new(BTreeMap::new()),
+            metadata: Spinlock::new(TmpfsMetadata {
+                mode: headers::fs::S_IFDIR | 0o755,
+                uid: 0,
+                gid: 0,
+                nlink: 2,
+            }),
         })
     }
 }
@@ -91,6 +148,34 @@ impl VfsNode for TmpfsDir {
         0
     }
 
+    fn mode(&self) -> u32 {
+        self.metadata.lock().mode
+    }
+
+    fn uid(&self) -> u32 {
+        self.metadata.lock().uid
+    }
+
+    fn gid(&self) -> u32 {
+        self.metadata.lock().gid
+    }
+
+    fn nlink(&self) -> u32 {
+        self.metadata.lock().nlink
+    }
+
+    fn set_mode(&self, mode: u32) -> Result<(), Errno> {
+        self.metadata.lock().mode = mode;
+        Ok(())
+    }
+
+    fn set_owner(&self, uid: u32, gid: u32) -> Result<(), Errno> {
+        let mut meta = self.metadata.lock();
+        meta.uid = uid;
+        meta.gid = gid;
+        Ok(())
+    }
+
     fn lookup(&self, name: &str) -> Result<VfsNodeRef, Errno> {
         self.children.lock().get(name).cloned().ok_or(Errno::ENOENT)
     }
@@ -102,18 +187,36 @@ impl VfsNode for TmpfsDir {
         }
         let node: VfsNodeRef = match node_type {
             NodeType::File => TmpfsFile::new(),
-            NodeType::Directory => TmpfsDir::new(),
+            NodeType::Directory => {
+                self.metadata.lock().nlink += 1;
+                TmpfsDir::new()
+            }
+            NodeType::Symlink => return Err(Errno::EINVAL),
         };
         children.insert(name.to_string(), node.clone());
         Ok(node)
     }
 
     fn unlink(&self, name: &str) -> Result<(), Errno> {
-        self.children
-            .lock()
-            .remove(name)
-            .map(|_| ())
-            .ok_or(Errno::ENOENT)
+        let mut children = self.children.lock();
+        let node = children.remove(name).ok_or(Errno::ENOENT)?;
+        if node.node_type() == NodeType::Directory {
+            self.metadata.lock().nlink -= 1;
+        }
+        Ok(())
+    }
+
+    fn link(&self, name: &str, node: VfsNodeRef) -> Result<(), Errno> {
+        let mut children = self.children.lock();
+        if children.contains_key(name) {
+            return Err(Errno::EEXIST);
+        }
+        children.insert(name.to_string(), node);
+        Ok(())
+    }
+
+    fn remove_child(&self, name: &str) -> Result<VfsNodeRef, Errno> {
+        self.children.lock().remove(name).ok_or(Errno::ENOENT)
     }
 
     fn readdir(&self) -> Result<Vec<DirEntry>, Errno> {
@@ -126,5 +229,41 @@ impl VfsNode for TmpfsDir {
                 node_type: node.node_type(),
             })
             .collect())
+    }
+}
+
+pub struct TmpfsSymlink {
+    ino: u64,
+    target: String,
+}
+
+impl TmpfsSymlink {
+    pub fn new(target: String) -> Arc<Self> {
+        Arc::new(Self {
+            ino: alloc_ino(),
+            target,
+        })
+    }
+}
+
+impl VfsNode for TmpfsSymlink {
+    fn node_type(&self) -> NodeType {
+        NodeType::Symlink
+    }
+
+    fn ino(&self) -> u64 {
+        self.ino
+    }
+
+    fn size(&self) -> usize {
+        self.target.len()
+    }
+
+    fn nlink(&self) -> u32 {
+        1
+    }
+
+    fn readlink(&self) -> Result<String, Errno> {
+        Ok(self.target.clone())
     }
 }

@@ -1,6 +1,6 @@
 use alloc::vec;
 use core::{
-    ffi::c_int,
+    ffi::{c_int, c_uint},
     sync::atomic::{AtomicU64, Ordering},
 };
 use headers::errno::Errno;
@@ -69,6 +69,47 @@ impl LinuxSyscallHandler {
         Ok(0)
     }
 
+    pub(super) fn do_getrlimit(
+        &self,
+        resource: c_uint,
+        rlim: LinuxUserspaceArg<*mut u8>,
+    ) -> Result<isize, Errno> {
+        let (soft, hard) = get_default_rlimit(resource);
+        let rl = headers::sysinfo_types::rlimit {
+            rlim_cur: soft,
+            rlim_max: hard,
+        };
+        rlim.write_slice(rl.as_slice())?;
+        Ok(0)
+    }
+
+    pub(super) fn do_prlimit64(
+        &self,
+        pid: c_int,
+        resource: c_uint,
+        old_limit: LinuxUserspaceArg<Option<*mut u8>>,
+    ) -> Result<isize, Errno> {
+        if pid != 0 {
+            let my_pid = self.current_process.with_lock(|p| p.main_tid());
+            if pid != my_pid.as_isize() as c_int {
+                return Err(Errno::ESRCH);
+            }
+        }
+        if old_limit.arg_nonzero() {
+            let (soft, hard) = get_default_rlimit(resource);
+            let rl = headers::sysinfo_types::rlimit {
+                rlim_cur: soft,
+                rlim_max: hard,
+            };
+            let ptr = LinuxUserspaceArg::<*mut u8>::new(
+                old_limit.raw_arg(),
+                self.current_process.clone(),
+            );
+            ptr.write_slice(rl.as_slice())?;
+        }
+        Ok(0)
+    }
+
     pub(super) fn do_getrandom(
         &self,
         buf: LinuxUserspaceArg<*mut u8>,
@@ -85,6 +126,16 @@ impl LinuxSyscallHandler {
 
         buf.write_slice(&data)?;
         Ok(len as isize)
+    }
+}
+
+fn get_default_rlimit(resource: u32) -> (u64, u64) {
+    let unlimited = u64::MAX;
+    match resource {
+        headers::sysinfo_types::RLIMIT_STACK => (8 * 1024 * 1024, unlimited),
+        headers::sysinfo_types::RLIMIT_NOFILE => (1024, 4096),
+        headers::sysinfo_types::RLIMIT_CORE => (0, 0),
+        _ => (unlimited, unlimited),
     }
 }
 
