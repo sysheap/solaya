@@ -2,7 +2,7 @@ use alloc::{string::String, vec::Vec};
 use core::ffi::{c_int, c_uint, c_ulong};
 use headers::{
     errno::Errno,
-    syscall_types::{FUTEX_PRIVATE_FLAG, FUTEX_WAIT, FUTEX_WAKE},
+    syscall_types::{FUTEX_PRIVATE_FLAG, FUTEX_WAIT, FUTEX_WAKE, PR_GET_NAME, PR_SET_NAME},
 };
 
 use crate::processes::{
@@ -12,9 +12,6 @@ use crate::processes::{
 use common::pid::Tid;
 
 use super::{linux::LinuxSyscallHandler, linux_validator::LinuxUserspaceArg};
-
-const PR_SET_NAME: c_int = 15;
-const PR_GET_NAME: c_int = 16;
 
 impl LinuxSyscallHandler {
     pub(super) fn do_getpgid(&self, pid: c_int) -> Result<isize, Errno> {
@@ -241,7 +238,7 @@ impl LinuxSyscallHandler {
         _arg4: c_ulong,
         _arg5: c_ulong,
     ) -> Result<isize, Errno> {
-        match option {
+        match option.cast_unsigned() {
             PR_SET_NAME => {
                 let ptr = LinuxUserspaceArg::<*const u8>::new(
                     arg2 as usize,
