@@ -30,6 +30,7 @@ pub async fn mount_ext2(dev: usize) {
             "ext2: block device {} is not ext2 (magic 0x{:04X}), skipping",
             dev, sb.s_magic
         );
+        info!("ext2: init complete");
         return;
     }
 
@@ -44,6 +45,7 @@ pub async fn mount_ext2(dev: usize) {
     let root = build_tree(dev, &sb, &bgds, EXT2_ROOT_INODE).await;
     vfs::mount("/mnt", root);
     info!("ext2: mounted at /mnt");
+    info!("ext2: init complete");
 }
 
 async fn read_superblock(dev: usize) -> Ext2Superblock {
