@@ -6,11 +6,7 @@
     "UserPromptSubmit": [
       {
         "hooks": [
-          {
-            "type": "command",
-            "command": "cat .claude/hooks/doc-check.txt"
-          },
-          {
+{
             "type": "command",
             "command": "cat .claude/hooks/commit-reminder.txt"
           },

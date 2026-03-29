@@ -319,7 +319,7 @@ Solaya is licensed under **MIT**. To keep it that way:
 
 **Commit incrementally.** Commit each small working step toward a larger goal. Include test code in commits. This enables incremental progress verification rather than large, hard-to-debug changesets.
 
-**Keep docs in sync.** Update `CLAUDE.md` and `doc/ai/*` when discovering inconsistencies or implementing new features.
+**Keep docs in sync.** Before starting implementation tasks, check `doc/ai/OVERVIEW.md` for available documentation, read the docs relevant to the task, and update them if the implementation changes. Update `CLAUDE.md` and `doc/ai/*` when discovering inconsistencies or implementing new features.
 
 **GitHub issue attribution.** When creating GitHub issues via `gh`, always append this footer to the issue body: `---\n_Created by [Claude Code](https://claude.ai/code)_`
 
