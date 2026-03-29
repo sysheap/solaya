@@ -51,13 +51,14 @@ impl LinuxSyscallHandler {
             parent_sid,
         )));
 
-        let (parent_fd_table, parent_cwd, parent_umask, parent_creds) =
+        let (parent_fd_table, parent_cwd, parent_umask, parent_creds, parent_binary_path) =
             parent_process.with_lock(|p| {
                 (
                     p.fd_table().clone(),
                     String::from(p.cwd()),
                     p.umask(),
                     p.credentials().clone(),
+                    p.binary_path().cloned(),
                 )
             });
         {
@@ -66,6 +67,9 @@ impl LinuxSyscallHandler {
             child.set_cwd(parent_cwd);
             child.set_umask(parent_umask);
             child.set_credentials(parent_creds);
+            if let Some(path) = parent_binary_path {
+                child.set_binary_path(path);
+            }
             child.set_fork_state(forked.cow_pages, forked.free_mmap_address);
         }
 

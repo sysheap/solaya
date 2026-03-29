@@ -281,6 +281,33 @@ where
         & (2u64.pow(u32::try_from(number_of_bits).expect("bit count fits in u32")) - 1)
 }
 
+/// A heap buffer guaranteed to be 8-byte aligned, suitable for ELF parsing.
+pub struct AlignedBuffer {
+    inner: alloc::vec::Vec<u64>,
+    len: usize,
+}
+
+impl AlignedBuffer {
+    pub fn new(size: usize) -> Self {
+        let u64_count = size.div_ceil(8);
+        Self {
+            inner: alloc::vec![0u64; u64_count],
+            len: size,
+        }
+    }
+
+    pub fn as_bytes(&self) -> &[u8] {
+        // SAFETY: u64 has alignment >= u8, the allocation covers at least
+        // `len` bytes, and the zeroed u64 values are valid u8 values.
+        unsafe { core::slice::from_raw_parts(self.inner.as_ptr().cast(), self.len) }
+    }
+
+    pub fn as_bytes_mut(&mut self) -> &mut [u8] {
+        // SAFETY: same as as_bytes; additionally we have exclusive access.
+        unsafe { core::slice::from_raw_parts_mut(self.inner.as_mut_ptr().cast(), self.len) }
+    }
+}
+
 pub trait InBytes {
     fn in_bytes(&self) -> usize;
 }

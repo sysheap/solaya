@@ -1,6 +1,6 @@
 # Codebase Index: solaya
 
-> Generated: 2026-03-29 21:39:22 UTC | Files: 289 | Lines: 47819
+> Generated: 2026-03-29 23:24:39 UTC | Files: 289 | Lines: 47722
 > Languages: C (2), Markdown (21), Python (4), Rust (248), Shell (1), TOML (13)
 
 ## Directory Structure
@@ -520,13 +520,11 @@ solaya/
 
 **common/src/ioctl.rs**
 - `pub const SOLAYA_PANIC: u32 = 0x5301`
-- `pub const SOLAYA_LIST_PROGRAMS: u32 = 0x5302`
 - `pub const SIOCGIFHWADDR: u32 = 0x8927`
 - `pub const SIOCSIFADDR: u32 = 0x8916`
 - `pub const ARPHRD_ETHER: u16 = 1`
 - `pub struct Ifreq`
 - `pub fn trigger_kernel_panic()`
-- `pub fn print_programs()`
 - `pub fn get_mac_address(socket_fd: i32) -> Option<[u8; 6]>`
 - `pub fn set_ip_address(socket_fd: i32, ip: [u8; 4])`
 
@@ -747,6 +745,7 @@ solaya/
 - `pub fn capacity(index: usize) -> u64`
 - `pub fn register_devfs_node(index: usize)`
 - `pub async fn read(index: usize, offset: usize, buf: &mut [u8]) -> Result<usize, Errno>`
+- `pub fn read_sync(index: usize, offset: usize, buf: &mut [u8]) -> Result<usize, Errno>`
 - `pub async fn write(index: usize, offset: usize, data: &[u8]) -> Result<usize, Errno>`
 
 **kernel/src/drivers/virtio/capability.rs**
@@ -812,18 +811,19 @@ solaya/
 - `pub struct Ext2File`
 
 **kernel/src/fs/ext2/inode.rs**
-- `pub async fn read_inode( dev: usize, sb: &Ext2Superblock, bgds: &[Ext2BlockGroupDescriptor], inode_number: u32, ) -> Ext2Inode`
-- `pub async fn read_inode_data(dev: usize, sb: &Ext2Superblock, inode: &Ext2Inode) -> Vec<u8>`
+- `pub fn read_inode_sync( dev: usize, sb: &Ext2Superblock, bgds: &[Ext2BlockGroupDescriptor], inode_number: u32, ) -> Ext2Inode`
+- `pub fn read_inode_data_sync(dev: usize, sb: &Ext2Superblock, inode: &Ext2Inode) -> Vec<u8>`
 
 **kernel/src/fs/ext2/mod.rs**
 - `pub mod structures`
-- `pub async fn mount_ext2(dev: usize)`
+- `pub fn mount_ext2(dev: usize)`
 
 **kernel/src/fs/ext2/structures.rs**
 - `pub const EXT2_MAGIC: u16 = 0xEF53`
 - `pub const EXT2_ROOT_INODE: u32 = 2`
 - `pub const EXT2_FT_REG_FILE: u8 = 1`
 - `pub const EXT2_FT_DIR: u8 = 2`
+- `pub const EXT2_FT_SYMLINK: u8 = 7`
 - `pub const S_IFMT: u16 = 0xF000`
 - `pub const S_IFDIR: u16 = 0x4000`
 - `pub const S_IFREG: u16 = 0x8000`
@@ -1189,6 +1189,7 @@ solaya/
 - `pub fn live_thread_count() -> usize`
 - `pub static THE: RuntimeInitializedData<Spinlock<ProcessTable>> = RuntimeInitializedData::new()`
 - `pub fn init()`
+- `pub fn spawn_init(elf_data: &[u8])`
 - `pub struct ProcessTable`
 
 **kernel/src/processes/scheduler.rs**
@@ -1457,6 +1458,7 @@ solaya/
 - `pub fn get_bit<DataType>(data: DataType, bit_position: usize) -> bool where DataType: Shr<usize, Output = DataType> + BitAnd<DataType, Output = DataType> + PartialEq<DataType> + From<u8>,`
 - `pub fn set_multiple_bits<DataType, ValueType>( data: &mut DataType, value: ValueType, number_of_bits: usize, bit_position: usize, ) -> DataType where DataType: BitAndAssign + BitOrAssign + Not<Output = DataType> + From<u8> + Shl<usize, Output = DataType> + Copy, ValueType: Copy + BitAnd + From<u8> + Shl<usize, Output = ValueType>, <ValueType as BitAnd>::Output: PartialOrd<ValueType>,`
 - `pub fn get_multiple_bits<DataType, ValueType>( data: DataType, number_of_bits: usize, bit_position: usize, ) -> ValueType where DataType: Shr<usize, Output = DataType> + BitAnd<u64, Output = ValueType>,`
+- `pub struct AlignedBuffer`
 - `pub trait InBytes`
 
 **sys/src/klibc/validated_ptr.rs**
@@ -1650,7 +1652,7 @@ solaya/
 
 ## INDEX.md
 
-**Language:** Markdown | **Size:** 229.2 KB | **Lines:** 9766
+**Language:** Markdown | **Size:** 229.2 KB | **Lines:** 9768
 
 **Declarations:**
 
@@ -2068,7 +2070,7 @@ solaya/
 
 ## common/src/ioctl.rs
 
-**Language:** Rust | **Size:** 1.7 KB | **Lines:** 64
+**Language:** Rust | **Size:** 1.5 KB | **Lines:** 56
 
 **Declarations:**
 
@@ -2447,17 +2449,14 @@ solaya/
 
 ## kernel/build.rs
 
-**Language:** Rust | **Size:** 3.3 KB | **Lines:** 104
+**Language:** Rust | **Size:** 2.1 KB | **Lines:** 72
 
 **Imports:**
 - `std::{
-    collections::BTreeMap,
     env,
     error::Error,
     fmt::Write as _,
-    fs::read_dir,
     io::Write as _,
-    path::PathBuf,
     process::{Command, Stdio},
 }`
 
@@ -2849,11 +2848,11 @@ solaya/
 
 ## kernel/src/drivers/mod.rs
 
-**Language:** Rust | **Size:** 3.1 KB | **Lines:** 87
+**Language:** Rust | **Size:** 3.1 KB | **Lines:** 85
 
 **Imports:**
 - `alloc::vec::Vec`
-- `crate::{fs, interrupts::plic, net, pci::PCIDevice, processes::kernel_tasks}`
+- `crate::{interrupts::plic, net, pci::PCIDevice, processes::kernel_tasks}`
 
 **Declarations:**
 
@@ -2871,7 +2870,7 @@ solaya/
 
 ## kernel/src/drivers/virtio/block.rs
 
-**Language:** Rust | **Size:** 18.4 KB | **Lines:** 577
+**Language:** Rust | **Size:** 20.3 KB | **Lines:** 636
 
 **Imports:**
 - `alloc::{collections::BTreeMap, vec::Vec}`
@@ -2948,6 +2947,8 @@ solaya/
 `fn harvest_completions(device_index: usize)`
 
 `async fn wait_for_completion(device_index: usize, head_index: u16) -> UsedBuffer`
+
+`fn wait_for_completion_sync(device_index: usize, head_index: u16) -> UsedBuffer`
 
 **`impl BlockDevice`**
   `pub fn is_virtio_block(device: &PCIDevice) -> bool`
@@ -3400,7 +3401,7 @@ solaya/
 
 ## kernel/src/fs/ext2/inode.rs
 
-**Language:** Rust | **Size:** 4.9 KB | **Lines:** 176
+**Language:** Rust | **Size:** 5.0 KB | **Lines:** 175
 
 **Imports:**
 - `alloc::{vec, vec::Vec}`
@@ -3412,37 +3413,40 @@ solaya/
 
 **Declarations:**
 
-`async fn read_block_data( dev: usize, block_num: u32, block_size: usize, remaining: usize, data: &mut Vec<u8>, )`
+`fn read_block_data_sync( dev: usize, block_num: u32, block_size: usize, remaining: usize, data: &mut Vec<u8>, )`
 
-`async fn read_block_pointers(dev: usize, block_num: u32, block_size: usize) -> Vec<u32>`
+`fn read_block_pointers_sync(dev: usize, block_num: u32, block_size: usize) -> Vec<u32>`
 
-`async fn read_indirect( dev: usize, indirect_block: u32, block_size: usize, file_size: usize, data: &mut Vec<u8>, )`
+`fn read_indirect_sync( dev: usize, indirect_block: u32, block_size: usize, file_size: usize, data: &mut Vec<u8>, )`
 
-`async fn read_doubly_indirect( dev: usize, dind_block: u32, block_size: usize, file_size: usize, data: &mut Vec<u8>, )`
+`fn read_doubly_indirect_sync( dev: usize, dind_block: u32, block_size: usize, file_size: usize, data: &mut Vec<u8>, )`
 
-`async fn read_triply_indirect( dev: usize, tind_block: u32, block_size: usize, file_size: usize, data: &mut Vec<u8>, )`
+`fn read_triply_indirect_sync( dev: usize, tind_block: u32, block_size: usize, file_size: usize, data: &mut Vec<u8>, )`
 
 ---
 
 ## kernel/src/fs/ext2/mod.rs
 
-**Language:** Rust | **Size:** 4.9 KB | **Lines:** 153
+**Language:** Rust | **Size:** 6.5 KB | **Lines:** 192
 
 **Imports:**
-- `alloc::{boxed::Box, collections::BTreeMap, string::String, vec}`
+- `alloc::{collections::BTreeMap, string::String, vec}`
 - `crate::{
     drivers::virtio::block,
-    fs::vfs::{self, VfsNodeRef, alloc_ino},
+    fs::{
+        tmpfs::TmpfsSymlink,
+        vfs::{self, VfsNodeRef, alloc_ino},
+    },
     info,
     klibc::util::BufferExtension,
+    processes::process_table,
     warn,
 }`
 - `dir::Ext2Dir`
 - `file::Ext2File`
-- `inode::{read_inode, read_inode_data}`
 - `structures::{
-    EXT2_FT_DIR, EXT2_FT_REG_FILE, EXT2_MAGIC, EXT2_ROOT_INODE, Ext2BlockGroupDescriptor,
-    Ext2DirEntry, Ext2Superblock,
+    EXT2_FT_DIR, EXT2_FT_REG_FILE, EXT2_FT_SYMLINK, EXT2_MAGIC, EXT2_ROOT_INODE,
+    Ext2BlockGroupDescriptor, Ext2DirEntry, Ext2Superblock,
 }`
 
 **Declarations:**
@@ -3453,11 +3457,15 @@ solaya/
 
 `mod inode`
 
-`async fn read_superblock(dev: usize) -> Ext2Superblock`
+`fn read_superblock(dev: usize) -> Ext2Superblock`
 
-`async fn read_block_group_descriptors( dev: usize, sb: &Ext2Superblock, ) -> alloc::vec::Vec<Ext2BlockGroupDescriptor>`
+`fn read_block_group_descriptors( dev: usize, sb: &Ext2Superblock, ) -> alloc::vec::Vec<Ext2BlockGroupDescriptor>`
 
-`fn build_tree<'a>( dev: usize, sb: &'a Ext2Superblock, bgds: &'a [Ext2BlockGroupDescriptor], inode_number: u32, ) -> core::pin::Pin<Box<dyn Future<Output = VfsNodeRef> + Send + 'a>>`
+`fn build_tree( dev: usize, sb: &Ext2Superblock, bgds: &[Ext2BlockGroupDescriptor], inode_number: u32, ) -> VfsNodeRef`
+
+`fn read_symlink_target_sync( dev: usize, sb: &Ext2Superblock, inode: &structures::Ext2Inode, ) -> String`
+
+`fn read_aligned(node: &VfsNodeRef, size: usize) -> sys::klibc::util::AlignedBuffer`
 
 `fn parse_dir_entries(data: &[u8]) -> alloc::vec::Vec<(String, u32, u8)>`
 
@@ -3465,7 +3473,7 @@ solaya/
 
 ## kernel/src/fs/ext2/structures.rs
 
-**Language:** Rust | **Size:** 2.7 KB | **Lines:** 120
+**Language:** Rust | **Size:** 2.8 KB | **Lines:** 121
 
 **Declarations:**
 
@@ -3680,7 +3688,7 @@ solaya/
 
 ## kernel/src/fs/vfs.rs
 
-**Language:** Rust | **Size:** 10.9 KB | **Lines:** 435
+**Language:** Rust | **Size:** 9.6 KB | **Lines:** 385
 
 **Imports:**
 - `alloc::{
@@ -3694,10 +3702,6 @@ solaya/
 - `crate::klibc::Spinlock`
 
 **Declarations:**
-
-`fn programs() -> &'static [(&'static str, &'static [u8])]`
-
-`fn programs() -> &'static [(&'static str, &'static [u8])]`
 
 `static NEXT_INO: AtomicU64 = AtomicU64::new(1)`
 
@@ -3745,19 +3749,6 @@ solaya/
   `fn lookup(&self, name: &str) -> Result<VfsNodeRef, Errno>`
 
   `fn readdir(&self) -> Result<Vec<DirEntry>, Errno>`
-
-
-`fn program_ino(name: &str) -> Option<u64>`
-
-`struct ProgramNode`
-> Fields: `ino: u64`
-
-**`impl VfsNode for ProgramNode`**
-  `fn node_type(&self) -> NodeType`
-
-  `fn ino(&self) -> u64`
-
-  `fn size(&self) -> usize`
 
 
 ---
@@ -4361,7 +4352,7 @@ solaya/
 
 ## kernel/src/lib.rs
 
-**Language:** Rust | **Size:** 7.1 KB | **Lines:** 243
+**Language:** Rust | **Size:** 7.2 KB | **Lines:** 247
 
 **Imports:**
 - `crate::{
@@ -5630,7 +5621,7 @@ solaya/
 
 ## kernel/src/processes/process.rs
 
-**Language:** Rust | **Size:** 18.3 KB | **Lines:** 590
+**Language:** Rust | **Size:** 18.6 KB | **Lines:** 600
 
 **Imports:**
 - `crate::{
@@ -5709,6 +5700,10 @@ solaya/
 
   `pub fn set_cwd(&mut self, cwd: String)`
 
+  `pub fn binary_path(&self) -> Option<&Arc<String>>`
+
+  `pub fn set_binary_path(&mut self, path: Arc<String>)`
+
   `pub fn credentials(&self) -> &Credentials`
 
   `pub fn credentials_mut(&mut self) -> &mut Credentials`
@@ -5752,7 +5747,7 @@ solaya/
 
 ## kernel/src/processes/process_table.rs
 
-**Language:** Rust | **Size:** 11.6 KB | **Lines:** 348
+**Language:** Rust | **Size:** 11.6 KB | **Lines:** 347
 
 **Imports:**
 - `alloc::{
@@ -5765,7 +5760,6 @@ solaya/
     task::Waker,
 }`
 - `crate::{
-    autogenerated::userspace_programs::INIT,
     cpu::Cpu,
     debug, info,
     klibc::{Spinlock, elf::ElfFile, runtime_initialized::RuntimeInitializedData},
@@ -6223,13 +6217,13 @@ solaya/
 
 ## kernel/src/syscalls/exec_ops.rs
 
-**Language:** Rust | **Size:** 4.7 KB | **Lines:** 136
+**Language:** Rust | **Size:** 4.9 KB | **Lines:** 138
 
 **Imports:**
 - `alloc::{string::String, sync::Arc, vec::Vec}`
 - `headers::errno::Errno`
 - `crate::{
-    autogenerated::userspace_programs::PROGRAMS,
+    fs::vfs::{self, NodeType},
     klibc::{consumable_buffer::ConsumableBuffer, elf::ElfFile},
     processes::{loader, process::Process, userspace_ptr::UserspacePtr},
 }`
@@ -6444,7 +6438,7 @@ solaya/
 
 ## kernel/src/syscalls/ioctl_ops.rs
 
-**Language:** Rust | **Size:** 5.3 KB | **Lines:** 132
+**Language:** Rust | **Size:** 5.0 KB | **Lines:** 124
 
 **Imports:**
 - `core::ffi::{c_int, c_uint}`
@@ -6455,8 +6449,7 @@ solaya/
     },
 }`
 - `crate::{
-    autogenerated::userspace_programs::PROGRAMS,
-    net, print, println,
+    net,
     processes::{
         fd_table::{FdFlags, FileDescriptor},
         process_table,
@@ -6464,7 +6457,7 @@ solaya/
     syscalls::linux_validator::LinuxUserspaceArg,
 }`
 - `common::{
-    ioctl::{ARPHRD_ETHER, Ifreq, SIOCGIFHWADDR, SIOCSIFADDR, SOLAYA_LIST_PROGRAMS, SOLAYA_PANIC},
+    ioctl::{ARPHRD_ETHER, Ifreq, SIOCGIFHWADDR, SIOCSIFADDR, SOLAYA_PANIC},
     pid::Tid,
 }`
 - `super::linux::{LinuxSyscallHandler, LinuxSyscalls}`
@@ -6943,7 +6936,7 @@ solaya/
 
 ## kernel/src/syscalls/process_ops.rs
 
-**Language:** Rust | **Size:** 5.9 KB | **Lines:** 186
+**Language:** Rust | **Size:** 6.0 KB | **Lines:** 190
 
 **Imports:**
 - `alloc::{collections::BTreeMap, string::String, sync::Arc}`
@@ -7096,16 +7089,16 @@ solaya/
 
 ## kernel/src/syscalls/tracer.rs
 
-**Language:** Rust | **Size:** 7.9 KB | **Lines:** 279
+**Language:** Rust | **Size:** 8.2 KB | **Lines:** 284
 
 **Imports:**
 - `crate::{
-    autogenerated::userspace_programs::PROGRAMS,
     cpu::Cpu,
     debugging::{
         eh_frame_parser::EhFrameParser,
         unwinder::{RegisterRule, Unwinder},
     },
+    fs::vfs,
     klibc::{elf::ElfFile, util::UsizeExt},
     println,
     processes::userspace_ptr::UserspacePtr,
@@ -7424,7 +7417,7 @@ solaya/
 
 ## qemu-infra/src/qemu.rs
 
-**Language:** Rust | **Size:** 8.5 KB | **Lines:** 292
+**Language:** Rust | **Size:** 8.0 KB | **Lines:** 279
 
 **Imports:**
 - `std::{
@@ -7462,8 +7455,6 @@ solaya/
   `pub fn headless(mut self, value: bool) -> Self`
 
   `pub fn qmp_socket(mut self, path: PathBuf) -> Self`
-
-  `fn has_block_device(&self) -> bool`
 
   `fn apply(self, command: &mut Command) -> Option<u16>`
 
@@ -7587,7 +7578,7 @@ solaya/
 
 ## qemu_wrapper.sh
 
-**Language:** Shell | **Size:** 4.2 KB | **Lines:** 140
+**Language:** Shell | **Size:** 4.2 KB | **Lines:** 141
 
 ---
 
@@ -7985,7 +7976,7 @@ solaya/
 
 ## sys/src/klibc/util.rs
 
-**Language:** Rust | **Size:** 7.9 KB | **Lines:** 298
+**Language:** Rust | **Size:** 8.8 KB | **Lines:** 325
 
 **Imports:**
 - `core::{
@@ -8010,6 +8001,14 @@ solaya/
   `fn interpret_as<T>(&self) -> &T`
 
   `fn split_as<T>(&self) -> (&T, &[u8])`
+
+
+**`impl AlignedBuffer`**
+  `pub fn new(size: usize) -> Self`
+
+  `pub fn as_bytes(&self) -> &[u8]`
+
+  `pub fn as_bytes_mut(&mut self) -> &mut [u8]`
 
 
 **`impl<T> InBytes for alloc::vec::Vec<T>`**
@@ -8593,17 +8592,7 @@ solaya/
 
 ## system-tests/src/tests/block.rs
 
-**Language:** Rust | **Size:** 1.5 KB | **Lines:** 52
-
-**Imports:**
-- `std::io::Write`
-- `crate::infra::qemu::{QemuInstance, QemuOptions}`
-
-**Declarations:**
-
-`fn create_test_disk(path: &std::path::Path)`
-
-`async fn block_read() -> anyhow::Result<()>`
+**Language:** Rust | **Size:** 154 B | **Lines:** 2
 
 ---
 
@@ -8667,19 +8656,16 @@ solaya/
 
 ## system-tests/src/tests/ext2.rs
 
-**Language:** Rust | **Size:** 2.8 KB | **Lines:** 105
+**Language:** Rust | **Size:** 1.1 KB | **Lines:** 35
 
 **Imports:**
-- `std::{path::Path, process::Command}`
-- `crate::infra::qemu::{QemuInstance, QemuOptions}`
+- `crate::infra::qemu::QemuInstance`
 
 **Declarations:**
 
-`fn create_ext2_image(path: &Path, files: &[(&str, &str)], dirs: &[&str])`
+`async fn ext2_read_file_from_bin() -> anyhow::Result<()>`
 
-`async fn ext2_read_file() -> anyhow::Result<()>`
-
-`async fn ext2_ls_mnt() -> anyhow::Result<()>`
+`async fn ext2_readdir_root() -> anyhow::Result<()>`
 
 ---
 
@@ -8964,10 +8950,10 @@ solaya/
 
 ## system-tests/src/tests/vfs.rs
 
-**Language:** Rust | **Size:** 5.4 KB | **Lines:** 173
+**Language:** Rust | **Size:** 4.9 KB | **Lines:** 157
 
 **Imports:**
-- `crate::infra::qemu::{QemuInstance, QemuOptions}`
+- `crate::infra::qemu::QemuInstance`
 
 **Declarations:**
 
@@ -8994,8 +8980,6 @@ solaya/
 `async fn ls_dev() -> anyhow::Result<()>`
 
 `async fn pread_pwrite() -> anyhow::Result<()>`
-
-`async fn ls_dev_with_block() -> anyhow::Result<()>`
 
 `async fn vfs_metadata() -> anyhow::Result<()>`
 
@@ -9743,7 +9727,7 @@ solaya/
 
 ## userspace/src/spawn.rs
 
-**Language:** Rust | **Size:** 176 B | **Lines:** 5
+**Language:** Rust | **Size:** 180 B | **Lines:** 5
 
 **Imports:**
 - `std::process::{Child, Command}`

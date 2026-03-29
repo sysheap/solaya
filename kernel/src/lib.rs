@@ -200,6 +200,10 @@ pub extern "C" fn kernel_init(hart_id: usize, device_tree_pointer: *const ()) ->
     let pci_devices = enumerate_devices(&pci_information);
     drivers::init_all_pci_devices(pci_devices);
 
+    if drivers::virtio::block::device_count() > 0 {
+        fs::ext2::mount_ext2(0);
+    }
+
     processes::kernel_tasks::create_worker_thread();
 
     info!("kernel_init done! Starting other harts");

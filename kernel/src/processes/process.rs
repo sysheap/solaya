@@ -48,6 +48,7 @@ pub type ProcessRef = Arc<Spinlock<Process>>;
 
 pub struct Process {
     name: Arc<String>,
+    binary_path: Option<Arc<String>>,
     page_table: RootPageTableHolder,
     mappings: BTreeMap<VirtAddr, Mapping>,
     free_mmap_address: VirtAddr,
@@ -94,6 +95,7 @@ impl Process {
             .collect();
         Self {
             name,
+            binary_path: None,
             page_table,
             mappings,
             free_mmap_address: VirtAddr::new(FREE_MMAP_START_ADDRESS),
@@ -255,6 +257,14 @@ impl Process {
 
     pub fn set_cwd(&mut self, cwd: String) {
         self.cwd = cwd;
+    }
+
+    pub fn binary_path(&self) -> Option<&Arc<String>> {
+        self.binary_path.as_ref()
+    }
+
+    pub fn set_binary_path(&mut self, path: Arc<String>) {
+        self.binary_path = Some(path);
     }
 
     pub fn credentials(&self) -> &Credentials {

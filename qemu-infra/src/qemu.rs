@@ -49,7 +49,7 @@ impl Default for QemuOptions {
             add_network_card: false,
             use_smp: true,
             enable_gdb,
-            block_device: None,
+            block_device: Some(PathBuf::from("disk.img")),
             framebuffer: false,
             headless: true,
             qmp_socket: None,
@@ -85,10 +85,6 @@ impl QemuOptions {
     pub fn qmp_socket(mut self, path: PathBuf) -> Self {
         self.qmp_socket = Some(path);
         self
-    }
-
-    fn has_block_device(&self) -> bool {
-        self.block_device.is_some()
     }
 
     fn apply(self, command: &mut Command) -> Option<u16> {
@@ -152,7 +148,6 @@ impl QemuInstance {
         }
 
         let gdb_enabled = options.enable_gdb;
-        let has_block_device = options.has_block_device();
         let qmp_socket = options.qmp_socket.clone();
         let network_port = options.apply(&mut command);
 
@@ -178,22 +173,14 @@ impl QemuInstance {
         stdout.assert_read_until("Hello World from Solaya!").await?;
         stdout.assert_read_until("kernel_init done!").await?;
 
-        // After kernel_init, async kernel tasks (like ext2 mount) run concurrently
-        // with the init process. Accumulate boot output to check if the ext2 init
-        // message was already seen before the prompt.
-        let mut boot_tail = stdout.assert_read_until("init process started").await?;
+        // ext2 is mounted synchronously during kernel_init, so "ext2: init complete"
+        // appears before "kernel_init done!" — no separate wait needed.
+        stdout.assert_read_until("init process started").await?;
         if network_port.is_some() {
-            boot_tail.extend(stdout.assert_read_until("dhcpd: configured ip").await?);
+            stdout.assert_read_until("dhcpd: configured ip").await?;
         }
-        boot_tail.extend(stdout.assert_read_until("starting shell").await?);
-        boot_tail.extend(stdout.assert_read_until(PROMPT).await?);
-
-        if has_block_device {
-            let seen = String::from_utf8_lossy(&boot_tail);
-            if !seen.contains("ext2: init complete") {
-                stdout.assert_read_until("ext2: init complete").await?;
-            }
-        }
+        stdout.assert_read_until("starting shell").await?;
+        stdout.assert_read_until(PROMPT).await?;
 
         let gdb_port = if gdb_enabled {
             std::fs::read_to_string(root.join(".gdb-port"))
