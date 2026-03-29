@@ -1,6 +1,6 @@
 # Codebase Index: solaya
 
-> Generated: 2026-03-29 20:48:36 UTC | Files: 289 | Lines: 47789
+> Generated: 2026-03-29 21:39:22 UTC | Files: 289 | Lines: 47819
 > Languages: C (2), Markdown (21), Python (4), Rust (248), Shell (1), TOML (13)
 
 ## Directory Structure
@@ -1650,7 +1650,7 @@ solaya/
 
 ## INDEX.md
 
-**Language:** Markdown | **Size:** 229.0 KB | **Lines:** 9754
+**Language:** Markdown | **Size:** 229.2 KB | **Lines:** 9766
 
 **Declarations:**
 
@@ -3426,7 +3426,7 @@ solaya/
 
 ## kernel/src/fs/ext2/mod.rs
 
-**Language:** Rust | **Size:** 4.9 KB | **Lines:** 151
+**Language:** Rust | **Size:** 4.9 KB | **Lines:** 153
 
 **Imports:**
 - `alloc::{boxed::Box, collections::BTreeMap, string::String, vec}`
@@ -7424,7 +7424,7 @@ solaya/
 
 ## qemu-infra/src/qemu.rs
 
-**Language:** Rust | **Size:** 7.8 KB | **Lines:** 276
+**Language:** Rust | **Size:** 8.5 KB | **Lines:** 292
 
 **Imports:**
 - `std::{
@@ -7462,6 +7462,8 @@ solaya/
   `pub fn headless(mut self, value: bool) -> Self`
 
   `pub fn qmp_socket(mut self, path: PathBuf) -> Self`
+
+  `fn has_block_device(&self) -> bool`
 
   `fn apply(self, command: &mut Command) -> Option<u16>`
 
