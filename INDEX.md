@@ -1,7 +1,7 @@
 # Codebase Index: solaya
 
-> Generated: 2026-03-29 20:41:45 UTC | Files: 288 | Lines: 37969
-> Languages: C (2), Markdown (20), Python (4), Rust (248), Shell (1), TOML (13)
+> Generated: 2026-03-29 20:48:36 UTC | Files: 289 | Lines: 47789
+> Languages: C (2), Markdown (21), Python (4), Rust (248), Shell (1), TOML (13)
 
 ## Directory Structure
 
@@ -9,6 +9,7 @@
 solaya/
   CLAUDE.md
   Cargo.toml
+  INDEX.md
   README.md
   arch/
     Cargo.toml
@@ -368,6 +369,9 @@ solaya/
 - `[workspace.package]`
 - `[profile.release]`
 - `[profile.dev]`
+
+**INDEX.md**
+- `# Codebase Index: solaya`
 
 **README.md**
 - `# Solaya`
@@ -1630,7 +1634,7 @@ solaya/
 
 ## CLAUDE.md
 
-**Language:** Markdown | **Size:** 12.0 KB | **Lines:** 261
+**Language:** Markdown | **Size:** 16.5 KB | **Lines:** 327
 
 **Declarations:**
 
@@ -1639,6 +1643,14 @@ solaya/
 ## Cargo.toml
 
 **Language:** TOML | **Size:** 433 B | **Lines:** 27
+
+**Declarations:**
+
+---
+
+## INDEX.md
+
+**Language:** Markdown | **Size:** 229.0 KB | **Lines:** 9754
 
 **Declarations:**
 

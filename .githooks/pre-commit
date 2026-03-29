@@ -10,3 +10,9 @@ fi
 
 # Auto-fix what clippy can, fail on remaining warnings
 cargo clippy --fix --allow-dirty --allow-staged -- -D warnings
+
+# Rebuild INDEX.md and stage it if changed
+indxr -o INDEX.md
+if ! git diff --quiet -- INDEX.md; then
+    git add INDEX.md
+fi
