@@ -107,6 +107,7 @@ impl LinuxSyscallHandler {
         pathname: &LinuxUserspaceArg<*const u8>,
         flags: c_int,
     ) -> Result<fs::vfs::VfsNodeRef, Errno> {
+        // TODO: We should have a better rust abstractions to check for set bitfields.
         let nofollow = (flags & headers::fs::AT_SYMLINK_NOFOLLOW) != 0;
         if (flags & headers::fs::AT_EMPTY_PATH) != 0 && !pathname.arg_nonzero() {
             let file = self
