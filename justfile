@@ -4,7 +4,13 @@ build-binary: build
     riscv64-unknown-linux-musl-objcopy -O binary target/riscv64gc-unknown-none-elf/release/boot target/solaya.bin
     @echo "Binary: target/solaya.bin ($(du -h target/solaya.bin | cut -f1))"
 
-tftp_dir := env("SOLAYA_TFTP_DIR", "target/tftp")
+tftp_dir := "target/tftp"
+
+picocom:
+    picocom --omap crlf /dev/ttyUSB0 -b 115200
+
+tftp-server:
+    sudo $(which atftpd) --daemon --logfile - --no-fork --user daemon --group daemon --verbose {{tftp_dir}}
 
 tftp-deploy: build-binary
     mkdir -p {{tftp_dir}}
