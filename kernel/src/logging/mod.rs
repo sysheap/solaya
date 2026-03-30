@@ -85,7 +85,7 @@ macro_rules! println {
 pub fn _print(args: fmt::Arguments) {
     use crate::io::uart;
     use core::fmt::Write;
-    uart::QEMU_UART
+    uart::CONSOLE_UART
         .lock()
         .write_fmt(args)
         .expect("Failed to write to UART");

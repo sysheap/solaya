@@ -99,7 +99,7 @@ impl VfsNode for DevConsole {
 
     fn write(&self, _offset: usize, data: &[u8]) -> Result<usize, Errno> {
         let processed = self.device.lock().process_output(data);
-        let mut uart = crate::io::uart::QEMU_UART.lock();
+        let mut uart = crate::io::uart::CONSOLE_UART.lock();
         for &b in &processed {
             uart.write_byte(b);
         }

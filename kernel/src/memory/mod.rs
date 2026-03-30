@@ -26,7 +26,7 @@ pub use runtime_mappings::initialize_runtime_mappings;
 
 #[cfg(target_arch = "riscv64")]
 pub fn kernel_device_mappings() -> alloc::vec::Vec<page_tables::MappingDescription> {
-    use crate::{interrupts::plic, io::TEST_DEVICE_ADDRESS, processes::timer};
+    use crate::{device_tree, interrupts::plic, io::TEST_DEVICE_ADDRESS, processes::timer};
     use alloc::vec::Vec;
 
     let mut mappings = Vec::new();
@@ -42,12 +42,14 @@ pub fn kernel_device_mappings() -> alloc::vec::Vec<page_tables::MappingDescripti
         privileges: page_tables::XWRMode::ReadWrite,
         name: "CLINT",
     });
-    mappings.push(page_tables::MappingDescription {
-        virtual_address_start: VirtAddr::new(TEST_DEVICE_ADDRESS),
-        size: PAGE_SIZE,
-        privileges: page_tables::XWRMode::ReadWrite,
-        name: "Qemu Test Device",
-    });
+    if device_tree::THE.root_node().find_node("test").is_some() {
+        mappings.push(page_tables::MappingDescription {
+            virtual_address_start: VirtAddr::new(TEST_DEVICE_ADDRESS),
+            size: PAGE_SIZE,
+            privileges: page_tables::XWRMode::ReadWrite,
+            name: "Qemu Test Device",
+        });
+    }
     for mapping in runtime_mappings::get_runtime_mappings() {
         mappings.push(mapping.clone());
     }

@@ -9,11 +9,9 @@ use sys::klibc::send_sync::UnsafeSendSync;
 pub const UART_BASE_ADDRESS: usize = 0x1000_0000;
 
 const LCR_WORD_LEN_8BIT: u8 = 0b11;
-const LCR_DLAB: u8 = 1 << 7;
 const FCR_ENABLE: u8 = 1;
 const IER_RX_AVAILABLE: u8 = 1;
 const LSR_DATA_READY: u8 = 1;
-const BAUD_DIVISOR: u16 = 592;
 
 mmio_struct! {
     #[repr(C)]
@@ -27,7 +25,7 @@ mmio_struct! {
     }
 }
 
-pub static QEMU_UART: Spinlock<UnsafeSendSync<Uart>> =
+pub static CONSOLE_UART: Spinlock<UnsafeSendSync<Uart>> =
     Spinlock::new(UnsafeSendSync(Uart::new(UART_BASE_ADDRESS)));
 
 pub struct Uart {
@@ -44,24 +42,12 @@ impl Uart {
     }
 
     pub fn init(&mut self) {
+        // Configure 8-bit word length, enable FIFO, and enable RX interrupts.
+        // Baud rate is left as-is: on QEMU it doesn't matter, and on real
+        // hardware the firmware (U-Boot/OpenSBI) has already configured it.
         self.regs.lcr().write(LCR_WORD_LEN_8BIT);
         self.regs.fcr_iir().write(FCR_ENABLE);
         self.regs.ier().write(IER_RX_AVAILABLE);
-
-        // Set baud rate via divisor latch.
-        // divisor = ceil(22_729_000 / (2400 * 16)) = 592
-        let divisor_least: u8 = (BAUD_DIVISOR & 0xff) as u8;
-        let divisor_most: u8 = (BAUD_DIVISOR >> 8) as u8;
-
-        // Open divisor latch (DLAB bit in LCR) to access DLL/DLM registers
-        self.regs.lcr().write(LCR_WORD_LEN_8BIT | LCR_DLAB);
-
-        // With DLAB set, thr_rbr becomes DLL and ier becomes DLM
-        self.regs.thr_rbr().write(divisor_least);
-        self.regs.ier().write(divisor_most);
-
-        // Close divisor latch to restore normal register access
-        self.regs.lcr().write(LCR_WORD_LEN_8BIT);
 
         self.is_init = true;
     }
@@ -82,7 +68,7 @@ impl Uart {
 pub fn on_uart_interrupt() {
     let mut raw_bytes = crate::klibc::array_vec::ArrayVec::<u8, 64>::new();
     {
-        let uart = QEMU_UART.lock();
+        let uart = CONSOLE_UART.lock();
         while let Some(input) = uart.read() {
             let _ = raw_bytes.push(input);
         }
@@ -93,7 +79,7 @@ pub fn on_uart_interrupt() {
     for &byte in &raw_bytes {
         let result = tty.lock().process_input_byte(byte);
         if !result.echo.is_empty() {
-            let mut uart = QEMU_UART.lock();
+            let mut uart = CONSOLE_UART.lock();
             for &echo_byte in &result.echo {
                 uart.write_byte(echo_byte);
             }

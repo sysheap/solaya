@@ -33,7 +33,7 @@
 
 #[cfg(target_arch = "riscv64")]
 use crate::{
-    interrupts::plic, io::uart::QEMU_UART, memory::page_tables, pci::enumerate_devices,
+    interrupts::plic, io::uart::CONSOLE_UART, memory::page_tables, pci::enumerate_devices,
     processes::timer,
 };
 #[cfg(target_arch = "riscv64")]
@@ -117,7 +117,7 @@ pub extern "C" fn kernel_init(hart_id: usize, device_tree_pointer: *const ()) ->
     let boot_cpu_id = cpu::CpuId::from_hart_id(hart_id);
     sys::cpu::STARTING_CPU_ID.initialize(boot_cpu_id);
 
-    QEMU_UART.lock().init();
+    CONSOLE_UART.lock().init();
 
     info!("Hello World from Solaya!\n");
     info!("Device Tree Pointer: {:p}", device_tree_pointer);
@@ -144,41 +144,45 @@ pub extern "C" fn kernel_init(hart_id: usize, device_tree_pointer: *const ()) ->
     #[cfg(test)]
     test_main();
 
-    let pci_information = pci::parse().expect("pci information must be parsable");
-
-    {
-        let pci_space_64_bit = pci_information
-            .get_first_range_for_type(pci::PCIBitField::MEMORY_SPACE_64_BIT_CODE)
-            .expect("There must be a 64 bit allocation space.");
-        let mut pci_allocator = pci::PCI_ALLOCATOR_64_BIT.lock();
-        pci_allocator.init(pci_space_64_bit);
-    }
-
-    if let Some(pci_space_32_bit) =
-        pci_information.get_first_range_for_type(pci::PCIBitField::MEMORY_SPACE_32_BIT_CODE)
-    {
-        let mut pci_allocator = pci::PCI_ALLOCATOR_32_BIT.lock();
-        pci_allocator.init(pci_space_32_bit);
-    }
+    let pci_information = pci::parse();
 
     let mut runtime_mapping = Vec::new();
 
-    runtime_mapping.push(MappingDescription {
-        virtual_address_start: memory::VirtAddr::new(
-            pci_information.pci_host_bridge_address.as_usize(),
-        ),
-        size: pci_information.pci_host_bridge_length,
-        privileges: page_tables::XWRMode::ReadWrite,
-        name: "PCI Space",
-    });
+    if let Some(ref pci_info) = pci_information {
+        {
+            let pci_space_64_bit = pci_info
+                .get_first_range_for_type(pci::PCIBitField::MEMORY_SPACE_64_BIT_CODE)
+                .expect("There must be a 64 bit allocation space.");
+            let mut pci_allocator = pci::PCI_ALLOCATOR_64_BIT.lock();
+            pci_allocator.init(pci_space_64_bit);
+        }
 
-    for range in &pci_information.ranges {
+        if let Some(pci_space_32_bit) =
+            pci_info.get_first_range_for_type(pci::PCIBitField::MEMORY_SPACE_32_BIT_CODE)
+        {
+            let mut pci_allocator = pci::PCI_ALLOCATOR_32_BIT.lock();
+            pci_allocator.init(pci_space_32_bit);
+        }
+
         runtime_mapping.push(MappingDescription {
-            virtual_address_start: memory::VirtAddr::new(range.cpu_address.as_usize()),
-            size: range.size,
+            virtual_address_start: memory::VirtAddr::new(
+                pci_info.pci_host_bridge_address.as_usize(),
+            ),
+            size: pci_info.pci_host_bridge_length,
             privileges: page_tables::XWRMode::ReadWrite,
-            name: "PCI Range",
+            name: "PCI Space",
         });
+
+        for range in &pci_info.ranges {
+            runtime_mapping.push(MappingDescription {
+                virtual_address_start: memory::VirtAddr::new(range.cpu_address.as_usize()),
+                size: range.size,
+                privileges: page_tables::XWRMode::ReadWrite,
+                name: "PCI Range",
+            });
+        }
+    } else {
+        info!("No PCI host bridge found in device tree, skipping PCI init");
     }
 
     memory::initialize_runtime_mappings(&runtime_mapping);
@@ -197,8 +201,10 @@ pub extern "C" fn kernel_init(hart_id: usize, device_tree_pointer: *const ()) ->
     plic::init_plic(boot_cpu_id);
     plic::register_interrupt(10, io::uart::on_uart_interrupt);
 
-    let pci_devices = enumerate_devices(&pci_information);
-    drivers::init_all_pci_devices(pci_devices);
+    if let Some(ref pci_info) = pci_information {
+        let pci_devices = enumerate_devices(pci_info);
+        drivers::init_all_pci_devices(pci_devices);
+    }
 
     processes::kernel_tasks::create_worker_thread();
 

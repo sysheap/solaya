@@ -20,7 +20,7 @@ fn test_panic_handler(info: &PanicInfo) -> ! {
 pub fn panic_handler(info: &PanicInfo) -> ! {
     use core::sync::atomic::Ordering;
 
-    use crate::{asm::wfi_loop, cpu::Cpu, io::uart::QEMU_UART};
+    use crate::{asm::wfi_loop, cpu::Cpu, io::uart::CONSOLE_UART};
 
     sys::panic_support::panic_disable_interrupts();
 
@@ -36,7 +36,7 @@ pub fn panic_handler(info: &PanicInfo) -> ! {
         wfi_loop();
     }
 
-    QEMU_UART.panic_force_unlock();
+    CONSOLE_UART.panic_force_unlock();
 
     println!("\nKERNEL Panic");
     println!("\nPanic Occurred on cpu {}!", Cpu::cpu_id());

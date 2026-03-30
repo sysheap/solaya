@@ -11,7 +11,7 @@ use crate::{
     io::{
         pipe::{PipeReader, PipeWriter, ReadPipe},
         tty_device::{ReadTty, TtyDevice},
-        uart::QEMU_UART,
+        uart::CONSOLE_UART,
     },
     net::{
         sockets::SharedAssignedSocket,
@@ -165,7 +165,7 @@ impl FileDescriptor {
         match self {
             FileDescriptor::Tty(dev) => {
                 let processed = dev.lock().process_output(data);
-                let mut uart = QEMU_UART.lock();
+                let mut uart = CONSOLE_UART.lock();
                 for &b in &processed {
                     uart.write_byte(b);
                 }
