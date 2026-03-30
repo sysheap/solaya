@@ -18,6 +18,8 @@ just mcp-server   # Build MCP server
 just disassm      # Disassemble kernel
 just addr2line 0x1234  # Get source line for kernel address
 just attach       # Attach GDB to running QEMU
+just build-binary             # Build + produce flat binary (target/solaya.bin)
+just tftp-deploy              # Build + deploy binary to TFTP server
 just stress-system-test       # Run system tests 5x in a row
 just loop-system-test TEST    # Run one system test in a loop until failure
 just deadlock-hunt            # Run system tests in loop with GDB enabled
