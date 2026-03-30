@@ -4,9 +4,10 @@ build-binary: build
     riscv64-unknown-linux-musl-objcopy -O binary target/riscv64gc-unknown-none-elf/release/boot target/solaya.bin
     @echo "Binary: target/solaya.bin ($(du -h target/solaya.bin | cut -f1))"
 
-tftp_dir := env("SOLAYA_TFTP_DIR", "/var/lib/tftpboot")
+tftp_dir := env("SOLAYA_TFTP_DIR", "target/tftp")
 
 tftp-deploy: build-binary
+    mkdir -p {{tftp_dir}}
     cp target/solaya.bin {{tftp_dir}}/solaya.bin
     @echo "Deployed to {{tftp_dir}}/solaya.bin"
 

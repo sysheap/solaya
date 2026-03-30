@@ -158,6 +158,7 @@
               pwndbg.packages.${system}.default
               pkgs.typos-lsp
               pkgs.dtc
+              pkgs.atftp
               (pkgs.python3.withPackages (ps: [
                 ps.pygdbmi
                 ps.mcp

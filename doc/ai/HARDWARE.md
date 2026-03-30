@@ -22,20 +22,20 @@ Serial config: 115200 baud, 8N1.
 ### Ethernet
 Connect to eth0 (port closer to USB ports). Must be on the same network as the development machine.
 
-## TFTP Server Setup (Fedora)
+## TFTP Server
+
+The devshell includes `atftp`. Start the TFTP server outside the container (port 69 requires root — U-Boot hardcodes this port):
 
 ```bash
-sudo dnf install tftp-server
-sudo systemctl enable --now tftp.socket
-# Default directory: /var/lib/tftpboot/
+sudo atftpd --daemon --no-fork --verbose 7 /path/to/solaya/target/tftp
 ```
 
-## Build and Deploy
-
+Build and deploy the binary:
 ```bash
-just build-binary    # Produces target/solaya.bin
-just tftp-deploy     # Copies to TFTP dir (set SOLAYA_TFTP_DIR to override)
+just tftp-deploy     # Builds and copies to target/tftp/solaya.bin
 ```
+
+Set `SOLAYA_TFTP_DIR` to change the deploy directory.
 
 ## U-Boot Commands
 
@@ -51,7 +51,9 @@ tftpboot 0x80200000 solaya.bin
 booti 0x80200000 - ${fdtcontroladdr}
 ```
 
-If `booti` rejects the binary, use: `go 0x80200000`
+If `booti` rejects the binary (no Linux Image header), use: `go 0x80200000`
+
+To save U-Boot env so you don't have to type IPs every time: `saveenv`
 
 ## Platform Generalization
 
