@@ -28,6 +28,7 @@ build-userspace: build-coreutils
 build-disk: build-userspace
     mkdir -p disk/lib disk/etc disk/tmp disk/proc disk/dev
     cp -L kernel/compiled_userspace_nix/* disk/bin/ 2>/dev/null || true
+    chmod u+w disk/bin/*
     cp disk/bin/init disk/init
     find disk/bin disk/init -type f -executable -exec riscv64-unknown-linux-musl-strip {} +
     mkfs.ext2 -b 4096 -d disk -F disk.img 32768
