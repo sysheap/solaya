@@ -18,8 +18,8 @@ _start:
 	.word 0x2			/* header version */
 	.word 0				/* res1 */
 	.dword 0			/* res2 */
-	.dword 0x5643534952		/* magic: "RISCV\0\0\0" */
-	.word 0				/* magic2 (not PE) */
+	.dword 0x5643534952		/* magic: "RISCV\0\0\0" (upstream U-Boot) */
+	.word 0x05435352		/* magic2: "RSC\x05" (StarFive U-Boot) */
 	.word 0				/* res3 */
 
 # Actual kernel entry point.
