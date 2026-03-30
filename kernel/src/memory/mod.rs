@@ -26,21 +26,34 @@ pub use runtime_mappings::initialize_runtime_mappings;
 
 #[cfg(target_arch = "riscv64")]
 pub fn kernel_device_mappings() -> alloc::vec::Vec<page_tables::MappingDescription> {
-    use crate::{device_tree, interrupts::plic, io::TEST_DEVICE_ADDRESS, processes::timer};
+    use crate::{
+        device_tree,
+        interrupts::plic,
+        io::{TEST_DEVICE_ADDRESS, uart::UART_BASE_ADDRESS},
+        processes::timer,
+    };
     use alloc::vec::Vec;
 
     let mut mappings = Vec::new();
     mappings.push(page_tables::MappingDescription {
-        virtual_address_start: VirtAddr::new(plic::PLIC_BASE),
-        size: plic::PLIC_SIZE,
+        virtual_address_start: VirtAddr::new(*plic::PLIC_BASE),
+        size: *plic::PLIC_SIZE,
         privileges: page_tables::XWRMode::ReadWrite,
         name: "PLIC",
     });
+    if let Some((clint_base, clint_size)) = timer::clint_region() {
+        mappings.push(page_tables::MappingDescription {
+            virtual_address_start: VirtAddr::new(clint_base),
+            size: clint_size,
+            privileges: page_tables::XWRMode::ReadWrite,
+            name: "CLINT",
+        });
+    }
     mappings.push(page_tables::MappingDescription {
-        virtual_address_start: VirtAddr::new(timer::CLINT_BASE),
-        size: timer::CLINT_SIZE,
+        virtual_address_start: VirtAddr::new(UART_BASE_ADDRESS),
+        size: PAGE_SIZE,
         privileges: page_tables::XWRMode::ReadWrite,
-        name: "CLINT",
+        name: "UART",
     });
     if device_tree::THE.root_node().find_node("test").is_some() {
         mappings.push(page_tables::MappingDescription {

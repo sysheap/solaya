@@ -1,12 +1,12 @@
 use crate::{
-    info,
+    device_tree, info,
     klibc::{MMIO, Spinlock, runtime_initialized::RuntimeInitializedData},
 };
 use alloc::vec::Vec;
 use arch::CpuId;
 
-pub const PLIC_BASE: usize = 0x0c00_0000;
-pub const PLIC_SIZE: usize = 0x1000_0000;
+pub static PLIC_BASE: RuntimeInitializedData<usize> = RuntimeInitializedData::new();
+pub static PLIC_SIZE: RuntimeInitializedData<usize> = RuntimeInitializedData::new();
 
 struct InterruptHandler {
     irq: u32,
@@ -37,14 +37,14 @@ impl Plic {
         let bit = interrupt_id % 32;
         let mut reg = self
             .enable_register
-            .add_within_region(word_offset as usize, PLIC_SIZE / 4);
+            .add_within_region(word_offset as usize, *PLIC_SIZE / 4);
         reg |= 1 << bit;
     }
 
     fn set_priority(&mut self, interrupt_id: u32, priority: u32) {
         assert!(priority <= 7);
         self.priority_register_base
-            .add_within_region(interrupt_id as usize, PLIC_SIZE / 4)
+            .add_within_region(interrupt_id as usize, *PLIC_SIZE / 4)
             .write(priority);
     }
 
@@ -65,9 +65,24 @@ impl Plic {
 
 pub static PLIC: RuntimeInitializedData<Spinlock<Plic>> = RuntimeInitializedData::new();
 
+pub fn discover_from_device_tree() {
+    let plic_node = device_tree::THE
+        .root_node()
+        .find_node("plic")
+        .expect("Device tree must have a plic node");
+    let reg = plic_node
+        .parse_reg_property()
+        .expect("PLIC node must have a reg property");
+
+    PLIC_BASE.initialize(reg.address);
+    PLIC_SIZE.initialize(reg.size);
+
+    info!("PLIC at {:#x} size {:#x}", *PLIC_BASE, *PLIC_SIZE);
+}
+
 pub fn init_plic(cpu_id: CpuId) {
     info!("Initializing PLIC");
-    PLIC.initialize(Spinlock::new(Plic::new(PLIC_BASE, cpu_id)));
+    PLIC.initialize(Spinlock::new(Plic::new(*PLIC_BASE, cpu_id)));
     let mut plic = PLIC.lock();
     plic.set_threshold(0);
 }
