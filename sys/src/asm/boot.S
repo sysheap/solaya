@@ -12,7 +12,7 @@
 _start:
 	j _start_kernel			/* code0: branch to kernel start */
 	nop				/* code1 */
-	.dword 0x200000			/* text_offset from start of RAM */
+	.dword 0x40200000		/* text_offset: 0x80200000 - 0x40000000 (VF2 DRAM base) */
 	.dword _end - _start		/* image_size */
 	.dword 0			/* flags */
 	.word 0x2			/* header version */
