@@ -1,7 +1,6 @@
 /*
- Linker script for outputting to RISC-V QEMU "virt" machine.
- Based on Stephen Marz
- 6 October 2019
+ Linker script for Solaya RISC-V kernel.
+ Kernel is loaded at 0x80200000 (SBI convention: DRAM_BASE + 2MB).
 */
 
 OUTPUT_ARCH( "riscv" )
@@ -49,4 +48,6 @@ SECTIONS
   symbols : ALIGN(4K) {
     BYTE(0);
   }
+
+  PROVIDE(_end = .);
 }

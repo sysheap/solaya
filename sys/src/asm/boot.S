@@ -6,12 +6,27 @@
 # address 0x8000_0000.
 .section .text.init
 
-# Execution starts here.
+# RISC-V Linux Image header (64 bytes).
+# Required for U-Boot's booti command on real hardware.
+.global _start
+_start:
+	j _start_kernel			/* code0: branch to kernel start */
+	nop				/* code1 */
+	.dword 0x200000			/* text_offset from start of RAM */
+	.dword _end - _start		/* image_size */
+	.dword 0			/* flags */
+	.word 0x2			/* header version */
+	.word 0				/* res1 */
+	.dword 0			/* res2 */
+	.dword 0x5643534952		/* magic: "RISCV\0\0\0" */
+	.word 0				/* magic2 (not PE) */
+	.word 0				/* res3 */
+
+# Actual kernel entry point.
 # a0 is hart id
 # a1 is pointer to device tree
 # Preserve them during startup code
-.global _start
-_start:
+_start_kernel:
 
 	# Disable linker instruction relaxation for the `la` instruction below.
 	# This disallows the assembler from assuming that `gp` is already initialized.
