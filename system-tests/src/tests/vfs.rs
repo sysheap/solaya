@@ -1,4 +1,4 @@
-use crate::infra::qemu::{QemuInstance, QemuOptions};
+use crate::infra::qemu::QemuInstance;
 
 #[tokio::test]
 async fn sendfile() -> anyhow::Result<()> {
@@ -37,6 +37,8 @@ async fn rm_file() -> anyhow::Result<()> {
 async fn ls_root() -> anyhow::Result<()> {
     let mut solaya = QemuInstance::start().await?;
     let output = solaya.run_prog("ls-test /").await?;
+    assert!(output.contains("bin"), "ls / should list bin");
+    assert!(output.contains("lib"), "ls / should list lib");
     assert!(output.contains("tmp"), "ls / should list tmp");
     assert!(output.contains("proc"), "ls / should list proc");
     assert!(output.contains("dev"), "ls / should list dev");
@@ -101,8 +103,8 @@ async fn ls_dev() -> anyhow::Result<()> {
     assert!(output.contains("zero"), "ls /dev should list zero");
     assert!(output.contains("random"), "ls /dev should list random");
     assert!(
-        !output.contains("vda"),
-        "/dev/vda should not appear without --block"
+        output.contains("vda"),
+        "/dev/vda should appear (block device always attached)"
     );
     Ok(())
 }
@@ -112,24 +114,6 @@ async fn pread_pwrite() -> anyhow::Result<()> {
     let mut solaya = QemuInstance::start().await?;
     let output = solaya.run_prog("pread-test").await?;
     assert_eq!(output, "pread_pwrite: OK\n");
-    Ok(())
-}
-
-#[tokio::test]
-async fn ls_dev_with_block() -> anyhow::Result<()> {
-    let dir = tempfile::tempdir()?;
-    let disk_path = dir.path().join("disk.img");
-    std::fs::write(&disk_path, vec![0u8; 1024 * 1024])?;
-
-    let mut solaya =
-        QemuInstance::start_with(QemuOptions::default().block_device(disk_path)).await?;
-    let output = solaya.run_prog("ls-test /dev").await?;
-    assert!(output.contains("null"), "ls /dev should list null");
-    assert!(output.contains("zero"), "ls /dev should list zero");
-    assert!(
-        output.contains("vda"),
-        "/dev/vda should appear with --block"
-    );
     Ok(())
 }
 

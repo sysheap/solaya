@@ -3,7 +3,7 @@ pub mod virtio;
 
 use alloc::vec::Vec;
 
-use crate::{fs, interrupts::plic, net, pci::PCIDevice, processes::kernel_tasks};
+use crate::{interrupts::plic, net, pci::PCIDevice, processes::kernel_tasks};
 
 pub fn init_all_pci_devices(mut pci_devices: Vec<PCIDevice>) {
     init_network_device(&mut pci_devices);
@@ -44,9 +44,7 @@ fn init_block_devices(pci_devices: &mut Vec<PCIDevice>) {
         plic::register_interrupt(plic_irq, virtio::block::on_block_interrupt);
     }
 
-    if virtio::block::device_count() > 0 {
-        kernel_tasks::spawn(fs::ext2::mount_ext2(0));
-    }
+    // ext2 is mounted synchronously in kernel_init via block_on_early_init
 }
 
 fn init_display_device(pci_devices: &mut Vec<PCIDevice>) {

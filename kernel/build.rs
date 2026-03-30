@@ -1,11 +1,8 @@
 use std::{
-    collections::BTreeMap,
     env,
     error::Error,
     fmt::Write as _,
-    fs::read_dir,
     io::Write as _,
-    path::PathBuf,
     process::{Command, Stdio},
 };
 
@@ -15,6 +12,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!("cargo:rerun-if-changed=../common/");
     println!("cargo:rerun-if-changed=../flake.nix");
     println!("cargo:rerun-if-changed=../flake.lock");
+    println!("cargo:rerun-if-changed=../disk/bin/");
     println!("cargo::rustc-check-cfg=cfg(kani)");
     // For unit tests (which produce a binary from this library crate)
     println!("cargo:rustc-link-arg=-Tkernel/qemu.ld");
@@ -41,45 +39,15 @@ fn generate_userspace_programs_include() -> Result<(), Box<dyn Error>> {
 
     let mut content = String::new();
 
-    writeln!(content, "use common::include_bytes_align_as;\n")?;
-
-    // Use BTreeMap to have the program names in a sorted order
-    let mut programs: BTreeMap<String, String> = BTreeMap::new();
-
-    let compiled_userspace = read_dir("../kernel/compiled_userspace")?;
-    let compiled_userspace_nix = read_dir("../kernel/compiled_userspace_nix")?;
-    let entries = compiled_userspace.chain(compiled_userspace_nix);
-
-    let mut canonical_to_static: BTreeMap<PathBuf, String> = BTreeMap::new();
-
-    for entry in entries {
-        let entry = entry?;
-        let path = entry.path();
-        let absolute_path = std::fs::canonicalize(&path)?;
-        let original_file_name = path.file_name().unwrap().to_str().unwrap();
-        let file_name = original_file_name.to_uppercase().replace('-', "_");
-
-        programs.insert(original_file_name.to_owned(), file_name.clone());
-
-        if let Some(first_static) = canonical_to_static.get(&absolute_path) {
-            writeln!(content, "pub static {file_name}: &[u8] = {first_static};")?;
-        } else {
-            writeln!(
-                content,
-                "pub static {file_name}: &[u8] = include_bytes_align_as!(u64, \"{}\");",
-                absolute_path.to_string_lossy()
-            )?;
-            canonical_to_static.insert(absolute_path, file_name);
-        }
+    // Only embed prog1 for unit tests
+    let prog1_path = std::fs::canonicalize("../disk/bin/prog1");
+    if let Ok(path) = prog1_path {
+        writeln!(
+            content,
+            "#[cfg(test)]\nuse common::include_bytes_align_as;\n\n#[cfg(test)]\npub static PROG1: &[u8] = include_bytes_align_as!(u64, \"{}\");",
+            path.to_string_lossy()
+        )?;
     }
-
-    writeln!(content)?;
-    write!(content, "pub static PROGRAMS: &[(&str, &[u8])] = &[")?;
-    for (original_file_name, file_name) in programs {
-        write!(content, "(\"{original_file_name}\", {file_name}),")?;
-    }
-
-    write!(content, "];")?;
 
     // Format in memory, then only write if content changed — preserves mtime to avoid rebuilds
     let mut rustfmt = Command::new("rustfmt")

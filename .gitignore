@@ -17,4 +17,6 @@ mcp-server/target/
 
 __pycache__/
 disk.img
+disk/bin/
+disk/init
 .indxr-cache/

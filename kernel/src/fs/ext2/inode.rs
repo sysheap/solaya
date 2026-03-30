@@ -7,7 +7,7 @@ use super::structures::{
     Ext2Inode, Ext2Superblock,
 };
 
-pub async fn read_inode(
+pub fn read_inode_sync(
     dev: usize,
     sb: &Ext2Superblock,
     bgds: &[Ext2BlockGroupDescriptor],
@@ -21,15 +21,13 @@ pub async fn read_inode(
 
     let offset = bgds[group].bg_inode_table as usize * block_size + index * inode_size;
     let mut buf = vec![0u8; inode_size];
-    let n = block::read(dev, offset, &mut buf)
-        .await
-        .expect("inode read must succeed");
+    let n = block::read_sync(dev, offset, &mut buf).expect("inode read must succeed");
     assert!(n == inode_size, "short inode read");
 
     sys::klibc::util::read_from_bytes(&buf)
 }
 
-pub async fn read_inode_data(dev: usize, sb: &Ext2Superblock, inode: &Ext2Inode) -> Vec<u8> {
+pub fn read_inode_data_sync(dev: usize, sb: &Ext2Superblock, inode: &Ext2Inode) -> Vec<u8> {
     let file_size = inode.i_size as usize;
     if file_size == 0 {
         return Vec::new();
@@ -39,61 +37,56 @@ pub async fn read_inode_data(dev: usize, sb: &Ext2Superblock, inode: &Ext2Inode)
     let mut data = Vec::with_capacity(file_size);
     let mut remaining = file_size;
 
-    // Direct blocks
     for i in 0..EXT2_NDIR_BLOCKS {
         if remaining == 0 {
             break;
         }
         if inode.i_block[i] == 0 {
-            break;
+            let hole = remaining.min(block_size);
+            data.resize(data.len() + hole, 0);
+        } else {
+            read_block_data_sync(dev, inode.i_block[i], block_size, remaining, &mut data);
         }
-        read_block_data(dev, inode.i_block[i], block_size, remaining, &mut data).await;
         remaining = file_size.saturating_sub(data.len());
     }
 
-    // Indirect block
     if remaining > 0 && inode.i_block[EXT2_IND_BLOCK] != 0 {
-        read_indirect(
+        read_indirect_sync(
             dev,
             inode.i_block[EXT2_IND_BLOCK],
             block_size,
             file_size,
             &mut data,
-        )
-        .await;
+        );
         remaining = file_size.saturating_sub(data.len());
     }
 
-    // Doubly indirect block
     if remaining > 0 && inode.i_block[EXT2_DIND_BLOCK] != 0 {
-        read_doubly_indirect(
+        read_doubly_indirect_sync(
             dev,
             inode.i_block[EXT2_DIND_BLOCK],
             block_size,
             file_size,
             &mut data,
-        )
-        .await;
+        );
         remaining = file_size.saturating_sub(data.len());
     }
 
-    // Triply indirect block
     if remaining > 0 && inode.i_block[EXT2_TIND_BLOCK] != 0 {
-        read_triply_indirect(
+        read_triply_indirect_sync(
             dev,
             inode.i_block[EXT2_TIND_BLOCK],
             block_size,
             file_size,
             &mut data,
-        )
-        .await;
+        );
     }
 
     data.truncate(file_size);
     data
 }
 
-async fn read_block_data(
+fn read_block_data_sync(
     dev: usize,
     block_num: u32,
     block_size: usize,
@@ -104,18 +97,15 @@ async fn read_block_data(
     let to_read = remaining.min(block_size);
     let start = data.len();
     data.resize(start + to_read, 0);
-    let n = block::read(dev, offset, &mut data[start..start + to_read])
-        .await
+    let n = block::read_sync(dev, offset, &mut data[start..start + to_read])
         .expect("block read must succeed");
     assert!(n == to_read, "short block read");
 }
 
-async fn read_block_pointers(dev: usize, block_num: u32, block_size: usize) -> Vec<u32> {
+fn read_block_pointers_sync(dev: usize, block_num: u32, block_size: usize) -> Vec<u32> {
     let mut buf = vec![0u8; block_size];
     let offset = block_num as usize * block_size;
-    let n = block::read(dev, offset, &mut buf)
-        .await
-        .expect("indirect block read must succeed");
+    let n = block::read_sync(dev, offset, &mut buf).expect("indirect block read must succeed");
     assert!(n == block_size, "short indirect block read");
 
     let ptrs_per_block = block_size / 4;
@@ -126,51 +116,60 @@ async fn read_block_pointers(dev: usize, block_num: u32, block_size: usize) -> V
     pointers
 }
 
-async fn read_indirect(
+fn read_indirect_sync(
     dev: usize,
     indirect_block: u32,
     block_size: usize,
     file_size: usize,
     data: &mut Vec<u8>,
 ) {
-    let pointers = read_block_pointers(dev, indirect_block, block_size).await;
+    let pointers = read_block_pointers_sync(dev, indirect_block, block_size);
     for &ptr in &pointers {
-        if ptr == 0 || data.len() >= file_size {
+        if data.len() >= file_size {
             break;
         }
         let remaining = file_size - data.len();
-        read_block_data(dev, ptr, block_size, remaining, data).await;
+        if ptr == 0 {
+            let hole = remaining.min(block_size);
+            data.resize(data.len() + hole, 0);
+        } else {
+            read_block_data_sync(dev, ptr, block_size, remaining, data);
+        }
     }
 }
 
-async fn read_doubly_indirect(
+fn read_doubly_indirect_sync(
     dev: usize,
     dind_block: u32,
     block_size: usize,
     file_size: usize,
     data: &mut Vec<u8>,
 ) {
-    let l1_pointers = read_block_pointers(dev, dind_block, block_size).await;
+    let l1_pointers = read_block_pointers_sync(dev, dind_block, block_size);
     for &l1_ptr in &l1_pointers {
-        if l1_ptr == 0 || data.len() >= file_size {
+        if data.len() >= file_size {
             break;
         }
-        read_indirect(dev, l1_ptr, block_size, file_size, data).await;
+        if l1_ptr != 0 {
+            read_indirect_sync(dev, l1_ptr, block_size, file_size, data);
+        }
     }
 }
 
-async fn read_triply_indirect(
+fn read_triply_indirect_sync(
     dev: usize,
     tind_block: u32,
     block_size: usize,
     file_size: usize,
     data: &mut Vec<u8>,
 ) {
-    let l1_pointers = read_block_pointers(dev, tind_block, block_size).await;
+    let l1_pointers = read_block_pointers_sync(dev, tind_block, block_size);
     for &l1_ptr in &l1_pointers {
-        if l1_ptr == 0 || data.len() >= file_size {
+        if data.len() >= file_size {
             break;
         }
-        read_doubly_indirect(dev, l1_ptr, block_size, file_size, data).await;
+        if l1_ptr != 0 {
+            read_doubly_indirect_sync(dev, l1_ptr, block_size, file_size, data);
+        }
     }
 }

@@ -150,6 +150,17 @@ async fn wait_for_completion(device_index: usize, head_index: u16) -> UsedBuffer
     }
 }
 
+/// Busy-poll variant for use during early boot before interrupts are available.
+fn wait_for_completion_sync(device_index: usize, head_index: u16) -> UsedBuffer {
+    loop {
+        harvest_completions(device_index);
+        if let Some(result) = BLOCK_COMPLETIONS.lock().remove(&head_index) {
+            return result;
+        }
+        core::hint::spin_loop();
+    }
+}
+
 pub fn assign_block_device(device: BlockDevice) -> usize {
     let mut devices = BLOCK_DEVICES.lock();
     let index = devices.len();
@@ -242,6 +253,54 @@ pub async fn read(index: usize, offset: usize, buf: &mut [u8]) -> Result<usize, 
     };
 
     let result = wait_for_completion(index, head_index).await;
+    assert!(result.buffers.len() == 3, "Expected 3-descriptor chain");
+    let status = result.buffers[2][0];
+    assert!(
+        status == VIRTIO_BLK_S_OK,
+        "Block read failed with status {}",
+        status
+    );
+
+    buf[..read_len].copy_from_slice(
+        &result.buffers[1][offset_in_first_sector..offset_in_first_sector + read_len],
+    );
+    Ok(read_len)
+}
+
+/// Synchronous block read for early boot, before the scheduler and interrupts
+/// are running. Busy-polls the VirtIO used ring instead of waiting for an IRQ.
+pub fn read_sync(index: usize, offset: usize, buf: &mut [u8]) -> Result<usize, Errno> {
+    let cap = {
+        let guard = BLOCK_DEVICES.lock();
+        let dev = guard.get(index).ok_or(Errno::ENODEV)?;
+        dev.capacity_bytes() as usize
+    };
+
+    if offset >= cap {
+        return Ok(0);
+    }
+    let read_len = core::cmp::min(buf.len(), cap - offset);
+    if read_len == 0 {
+        return Ok(0);
+    }
+
+    let start_sector = offset / SECTOR_SIZE;
+    let offset_in_first_sector = offset % SECTOR_SIZE;
+    let end = offset + read_len;
+    let end_sector = end.div_ceil(SECTOR_SIZE);
+    let num_sectors = end_sector - start_sector;
+
+    let sector_buf_len = num_sectors * SECTOR_SIZE;
+    let head_index = {
+        let mut guard = BLOCK_DEVICES.lock();
+        let dev = guard.get_mut(index).ok_or(Errno::ENODEV)?;
+        dev.submit_read(
+            u64::try_from(start_sector).expect("sector fits in u64"),
+            sector_buf_len,
+        )
+    };
+
+    let result = wait_for_completion_sync(index, head_index);
     assert!(result.buffers.len() == 3, "Expected 3-descriptor chain");
     let status = result.buffers[2][0];
     assert!(

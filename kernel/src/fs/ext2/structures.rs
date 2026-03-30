@@ -3,6 +3,7 @@ pub const EXT2_ROOT_INODE: u32 = 2;
 
 pub const EXT2_FT_REG_FILE: u8 = 1;
 pub const EXT2_FT_DIR: u8 = 2;
+pub const EXT2_FT_SYMLINK: u8 = 7;
 
 pub const S_IFMT: u16 = 0xF000;
 pub const S_IFDIR: u16 = 0x4000;

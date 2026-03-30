@@ -73,9 +73,10 @@ while [[ $# -gt 0 ]]; do
             BLOCK_FILE="$1"
             shift
             if [[ ! -f "$BLOCK_FILE" ]]; then
-                dd if=/dev/zero of="$BLOCK_FILE" bs=1M count=1 2>/dev/null
+                echo "Error: Block device file '$BLOCK_FILE' not found. Run 'just build' first." >&2
+                exit 1
             fi
-            QEMU_CMD+=" -drive if=none,file=${BLOCK_FILE},format=raw,id=hd0 -device virtio-blk-pci,drive=hd0"
+            QEMU_CMD+=" -drive if=none,file=${BLOCK_FILE},format=raw,id=hd0,file.locking=off -device virtio-blk-pci,drive=hd0"
             ;;
         --net)
             shift
