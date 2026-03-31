@@ -163,7 +163,7 @@ pub fn on_uart_interrupt() {
     for &byte in &raw_bytes {
         if check_reboot_magic(byte) {
             crate::println!("\n[UART] Reboot magic received, rebooting...");
-            crate::drivers::watchdog::trigger_reset();
+            crate::drivers::jh7110::reset::trigger_reset();
         }
     }
 
@@ -243,7 +243,7 @@ pub fn poll_for_reboot() -> ! {
                 uart.write_byte(b);
             }
             drop(uart);
-            crate::drivers::watchdog::trigger_reset();
+            crate::drivers::jh7110::reset::trigger_reset();
         }
         core::hint::spin_loop();
     }

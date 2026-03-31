@@ -1,7 +1,7 @@
 pub mod bochs_display;
 pub mod dwmac;
+pub mod jh7110;
 pub mod virtio;
-pub mod watchdog;
 
 use alloc::{boxed::Box, vec::Vec};
 
