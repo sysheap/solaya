@@ -114,6 +114,7 @@ linux_syscalls! {
     SYSCALL_NR_SETRLIMIT => setrlimit(resource: c_uint, rlim: *const u8);
     SYSCALL_NR_SETSID => setsid();
     SYSCALL_NR_SETUID => setuid(uid: c_uint);
+    SYSCALL_NR_SCHED_GETAFFINITY => sched_getaffinity(pid: c_int, cpusetsize: usize, mask: *mut u8);
     SYSCALL_NR_SET_ROBUST_LIST => set_robust_list(head: usize, len: usize);
     SYSCALL_NR_SET_TID_ADDRESS => set_tid_address(tidptr: *mut c_int);
     SYSCALL_NR_SETSOCKOPT => setsockopt(fd: c_int, level: c_int, optname: c_int, optval: *const u8, optlen: c_uint);
@@ -782,6 +783,15 @@ impl LinuxSyscalls for LinuxSyscallHandler {
 
     fn get_process(&self) -> ProcessRef {
         self.current_process.clone()
+    }
+
+    async fn sched_getaffinity(
+        &mut self,
+        pid: c_int,
+        cpusetsize: usize,
+        mask: LinuxUserspaceArg<*mut u8>,
+    ) -> Result<isize, Errno> {
+        self.do_sched_getaffinity(pid, cpusetsize, mask)
     }
 
     async fn set_robust_list(&mut self, _head: usize, _len: usize) -> Result<isize, Errno> {

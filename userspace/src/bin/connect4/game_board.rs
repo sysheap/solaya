@@ -1,3 +1,5 @@
+use std::sync::atomic::{AtomicUsize, Ordering};
+
 const COLUMNS: u8 = 7;
 const ROWS: u8 = 6;
 
@@ -216,7 +218,6 @@ impl GameBoard {
         }
     }
 
-    /// Perform the minimax algorithm with alpha-beta pruning.
     fn minimax(
         &self,
         depth: u8,
@@ -224,9 +225,9 @@ impl GameBoard {
         beta: i64,
         maximizing_player: bool,
         player: Player,
-        counter: &mut usize,
+        counter: &AtomicUsize,
     ) -> i64 {
-        *counter += 1;
+        counter.fetch_add(1, Ordering::Relaxed);
 
         // Check for terminal states or maximum depth
         if depth == 0 || self.is_game_over().is_some() {
@@ -278,23 +279,31 @@ impl GameBoard {
         }
     }
 
-    /// Get the best move using minimax with alpha-beta pruning.
-    pub fn find_best_move(&self, depth: u8, player: Player, counter: &mut usize) -> Option<u8> {
+    pub fn find_best_move(&self, depth: u8, player: Player, counter: &AtomicUsize) -> Option<u8> {
         let mut best_move = None;
         let mut best_score = i64::MIN;
 
-        self.for_valid_moves(|column| {
-            let mut new_state = self.clone();
-            new_state.put(player, column).unwrap();
+        std::thread::scope(|s| {
+            let mut handles = Vec::new();
+            self.for_valid_moves(|column| {
+                let board = self.clone();
+                handles.push(s.spawn(move || {
+                    let mut new_state = board;
+                    new_state.put(player, column).unwrap();
+                    let score =
+                        new_state.minimax(depth - 1, i64::MIN, i64::MAX, false, player, counter);
+                    (column, score)
+                }));
+                true
+            });
 
-            let score = new_state.minimax(depth - 1, i64::MIN, i64::MAX, false, player, counter);
-
-            if score > best_score {
-                best_score = score;
-                best_move = Some(column);
+            for handle in handles {
+                let (column, score) = handle.join().unwrap();
+                if score > best_score {
+                    best_score = score;
+                    best_move = Some(column);
+                }
             }
-
-            true
         });
 
         best_move

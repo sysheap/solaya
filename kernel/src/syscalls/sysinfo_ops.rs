@@ -6,6 +6,7 @@ use core::{
 use headers::errno::Errno;
 
 use crate::{
+    cpu::Cpu,
     drivers::virtio::rng,
     klibc::util::ByteInterpretable,
     memory::{self, PAGE_SIZE},
@@ -108,6 +109,25 @@ impl LinuxSyscallHandler {
             ptr.write_slice(rl.as_slice())?;
         }
         Ok(0)
+    }
+
+    pub(super) fn do_sched_getaffinity(
+        &self,
+        _pid: c_int,
+        cpusetsize: usize,
+        mask: LinuxUserspaceArg<*mut u8>,
+    ) -> Result<isize, Errno> {
+        let num_cpus = Cpu::current().number_cpus();
+        let bytes_needed = num_cpus.div_ceil(8);
+        if cpusetsize < bytes_needed {
+            return Err(Errno::EINVAL);
+        }
+        let mut buf = vec![0u8; bytes_needed];
+        for i in 0..num_cpus {
+            buf[i / 8] |= 1 << (i % 8);
+        }
+        mask.write_slice(&buf)?;
+        Ok(bytes_needed as isize)
     }
 
     pub(super) fn do_getrandom(

@@ -1,6 +1,6 @@
 # Codebase Index: solaya
 
-> Generated: 2026-03-31 07:42:31 UTC | Files: 289 | Lines: 47821
+> Generated: 2026-03-31 12:11:58 UTC | Files: 289 | Lines: 47866
 > Languages: C (2), Markdown (21), Python (4), Rust (248), Shell (1), TOML (13)
 
 ## Directory Structure
@@ -2509,7 +2509,7 @@ solaya/
 
 ## kernel/src/cpu.rs
 
-**Language:** Rust | **Size:** 4.0 KB | **Lines:** 130
+**Language:** Rust | **Size:** 4.0 KB | **Lines:** 134
 
 **Imports:**
 - `alloc::{boxed::Box, sync::Arc}`
@@ -2552,6 +2552,8 @@ solaya/
   `pub fn maybe_kernel_page_tables() -> Option<&'static RootPageTableHolder>`
 
   `pub fn cpu_id() -> CpuId`
+
+  `pub fn number_cpus(&self) -> usize`
 
   `pub fn activate_kernel_page_table(&self)`
 
@@ -6479,7 +6481,7 @@ solaya/
 
 ## kernel/src/syscalls/linux.rs
 
-**Language:** Rust | **Size:** 32.3 KB | **Lines:** 1008
+**Language:** Rust | **Size:** 32.7 KB | **Lines:** 1018
 
 **Imports:**
 - `crate::{
@@ -6683,6 +6685,8 @@ solaya/
   `async fn getrandom( &mut self, buf: LinuxUserspaceArg<*mut u8>, buflen: usize, _flags: c_uint, ) -> Result<isize, Errno>`
 
   `fn get_process(&self) -> ProcessRef`
+
+  `async fn sched_getaffinity( &mut self, pid: c_int, cpusetsize: usize, mask: LinuxUserspaceArg<*mut u8>, ) -> Result<isize, Errno>`
 
   `async fn set_robust_list(&mut self, _head: usize, _len: usize) -> Result<isize, Errno>`
 
@@ -7011,7 +7015,7 @@ solaya/
 
 ## kernel/src/syscalls/sysinfo_ops.rs
 
-**Language:** Rust | **Size:** 4.5 KB | **Lines:** 156
+**Language:** Rust | **Size:** 5.1 KB | **Lines:** 176
 
 **Imports:**
 - `alloc::vec`
@@ -7021,6 +7025,7 @@ solaya/
 }`
 - `headers::errno::Errno`
 - `crate::{
+    cpu::Cpu,
     drivers::virtio::rng,
     klibc::util::ByteInterpretable,
     memory::{self, PAGE_SIZE},
@@ -7049,6 +7054,8 @@ solaya/
   `pub(super) fn do_getrlimit( &self, resource: c_uint, rlim: LinuxUserspaceArg<*mut u8>, ) -> Result<isize, Errno>`
 
   `pub(super) fn do_prlimit64( &self, pid: c_int, resource: c_uint, old_limit: LinuxUserspaceArg<Option<*mut u8>>, ) -> Result<isize, Errno>`
+
+  `pub(super) fn do_sched_getaffinity( &self, _pid: c_int, cpusetsize: usize, mask: LinuxUserspaceArg<*mut u8>, ) -> Result<isize, Errno>`
 
   `pub(super) fn do_getrandom( &self, buf: LinuxUserspaceArg<*mut u8>, buflen: usize, ) -> Result<isize, Errno>`
 
@@ -8622,7 +8629,7 @@ solaya/
 
 ## system-tests/src/tests/connect4.rs
 
-**Language:** Rust | **Size:** 444 B | **Lines:** 20
+**Language:** Rust | **Size:** 441 B | **Lines:** 20
 
 **Imports:**
 - `crate::infra::qemu::QemuInstance`
@@ -9142,7 +9149,10 @@ solaya/
 
 ## userspace/src/bin/connect4/game_board.rs
 
-**Language:** Rust | **Size:** 8.4 KB | **Lines:** 302
+**Language:** Rust | **Size:** 8.8 KB | **Lines:** 311
+
+**Imports:**
+- `std::sync::atomic::{AtomicUsize, Ordering}`
 
 **Declarations:**
 
@@ -9182,19 +9192,22 @@ solaya/
 
   `fn for_valid_moves(&self, mut f: impl FnMut(u8) -> bool)`
 
-  `fn minimax( &self, depth: u8, alpha: i64, beta: i64, maximizing_player: bool, player: Player, counter: &mut usize, ) -> i64`
+  `fn minimax( &self, depth: u8, alpha: i64, beta: i64, maximizing_player: bool, player: Player, counter: &AtomicUsize, ) -> i64`
 
-  `pub fn find_best_move(&self, depth: u8, player: Player, counter: &mut usize) -> Option<u8>`
+  `pub fn find_best_move(&self, depth: u8, player: Player, counter: &AtomicUsize) -> Option<u8>`
 
 
 ---
 
 ## userspace/src/bin/connect4/main.rs
 
-**Language:** Rust | **Size:** 2.5 KB | **Lines:** 89
+**Language:** Rust | **Size:** 2.3 KB | **Lines:** 91
 
 **Imports:**
-- `std::io::{Write, stdout}`
+- `std::{
+    io::{Write, stdout},
+    sync::atomic::{AtomicUsize, Ordering},
+}`
 - `game_board::{GameBoard, Player}`
 - `userspace::util::read_line`
 
