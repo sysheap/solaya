@@ -57,6 +57,7 @@ read_csr!(scause);
 read_csr!(sscratch);
 read_csr!(sie);
 read_csr!(sstatus);
+read_csr!(stvec);
 
 write_csr!(satp);
 write_csr!(sepc);

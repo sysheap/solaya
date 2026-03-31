@@ -27,6 +27,7 @@ read_csr_stub!(scause);
 read_csr_stub!(sscratch);
 read_csr_stub!(sie);
 read_csr_stub!(sstatus);
+read_csr_stub!(stvec);
 
 write_csr_stub!(satp);
 write_csr_stub!(sepc);
