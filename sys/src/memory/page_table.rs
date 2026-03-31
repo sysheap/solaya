@@ -67,6 +67,8 @@ impl PageTableEntry {
     #[allow(dead_code)]
     const EXECUTE_BIT_POS: usize = 3;
     const USER_MODE_ACCESSIBLE_BIT_POS: usize = 4;
+    const ACCESSED_BIT_POS: usize = 6;
+    const DIRTY_BIT_POS: usize = 7;
     const PHYSICAL_PAGE_BIT_POS: usize = 10;
     const PHYSICAL_PAGE_BITS: usize = 0xfffffffffff;
 
@@ -92,6 +94,15 @@ impl PageTableEntry {
 
     pub fn get_user_mode_accessible(&self) -> bool {
         get_bit(self.0.addr(), Self::USER_MODE_ACCESSIBLE_BIT_POS)
+    }
+
+    pub fn set_accessed_and_dirty(&mut self) {
+        self.0 = self
+            .0
+            .map_addr(|mut addr| set_or_clear_bit(&mut addr, true, Self::ACCESSED_BIT_POS));
+        self.0 = self
+            .0
+            .map_addr(|mut addr| set_or_clear_bit(&mut addr, true, Self::DIRTY_BIT_POS));
     }
 
     pub fn set_xwr_mode(&mut self, mode: XWRMode) {

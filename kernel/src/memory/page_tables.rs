@@ -318,6 +318,7 @@ impl RootPageTableHolder {
                 first_level_entry.set_validity(true);
                 first_level_entry.set_leaf_address(physical_address_with_offset(offset));
                 first_level_entry.set_user_mode_accessible(is_user_mode_accessible);
+                first_level_entry.set_accessed_and_dirty();
                 offset += GiB(1);
                 continue;
             }
@@ -344,6 +345,7 @@ impl RootPageTableHolder {
                 second_level_entry.set_validity(true);
                 second_level_entry.set_leaf_address(physical_address_with_offset(offset));
                 second_level_entry.set_user_mode_accessible(is_user_mode_accessible);
+                second_level_entry.set_accessed_and_dirty();
                 offset += MiB(2);
                 continue;
             }
@@ -384,6 +386,7 @@ impl RootPageTableHolder {
             third_level_entry.set_validity(true);
             third_level_entry.set_leaf_address(physical_address_with_offset(offset));
             third_level_entry.set_user_mode_accessible(is_user_mode_accessible);
+            third_level_entry.set_accessed_and_dirty();
 
             offset += PAGE_SIZE;
         }
@@ -471,6 +474,7 @@ impl RootPageTableHolder {
             .expect("remap_page: page not mapped");
         pte.set_leaf_address(new_phys);
         pte.set_xwr_mode(new_mode);
+        pte.set_accessed_and_dirty();
     }
 
     pub fn get_userspace_permissions(&self, va: VirtAddr) -> Option<XWRMode> {
