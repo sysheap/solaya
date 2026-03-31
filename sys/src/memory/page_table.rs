@@ -71,6 +71,7 @@ impl PageTableEntry {
     const DIRTY_BIT_POS: usize = 7;
     const PHYSICAL_PAGE_BIT_POS: usize = 10;
     const PHYSICAL_PAGE_BITS: usize = 0xfffffffffff;
+    const PBMT_BIT_POS: usize = 61; // Svpbmt: bits 61-62
 
     pub fn set_validity(&mut self, is_valid: bool) {
         self.0 = self
@@ -103,6 +104,15 @@ impl PageTableEntry {
         self.0 = self
             .0
             .map_addr(|mut addr| set_or_clear_bit(&mut addr, true, Self::DIRTY_BIT_POS));
+    }
+
+    /// Set PBMT (Page-Based Memory Type) for Svpbmt:
+    /// 0 = PMA (default), 1 = NC (non-cacheable), 2 = IO (strongly-ordered I/O)
+    /// Only call this on CPUs that support the Svpbmt extension.
+    pub fn set_pbmt_io(&mut self) {
+        self.0 = self
+            .0
+            .map_addr(|mut addr| set_multiple_bits(&mut addr, 2u8, 2, Self::PBMT_BIT_POS));
     }
 
     pub fn set_xwr_mode(&mut self, mode: XWRMode) {

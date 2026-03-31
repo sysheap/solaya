@@ -232,12 +232,16 @@ impl DwmacDevice {
             mac_address,
         };
 
-        dev.init_hardware(phy_addr);
+        if !dev.init_hardware(phy_addr) {
+            return None;
+        }
         Some(dev)
     }
 
-    fn init_hardware(&mut self, phy_addr: u32) {
-        self.init_phy(phy_addr);
+    fn init_hardware(&mut self, phy_addr: u32) -> bool {
+        if !self.init_phy(phy_addr) {
+            return false;
+        }
         self.configure_mtl();
         self.configure_mac();
         self.write_mac_address();
@@ -245,6 +249,7 @@ impl DwmacDevice {
         self.setup_descriptor_rings();
         self.enable_hardware();
         info!("DWMAC: initialization complete");
+        true
     }
 
     fn wait_for_dma_reset(base: usize) -> bool {
@@ -290,7 +295,7 @@ impl DwmacDevice {
         self.mdio_wait_idle();
     }
 
-    fn init_phy(&self, phy_addr: u32) {
+    fn init_phy(&self, phy_addr: u32) -> bool {
         // Reset PHY
         self.mdio_write(phy_addr, PHY_BMCR, PHY_BMCR_RESET);
         for _ in 0..100_000 {
@@ -307,21 +312,20 @@ impl DwmacDevice {
         for i in 0..1_000_000 {
             let bmsr = self.mdio_read(phy_addr, PHY_BMSR);
             if bmsr & PHY_BMSR_AN_COMPLETE != 0 {
-                let link = if bmsr & PHY_BMSR_LINK_STATUS != 0 {
-                    "up"
-                } else {
-                    "down"
-                };
-                info!("DWMAC: PHY auto-negotiation complete, link {}", link);
-                return;
+                if bmsr & PHY_BMSR_LINK_STATUS != 0 {
+                    info!("DWMAC: PHY auto-negotiation complete, link up");
+                    return true;
+                }
+                info!("DWMAC: PHY auto-negotiation complete but no link, skipping");
+                return false;
             }
             if i % 200_000 == 0 && i > 0 {
                 info!("DWMAC: waiting for PHY auto-negotiation...");
             }
             core::hint::spin_loop();
         }
-        let bmsr = self.mdio_read(phy_addr, PHY_BMSR);
-        info!("DWMAC: PHY auto-negotiation timed out (BMSR={:#06x})", bmsr);
+        info!("DWMAC: PHY auto-negotiation timed out, skipping");
+        false
     }
 
     fn configure_mtl(&self) {
@@ -387,7 +391,7 @@ impl DwmacDevice {
     }
 
     fn configure_mac(&self) {
-        // RX queue enable (DCB mode)
+        // RX queue enable (DCB mode) — write may be ignored on some JH7110 variants
         clear_set_bits(self.base, MAC_RXQ_CTRL0, 0x3, RXQ0EN_ENABLED_DCB);
 
         // Multicast and Broadcast Queue Enable
@@ -524,9 +528,14 @@ impl DwmacDevice {
             (RX_RING_SIZE - 1) as u32,
         );
 
-        // Point RX tail pointer at last descriptor to start reception
-        let last_rx_desc = &self.rx_ring.descriptors[RX_RING_SIZE - 1] as *const _ as usize;
-        write_reg(self.base, DMA_CH0_RXDESC_TAIL_PTR, last_rx_desc as u32);
+        // Tail pointer must point past the last descriptor to make all available
+        let end_of_ring = rx_base + RX_RING_SIZE * core::mem::size_of::<DmaDescriptor>();
+        write_reg(self.base, DMA_CH0_RXDESC_TAIL_PTR, end_of_ring as u32);
+
+        debug!(
+            "DWMAC: RX ring at {:#x}, tail at {:#x}, buf[0] at {:#x}",
+            rx_base, end_of_ring, &self.rx_buffers[0].0 as *const _ as usize
+        );
     }
 
     fn enable_hardware(&self) {

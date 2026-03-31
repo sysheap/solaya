@@ -327,9 +327,7 @@ impl RootPageTableHolder {
                 first_level_entry.set_leaf_address(physical_address_with_offset(offset));
                 first_level_entry.set_user_mode_accessible(is_user_mode_accessible);
                 first_level_entry.set_accessed_and_dirty();
-                if is_device {
-                    first_level_entry.set_pbmt_io();
-                }
+                let _ = is_device; // PBMT not supported on JH7110 (no Svpbmt)
                 offset += GiB(1);
                 continue;
             }
@@ -357,9 +355,6 @@ impl RootPageTableHolder {
                 second_level_entry.set_leaf_address(physical_address_with_offset(offset));
                 second_level_entry.set_user_mode_accessible(is_user_mode_accessible);
                 second_level_entry.set_accessed_and_dirty();
-                if is_device {
-                    second_level_entry.set_pbmt_io();
-                }
                 offset += MiB(2);
                 continue;
             }
@@ -401,10 +396,6 @@ impl RootPageTableHolder {
             third_level_entry.set_leaf_address(physical_address_with_offset(offset));
             third_level_entry.set_user_mode_accessible(is_user_mode_accessible);
             third_level_entry.set_accessed_and_dirty();
-            if is_device {
-                third_level_entry.set_pbmt_io();
-            }
-
             offset += PAGE_SIZE;
         }
     }

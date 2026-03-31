@@ -1,4 +1,4 @@
-const LOG_FOLLOWING_MODULES: &[&str] = &[];
+const LOG_FOLLOWING_MODULES: &[&str] = &["solaya::drivers::dwmac", "solaya::net"];
 const DONT_LOG_FOLLOWING_MODULES: &[&str] = &[
     "solaya::interrupts::trap",
     "solaya::debugging::unwinder",
