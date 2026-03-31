@@ -268,6 +268,47 @@ impl<'a> Node<'a> {
 
         Some(Reg { address, size })
     }
+
+    pub fn parse_all_reg_properties(&self) -> alloc::vec::Vec<Reg> {
+        let mut regs = alloc::vec::Vec::new();
+        let Some(mut reg_property) = self.get_property("reg") else {
+            return regs;
+        };
+        loop {
+            let address = match self.parent_address_cells {
+                Some(1) => {
+                    let Some(v) = reg_property.consume_sized_type::<BigEndian<u32>>() else {
+                        break;
+                    };
+                    v.get() as usize
+                }
+                Some(2) => {
+                    let Some(v) = reg_property.consume_sized_type::<BigEndian<u64>>() else {
+                        break;
+                    };
+                    v.get().as_usize()
+                }
+                _ => break,
+            };
+            let size = match self.parent_size_cells {
+                Some(1) => {
+                    let Some(v) = reg_property.consume_sized_type::<BigEndian<u32>>() else {
+                        break;
+                    };
+                    v.get() as usize
+                }
+                Some(2) => {
+                    let Some(v) = reg_property.consume_sized_type::<BigEndian<u64>>() else {
+                        break;
+                    };
+                    v.get().as_usize()
+                }
+                _ => break,
+            };
+            regs.push(Reg { address, size });
+        }
+        regs
+    }
 }
 
 pub struct Reg {
