@@ -73,13 +73,7 @@ pub fn kernel_device_mappings() -> alloc::vec::Vec<page_tables::MappingDescripti
         // JH7110 clock/reset generators, system controllers, and watchdog.
         // The extracted DTS names the main CRG node "clock-controller" (no @addr),
         // so we search for both variants.
-        for name in [
-            "clock-controller",
-            "clock-controller@13020000",
-            "sys_syscon@13030000",
-            "aon_syscon@17010000",
-            "wdog@13070000",
-        ] {
+        for name in ["clock-controller", "sys_syscon", "aon_syscon", "wdog"] {
             if let Some(node) = soc.find_node(name)
                 && let Some(reg) = node.parse_reg_property()
             {
