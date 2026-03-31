@@ -173,8 +173,16 @@ fn clear_set_bits(base: usize, offset: usize, clear: u32, set: u32) {
 impl DwmacDevice {
     /// Initialize a DWMAC device at the given MMIO base address.
     /// Clocks and resets must already be enabled before calling this.
-    pub fn new(base: usize, mac_address: MacAddress) -> Self {
+    /// Returns None if DMA reset fails (hardware not functional).
+    pub fn new(base: usize, mac_address: MacAddress) -> Option<Self> {
         info!("DWMAC: initializing at {:#x}, MAC {}", base, mac_address);
+
+        // Issue DMA software reset and wait for completion
+        set_bits(base, DMA_MODE, DMA_MODE_SWR);
+        if !Self::wait_for_dma_reset(base) {
+            info!("DWMAC: DMA software reset did not clear, skipping device");
+            return None;
+        }
 
         let mut dev = Self {
             base,
@@ -204,11 +212,10 @@ impl DwmacDevice {
         };
 
         dev.init_hardware();
-        dev
+        Some(dev)
     }
 
     fn init_hardware(&mut self) {
-        self.wait_for_dma_reset();
         self.configure_mtl();
         self.configure_mac();
         self.write_mac_address();
@@ -218,15 +225,14 @@ impl DwmacDevice {
         info!("DWMAC: initialization complete");
     }
 
-    fn wait_for_dma_reset(&self) {
-        // Wait for software reset to clear (DMA_MODE.SWR)
+    fn wait_for_dma_reset(base: usize) -> bool {
         for _ in 0..100_000 {
-            if read_reg(self.base, DMA_MODE) & DMA_MODE_SWR == 0 {
-                return;
+            if read_reg(base, DMA_MODE) & DMA_MODE_SWR == 0 {
+                return true;
             }
             core::hint::spin_loop();
         }
-        info!("DWMAC: DMA software reset did not clear, continuing anyway");
+        false
     }
 
     fn configure_mtl(&self) {

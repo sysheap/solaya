@@ -93,8 +93,10 @@ pub fn init_dwmac_devices() {
         // Initialize clocks, resets, and syscon
         dwmac::jh7110::init_gmac(gmac_index, &clock_ids, &reset_ids);
 
-        // Initialize the DWMAC hardware
-        let device = dwmac::DwmacDevice::new(reg.address, mac);
+        // Initialize the DWMAC hardware (may fail if DMA reset is stuck)
+        let Some(device) = dwmac::DwmacDevice::new(reg.address, mac) else {
+            continue;
+        };
         let isr_status = device.isr_status_mmio();
 
         if !net::has_network_device() {
