@@ -161,11 +161,11 @@ fn find_s_mode_context(boot_cpu_id: CpuId, plic_node: &device_tree::Node<'_>) ->
     while ext_prop.size_left() >= 8 {
         let phandle = ext_prop
             .consume_sized_type::<BigEndian<u32>>()
-            .unwrap()
+            .expect("PLIC interrupts-extended phandle must be a u32")
             .get();
         let irq_type = ext_prop
             .consume_sized_type::<BigEndian<u32>>()
-            .unwrap()
+            .expect("PLIC interrupts-extended irq_type must be a u32")
             .get();
         if phandle == boot_intc_phandle && irq_type == S_MODE_EXTERNAL_INTERRUPT {
             return context_index;

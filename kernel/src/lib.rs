@@ -239,10 +239,51 @@ pub extern "C" fn prepare_for_scheduling() -> ! {
 }
 
 #[cfg(target_arch = "riscv64")]
-fn start_other_harts(_current_hart_id: usize, _number_of_cpus: usize) {
-    // TODO: Implement SMP boot using device tree mmu-type filtering.
-    // For now, boot single-core only to get basic hardware support working.
-    info!("Single-core boot: not starting other harts");
+fn start_other_harts(current_hart_id: usize, number_of_cpus: usize) {
+    use arch::sbi::extensions::hart_state_extension;
+    use klibc::big_endian::BigEndian;
+
+    let root = device_tree::THE.root_node();
+    let cpus_node = root
+        .find_node("cpus")
+        .expect("Device tree must have a cpus node");
+
+    for cpu_node in cpus_node.children() {
+        if !cpu_node.name.starts_with("cpu@") {
+            continue;
+        }
+
+        // Skip harts without an MMU (e.g. SiFive S7 monitor core on JH7110)
+        if cpu_node.get_property("mmu-type").is_none() {
+            info!("Skipping hart {} (no mmu-type)", cpu_node.name);
+            continue;
+        }
+
+        let Some(mut reg_prop) = cpu_node.get_property("reg") else {
+            continue;
+        };
+        let hart_id = reg_prop
+            .consume_sized_type::<BigEndian<u32>>()
+            .expect("CPU reg must be a u32")
+            .get() as usize;
+
+        if hart_id == current_hart_id {
+            continue;
+        }
+
+        if !hart_state_extension::is_hart_stopped(hart_id) {
+            info!("Skipping hart {hart_id} (not in stopped state)");
+            continue;
+        }
+
+        let cpu_struct = Cpu::init(cpu::CpuId::from_hart_id(hart_id), number_of_cpus);
+        hart_state_extension::start_hart(
+            hart_id,
+            arch::linker_symbols::start_hart_addr(),
+            cpu_struct as usize,
+        )
+        .assert_success();
+    }
 }
 
 #[cfg(kani)]
