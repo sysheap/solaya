@@ -87,6 +87,7 @@ const DMA_CH0_INTERRUPT_ENABLE: usize = 0x1134;
 const DMA_CH0_STATUS: usize = 0x1160;
 
 // DMA mode bits
+#[allow(dead_code)]
 const DMA_MODE_SWR: u32 = 1 << 0;
 
 // DMA sysbus mode bits
@@ -198,12 +199,14 @@ impl DwmacDevice {
     pub fn new(base: usize, mac_address: MacAddress, phy_addr: u32) -> Option<Self> {
         info!("DWMAC: initializing at {:#x}, MAC {}", base, mac_address);
 
-        // Issue DMA software reset and wait for completion
-        set_bits(base, DMA_MODE, DMA_MODE_SWR);
-        if !Self::wait_for_dma_reset(base) {
-            info!("DWMAC: DMA software reset did not clear, skipping device");
-            return None;
-        }
+        // Read RXQ_CTRL0 before any changes (debug)
+        let rxq_before = read_reg(base, MAC_RXQ_CTRL0);
+        info!("DWMAC: RXQ_CTRL0 before init: {:#x}", rxq_before);
+
+        // Stop MAC and DMA before reconfiguring
+        clear_set_bits(base, MAC_CONFIGURATION, MAC_CONFIG_TE | MAC_CONFIG_RE, 0);
+        clear_set_bits(base, DMA_CH0_TX_CONTROL, DMA_CH0_TX_CONTROL_ST, 0);
+        clear_set_bits(base, DMA_CH0_RX_CONTROL, DMA_CH0_RX_CONTROL_SR, 0);
 
         let mut dev = Self {
             base,
@@ -248,10 +251,15 @@ impl DwmacDevice {
         self.configure_dma();
         self.setup_descriptor_rings();
         self.enable_hardware();
+
+        // RXQ_CTRL0 is unwritable on JH7110 DWMAC — the single RX queue
+        // appears to be always enabled in hardware.
+
         info!("DWMAC: initialization complete");
         true
     }
 
+    #[allow(dead_code)]
     fn wait_for_dma_reset(base: usize) -> bool {
         for _ in 0..100_000 {
             if read_reg(base, DMA_MODE) & DMA_MODE_SWR == 0 {
@@ -552,6 +560,20 @@ impl DwmacDevice {
 
         // Enable MAC TX and RX
         set_bits(self.base, MAC_CONFIGURATION, MAC_CONFIG_TE | MAC_CONFIG_RE);
+    }
+
+    pub fn dump_debug_status(&self) {
+        // MMC RX counters (offsets from DWMAC datasheet)
+        let rx_packets = read_reg(self.base, 0x780); // Rx Packets Good+Bad
+        let rx_crc_err = read_reg(self.base, 0x794); // Rx CRC Error
+        let dma_status = read_reg(self.base, DMA_CH0_STATUS);
+        let dma_cur_rx = read_reg(self.base, 0x114C); // DMA CH0 Current RX Desc
+        let dma_cur_rxbuf = read_reg(self.base, 0x1154); // DMA CH0 Current RX Buffer
+        let mtl_rxq_debug = read_reg(self.base, 0xD38); // MTL RXQ0 Debug
+        info!(
+            "DWMAC debug: rx_pkts={} rx_crc={} dma_status={:#x} cur_rxdesc={:#x} cur_rxbuf={:#x} mtl_rxq={:#x}",
+            rx_packets, rx_crc_err, dma_status, dma_cur_rx, dma_cur_rxbuf, mtl_rxq_debug
+        );
     }
 
     /// Returns the MMIO address of the DMA CH0 status register.

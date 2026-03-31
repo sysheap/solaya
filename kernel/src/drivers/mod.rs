@@ -103,6 +103,7 @@ pub fn init_dwmac_devices() {
         let isr_status = device.isr_status_mmio();
 
         if !net::has_network_device() {
+            device.dump_debug_status();
             net::assign_network_device(Box::new(device));
             net::init_isr_status(isr_status);
             plic::register_interrupt(plic_irq, net::on_network_interrupt);

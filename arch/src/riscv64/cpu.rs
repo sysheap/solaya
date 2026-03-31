@@ -83,6 +83,14 @@ pub fn memory_fence() {
     }
 }
 
+pub fn io_fence() {
+    // SAFETY: `fence iorw, iorw` ensures all prior I/O and memory accesses
+    // complete before subsequent ones. Required for reliable MMIO on RISC-V.
+    unsafe {
+        asm!("fence iorw, iorw");
+    }
+}
+
 /// # Safety
 /// Must only be called during panic or shutdown paths where no further
 /// interrupt handling is expected.

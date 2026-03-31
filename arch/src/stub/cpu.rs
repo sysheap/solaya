@@ -41,6 +41,7 @@ pub unsafe fn write_satp_and_fence(_satp_val: usize) {}
 
 #[allow(dead_code)]
 pub fn memory_fence() {}
+pub fn io_fence() {}
 
 #[allow(dead_code)]
 pub unsafe fn disable_global_interrupts() {}
