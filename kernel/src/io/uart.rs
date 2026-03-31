@@ -234,7 +234,12 @@ pub fn poll_for_reboot() -> ! {
         if let Some(byte) = CONSOLE_UART.lock().read()
             && check_reboot_magic(byte)
         {
-            crate::println!("\n[UART] Reboot magic received, rebooting...");
+            // Write directly to UART — println! can trigger a panic-in-panic.
+            let mut uart = CONSOLE_UART.lock();
+            for &b in b"\n[UART] Reboot magic received, rebooting...\n" {
+                uart.write_byte(b);
+            }
+            drop(uart);
             arch::sbi::extensions::srst_extension::sbi_system_reset(1, 0).assert_success();
             loop {
                 core::hint::spin_loop();
