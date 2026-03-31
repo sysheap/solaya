@@ -6,11 +6,7 @@ pub use arch::CpuId;
 use crate::{
     klibc::{Spinlock, SpinlockGuard, sizes::KiB},
     memory::page_tables::RootPageTableHolder,
-    processes::{
-        process::Process,
-        scheduler::CpuScheduler,
-        thread::{ThreadRef, ThreadWeakRef},
-    },
+    processes::{process::Process, scheduler::CpuScheduler, thread::ThreadWeakRef},
 };
 use arch::sbi::extensions::ipi_extension::sbi_send_ipi;
 
@@ -93,21 +89,12 @@ impl Cpu {
         f(scheduler)
     }
 
-    pub fn current_thread() -> ThreadRef {
-        Self::with_scheduler(|s| s.get_current_thread().clone())
-    }
-
     pub fn current_thread_weak() -> ThreadWeakRef {
         Self::with_scheduler(|s| Arc::downgrade(s.get_current_thread()))
     }
 
     pub fn with_current_process<R>(f: impl FnOnce(SpinlockGuard<'_, Process>) -> R) -> R {
         Self::with_scheduler(|s| f(s.get_current_process().lock()))
-    }
-
-    pub fn maybe_kernel_page_tables() -> Option<&'static RootPageTableHolder> {
-        let cpu: &Cpu = sys::cpu::try_per_cpu_ref()?;
-        Some(&cpu.kernel_page_tables)
     }
 
     pub fn cpu_id() -> CpuId {

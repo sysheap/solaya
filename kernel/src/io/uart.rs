@@ -228,7 +228,9 @@ fn check_reboot_magic(byte: u8) -> bool {
 #[cfg(target_arch = "riscv64")]
 pub fn poll_for_reboot() -> ! {
     // Break any held lock — we're in a panic/shutdown path with interrupts disabled.
+
     CONSOLE_UART.panic_force_unlock();
+    sys::println!("Polling for reboot...");
     loop {
         // Bind the read result first so the lock guard is dropped before the if-body.
         // (if-let chains extend temporaries through the entire block → deadlock)

@@ -255,10 +255,6 @@ impl Thread {
         }))
     }
 
-    pub fn get_name(&self) -> &str {
-        &self.process_name
-    }
-
     pub fn process_name(&self) -> &str {
         &self.process_name
     }
