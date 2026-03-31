@@ -227,11 +227,15 @@ fn check_reboot_magic(byte: u8) -> bool {
 
 #[cfg(target_arch = "riscv64")]
 pub fn poll_for_reboot() -> ! {
+    // Break any held lock — we're in a panic/shutdown path with interrupts disabled.
+    CONSOLE_UART.panic_force_unlock();
     loop {
-        if let Some(byte) = CONSOLE_UART.lock().read()
+        // Bind the read result first so the lock guard is dropped before the if-body.
+        // (if-let chains extend temporaries through the entire block → deadlock)
+        let byte = CONSOLE_UART.lock().read();
+        if let Some(byte) = byte
             && check_reboot_magic(byte)
         {
-            // Write directly to UART — println! can trigger a panic-in-panic.
             let mut uart = CONSOLE_UART.lock();
             for &b in b"\n[UART] Reboot magic received, rebooting...\n" {
                 uart.write_byte(b);
