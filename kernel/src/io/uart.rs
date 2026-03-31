@@ -7,9 +7,11 @@ pub const UART_BASE_ADDRESS: usize = 0x1000_0000;
 
 const THR: usize = 0;
 const IER: usize = 1;
-const FCR: usize = 2;
+const IIR: usize = 2; // Read: Interrupt Identification Register
+const FCR: usize = 2; // Write: FIFO Control Register
 const LCR: usize = 3;
 const LSR: usize = 5;
+const USR: usize = 0x1F; // DW APB UART: UART Status Register
 
 const LCR_WORD_LEN_8BIT: u8 = 0b11;
 const FCR_FIFO_EN: u8 = 0x01;
@@ -66,14 +68,40 @@ impl Uart {
         // idle from firmware — otherwise THRE clears and detection fails.
         self.reg_shift = detect_reg_shift(self.base);
 
-        // Configure 8-bit word length, enable FIFO, and enable RX interrupts.
+        // Disable all interrupts first to prevent spurious interrupts
+        // while we reconfigure.
+        self.write_reg(IER, 0);
+
+        // Configure 8-bit word length, enable FIFO.
         // Baud rate is left as-is: on QEMU it doesn't matter, and on real
         // hardware the firmware (U-Boot/OpenSBI) has already configured it.
         self.write_reg(LCR, LCR_WORD_LEN_8BIT);
         self.write_reg(FCR, FCR_FIFO_EN | FCR_RXSR | FCR_TXSR);
+
+        // Clear any pending interrupts left by firmware.
+        self.clear_pending_interrupts();
+
+        // Now enable RX interrupts.
         self.write_reg(IER, IER_RX_AVAILABLE);
 
         self.is_init = true;
+    }
+
+    /// Clear all pending UART interrupt sources.
+    /// On the DW APB UART, this includes the "Busy Detect" interrupt
+    /// (triggered by writing LCR while busy), which can only be cleared
+    /// by reading the USR register.
+    pub fn clear_pending_interrupts(&self) {
+        // Read IIR to clear THR Empty interrupt
+        let _ = self.read_reg(IIR);
+        // Read LSR to clear Line Status interrupt
+        let _ = self.read_reg(LSR);
+        // Read RBR to clear Received Data Available / Character Timeout
+        let _ = self.read_reg(THR);
+        // Read USR to clear DW APB UART Busy Detect interrupt
+        if self.reg_shift >= 2 {
+            let _ = self.read_reg(USR);
+        }
     }
 
     fn wait_for_tx_ready(&self) {
@@ -125,6 +153,8 @@ pub fn on_uart_interrupt() {
         while let Some(input) = uart.read() {
             let _ = raw_bytes.push(input);
         }
+        // Clear any non-RX interrupt sources (e.g. DW APB UART Busy Detect)
+        uart.clear_pending_interrupts();
     }
 
     let mut signal_to_send: Option<u32> = None;
@@ -161,6 +191,9 @@ impl Write for Uart {
             return Ok(());
         }
         for c in s.bytes() {
+            if c == b'\n' {
+                self.write_byte(b'\r');
+            }
             self.write_byte(c);
         }
         Ok(())

@@ -144,7 +144,7 @@ pub enum FdtToken<'a> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Node<'a> {
-    name: &'a str,
+    pub name: &'a str,
     pub address_cells: Option<u32>,
     pub size_cells: Option<u32>,
     pub parent_address_cells: Option<u32>,
@@ -240,6 +240,12 @@ impl<'a> Node<'a> {
         None
     }
 
+    pub fn children(&self) -> ChildrenIterator<'a> {
+        ChildrenIterator {
+            parent: self.clone(),
+        }
+    }
+
     pub fn parse_reg_property(&self) -> Option<Reg> {
         let mut reg_property = self.get_property("reg")?;
         let address = match self.parent_address_cells? {
@@ -267,6 +273,48 @@ impl<'a> Node<'a> {
 pub struct Reg {
     pub address: usize,
     pub size: usize,
+}
+
+pub struct ChildrenIterator<'a> {
+    parent: Node<'a>,
+}
+
+impl<'a> Iterator for ChildrenIterator<'a> {
+    type Item = Node<'a>;
+
+    fn next(&mut self) -> Option<Node<'a>> {
+        loop {
+            let token = self.parent.next()?;
+            match token {
+                FdtToken::BeginNode(name) => {
+                    let child_sb = self.parent.structure_block.clone();
+                    let mut child = Node::new(name, self.parent.device_tree, child_sb);
+                    child.parent_address_cells = self.parent.address_cells;
+                    child.parent_size_cells = self.parent.size_cells;
+
+                    // Skip over child content in parent's stream
+                    let mut depth = 0u32;
+                    loop {
+                        match self.parent.next()? {
+                            FdtToken::BeginNode(_) => depth += 1,
+                            FdtToken::EndNode => {
+                                if depth == 0 {
+                                    break;
+                                }
+                                depth -= 1;
+                            }
+                            FdtToken::End => return None,
+                            _ => {}
+                        }
+                    }
+
+                    return Some(child);
+                }
+                FdtToken::Prop(_, _) | FdtToken::Nop => continue,
+                FdtToken::EndNode | FdtToken::End => return None,
+            }
+        }
+    }
 }
 
 impl<'a> IntoIterator for &Node<'a> {

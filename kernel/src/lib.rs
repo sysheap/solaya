@@ -139,7 +139,7 @@ pub extern "C" fn kernel_init(hart_id: usize, device_tree_pointer: *const ()) ->
     memory::init_page_allocator(&[device_tree_range]);
 
     backtrace::init();
-    plic::discover_from_device_tree();
+    plic::discover_from_device_tree(boot_cpu_id);
     processes::timer::init();
 
     #[cfg(test)]
@@ -199,7 +199,7 @@ pub extern "C" fn kernel_init(hart_id: usize, device_tree_pointer: *const ()) ->
 
     Cpu::current().activate_kernel_page_table();
 
-    plic::init_plic(boot_cpu_id);
+    plic::init_plic();
 
     if let Some(serial_node) = device_tree::THE.root_node().find_node("serial")
         && let Some(mut irq_prop) = serial_node.get_property("interrupts")
