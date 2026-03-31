@@ -1,6 +1,6 @@
 # Codebase Index: solaya
 
-> Generated: 2026-03-31 12:11:58 UTC | Files: 289 | Lines: 47866
+> Generated: 2026-03-31 12:23:54 UTC | Files: 289 | Lines: 47882
 > Languages: C (2), Markdown (21), Python (4), Rust (248), Shell (1), TOML (13)
 
 ## Directory Structure
@@ -1650,7 +1650,7 @@ solaya/
 
 ## INDEX.md
 
-**Language:** Markdown | **Size:** 229.2 KB | **Lines:** 9768
+**Language:** Markdown | **Size:** 229.6 KB | **Lines:** 9781
 
 **Declarations:**
 
@@ -9149,10 +9149,10 @@ solaya/
 
 ## userspace/src/bin/connect4/game_board.rs
 
-**Language:** Rust | **Size:** 8.8 KB | **Lines:** 311
+**Language:** Rust | **Size:** 9.0 KB | **Lines:** 319
 
 **Imports:**
-- `std::sync::atomic::{AtomicUsize, Ordering}`
+- `std::sync::atomic::{AtomicI64, AtomicUsize, Ordering}`
 
 **Declarations:**
 
@@ -9173,6 +9173,9 @@ solaya/
   `fn from(value: Player) -> Self`
 
 
+`struct SearchContext`
+> Fields: `player: Player`, `counter: AtomicUsize`, `shared_alpha: AtomicI64`
+
 **`impl GameBoard`**
   `pub fn new() -> Self`
 
@@ -9190,24 +9193,21 @@ solaya/
 
   `fn check_four_in_a_row(&self, row: u8, col: u8) -> Option<Player>`
 
+  `fn minimax_inner( &self, depth: u8, alpha: i64, beta: i64, maximizing_player: bool, ctx: &SearchContext, ) -> i64`
+
   `fn for_valid_moves(&self, mut f: impl FnMut(u8) -> bool)`
 
-  `fn minimax( &self, depth: u8, alpha: i64, beta: i64, maximizing_player: bool, player: Player, counter: &AtomicUsize, ) -> i64`
-
-  `pub fn find_best_move(&self, depth: u8, player: Player, counter: &AtomicUsize) -> Option<u8>`
+  `pub fn find_best_move(&self, depth: u8, player: Player) -> (Option<u8>, usize)`
 
 
 ---
 
 ## userspace/src/bin/connect4/main.rs
 
-**Language:** Rust | **Size:** 2.3 KB | **Lines:** 91
+**Language:** Rust | **Size:** 2.2 KB | **Lines:** 86
 
 **Imports:**
-- `std::{
-    io::{Write, stdout},
-    sync::atomic::{AtomicUsize, Ordering},
-}`
+- `std::io::{Write, stdout}`
 - `game_board::{GameBoard, Player}`
 - `userspace::util::read_line`
 
