@@ -1,7 +1,7 @@
 pub mod bochs_display;
 pub mod virtio;
 
-use alloc::vec::Vec;
+use alloc::{boxed::Box, vec::Vec};
 
 use crate::{fs, interrupts::plic, net, pci::PCIDevice, processes::kernel_tasks};
 
@@ -22,7 +22,7 @@ fn init_network_device(pci_devices: &mut Vec<PCIDevice>) {
         let plic_irq = device.plic_interrupt_id();
         let init =
             virtio::net::NetworkDevice::initialize(device).expect("Initialization must work.");
-        net::assign_network_device(init.device);
+        net::assign_network_device(Box::new(init.device));
         net::init_isr_status(init.interrupt_status);
         plic::register_interrupt(plic_irq, net::on_network_interrupt);
         kernel_tasks::spawn(net::network_rx_task());

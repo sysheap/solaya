@@ -26,9 +26,7 @@ use crate::{
 };
 use alloc::vec::Vec;
 
-use super::virtqueue::QueueError;
 use crate::net::DRIVER_HEADER_RESERVE;
-
 const EXPECTED_QUEUE_SIZE: usize = 0x100;
 
 const VIRTIO_NET_F_MAC: u64 = 1 << 5;
@@ -318,7 +316,27 @@ impl NetworkDevice {
         }
     }
 
-    pub fn receive_packets(&mut self) -> Vec<Vec<u8>> {
+    fn fill_net_header(mut data: Vec<u8>) -> Vec<u8> {
+        assert!(
+            data.len() >= DRIVER_HEADER_RESERVE,
+            "Packet must have pre-reserved driver header space"
+        );
+        let header = virtio_net_hdr {
+            flags: 0,
+            gso_type: VIRTIO_NET_HDR_GSO_NONE,
+            hdr_len: 0,
+            gso_size: 0,
+            csum_start: 0,
+            csum_offset: 0,
+            num_buffers: 0,
+        };
+        data[..DRIVER_HEADER_RESERVE].copy_from_slice(header.as_slice());
+        data
+    }
+}
+
+impl crate::net::NetworkDevice for NetworkDevice {
+    fn receive_packets(&mut self) -> Vec<Vec<u8>> {
         let new_receive_buffers = self.receive_queue.receive_buffer();
         let mut received_packets = Vec::new();
 
@@ -346,25 +364,7 @@ impl NetworkDevice {
         received_packets
     }
 
-    fn fill_net_header(mut data: Vec<u8>) -> Vec<u8> {
-        assert!(
-            data.len() >= DRIVER_HEADER_RESERVE,
-            "Packet must have pre-reserved driver header space"
-        );
-        let header = virtio_net_hdr {
-            flags: 0,
-            gso_type: VIRTIO_NET_HDR_GSO_NONE,
-            hdr_len: 0,
-            gso_size: 0,
-            csum_start: 0,
-            csum_offset: 0,
-            num_buffers: 0,
-        };
-        data[..DRIVER_HEADER_RESERVE].copy_from_slice(header.as_slice());
-        data
-    }
-
-    pub fn send_packet(&mut self, data: Vec<u8>) -> Result<u16, QueueError> {
+    fn send_packet(&mut self, data: Vec<u8>) {
         // First free all already transmitted packets
         debug!("Going to free all buffers which were used to send packets.");
         for transmitted_packet in self.transmit_queue.receive_buffer() {
@@ -373,17 +373,15 @@ impl NetworkDevice {
         }
 
         let data = Self::fill_net_header(data);
-        let index = self
-            .transmit_queue
-            .put_buffer(data, BufferDirection::DriverWritable);
+        self.transmit_queue
+            .put_buffer(data, BufferDirection::DriverWritable)
+            .expect("Packet must be sendable");
 
         // Notify device
         self.transmit_queue.notify();
-
-        index
     }
 
-    pub fn send_packet_batch(&mut self, packets: Vec<Vec<u8>>) {
+    fn send_packet_batch(&mut self, packets: Vec<Vec<u8>>) {
         // Reclaim completed TX buffers once
         for transmitted_packet in self.transmit_queue.receive_buffer() {
             drop(transmitted_packet);
@@ -400,7 +398,7 @@ impl NetworkDevice {
         self.transmit_queue.notify();
     }
 
-    pub fn get_mac_address(&self) -> MacAddress {
+    fn get_mac_address(&self) -> MacAddress {
         self.mac_address
     }
 }

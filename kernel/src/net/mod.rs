@@ -6,14 +6,24 @@ use core::{
     task::{Context, Poll, Waker},
 };
 
-use alloc::vec::Vec;
+use alloc::{boxed::Box, vec::Vec};
 
 use crate::{
     debug,
-    drivers::virtio::net::NetworkDevice,
     klibc::{MMIO, Spinlock, runtime_initialized::RuntimeInitializedData},
     net::{ipv4::IpV4Header, udp::UdpHeader},
 };
+
+pub trait NetworkDevice: Send {
+    fn receive_packets(&mut self) -> Vec<Vec<u8>>;
+    fn send_packet(&mut self, data: Vec<u8>);
+    fn send_packet_batch(&mut self, packets: Vec<Vec<u8>>) {
+        for p in packets {
+            self.send_packet(p);
+        }
+    }
+    fn get_mac_address(&self) -> mac::MacAddress;
+}
 
 #[cfg(target_arch = "riscv64")]
 use self::ipv4::PROTOCOL_TCP;
@@ -36,7 +46,7 @@ pub mod udp;
 pub const DRIVER_HEADER_RESERVE: usize = 12;
 
 struct NetworkStack {
-    device: Spinlock<Option<NetworkDevice>>,
+    device: Spinlock<Option<Box<dyn NetworkDevice>>>,
     ip_addr: Spinlock<Ipv4Addr>,
     open_sockets: Spinlock<LazyCell<OpenSockets>>,
 }
@@ -129,7 +139,7 @@ pub fn open_sockets() -> &'static Spinlock<LazyCell<OpenSockets>> {
 
 static CACHED_MAC: Spinlock<Option<MacAddress>> = Spinlock::new(None);
 
-pub fn assign_network_device(device: NetworkDevice) {
+pub fn assign_network_device(device: Box<dyn NetworkDevice>) {
     *CACHED_MAC.lock() = Some(device.get_mac_address());
     *NETWORK_STACK.device.lock() = Some(device);
 }
@@ -155,8 +165,7 @@ pub fn send_packet(packet: Vec<u8>) {
         .lock()
         .as_mut()
         .expect("There must be a configured network device.")
-        .send_packet(packet)
-        .expect("Packet must be sendable");
+        .send_packet(packet);
 }
 
 pub fn send_packets(packets: Vec<Vec<u8>>) {
