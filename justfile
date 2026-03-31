@@ -17,6 +17,12 @@ tftp-deploy: build-binary
     cp target/solaya.bin {{tftp_dir}}/solaya.bin
     @echo "Deployed to {{tftp_dir}}/solaya.bin"
 
+reboot-hw:
+    stty -F /dev/ttyUSB0 115200 raw
+    printf '\xDE\xAD\xBE\xEF' > /dev/ttyUSB0
+
+deploy-and-reboot: tftp-deploy reboot-hw
+
 patch-symbols:
     riscv64-unknown-linux-musl-nm --demangle --numeric-sort --line-numbers target/riscv64gc-unknown-none-elf/release/boot | grep -e ' t ' -e ' T ' > symbols && printf '\0' >> symbols
     riscv64-unknown-linux-musl-objcopy --update-section symbols=./symbols target/riscv64gc-unknown-none-elf/release/boot

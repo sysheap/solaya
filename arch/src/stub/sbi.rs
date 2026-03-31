@@ -88,6 +88,15 @@ pub mod extensions {
         }
     }
 
+    pub mod srst_extension {
+        use crate::sbi::sbi_call::SbiRet;
+
+        #[allow(dead_code)]
+        pub fn sbi_system_reset(_reset_type: u32, _reset_reason: u32) -> SbiRet {
+            SbiRet::default()
+        }
+    }
+
     pub mod timer_extension {
         use crate::sbi::sbi_call::SbiRet;
 

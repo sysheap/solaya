@@ -1,4 +1,7 @@
-use core::fmt::Write;
+use core::{
+    fmt::Write,
+    sync::atomic::{AtomicU8, Ordering},
+};
 
 use crate::klibc::{MMIO, Spinlock};
 use sys::klibc::send_sync::UnsafeSendSync;
@@ -157,6 +160,16 @@ pub fn on_uart_interrupt() {
         uart.clear_pending_interrupts();
     }
 
+    for &byte in &raw_bytes {
+        if check_reboot_magic(byte) {
+            crate::println!("\n[UART] Reboot magic received, rebooting...");
+            arch::sbi::extensions::srst_extension::sbi_system_reset(1, 0).assert_success();
+            loop {
+                core::hint::spin_loop();
+            }
+        }
+    }
+
     let mut signal_to_send: Option<u32> = None;
     let tty = crate::io::tty_device::console_tty();
     for &byte in &raw_bytes {
@@ -182,6 +195,36 @@ pub fn on_uart_interrupt() {
         crate::cpu::Cpu::with_scheduler(|mut s| {
             s.send_tty_signal(sig, fg_pgid);
         });
+    }
+}
+
+#[cfg(target_arch = "riscv64")]
+const REBOOT_MAGIC: [u8; 4] = [0xDE, 0xAD, 0xBE, 0xEF];
+#[cfg(target_arch = "riscv64")]
+static REBOOT_SEQ_INDEX: AtomicU8 = AtomicU8::new(0);
+
+#[cfg(target_arch = "riscv64")]
+fn advance_reboot_sequence(current_index: u8, byte: u8) -> Option<u8> {
+    if byte == REBOOT_MAGIC[current_index as usize] {
+        let next = current_index + 1;
+        if next as usize == REBOOT_MAGIC.len() {
+            return None;
+        }
+        Some(next)
+    } else {
+        Some(0)
+    }
+}
+
+#[cfg(target_arch = "riscv64")]
+fn check_reboot_magic(byte: u8) -> bool {
+    let idx = REBOOT_SEQ_INDEX.load(Ordering::Relaxed);
+    match advance_reboot_sequence(idx, byte) {
+        None => true,
+        Some(new_idx) => {
+            REBOOT_SEQ_INDEX.store(new_idx, Ordering::Relaxed);
+            false
+        }
     }
 }
 
