@@ -127,6 +127,19 @@ async fn bg_process_gets_sigttin() -> anyhow::Result<()> {
     solaya.stdin().flush().await?;
     solaya.stdout().assert_read_until(PROMPT).await?;
 
+    // Deterministically wait for cat to be stopped by SIGTTIN.
+    // Poll with 'jobs' until the shell reports cat as Stopped.
+    // (dash defers job notifications, so without draining the notification
+    // first it can appear interleaved with the next command's output.)
+    loop {
+        solaya.stdin().write_all(b"jobs\n").await?;
+        solaya.stdin().flush().await?;
+        let result = solaya.stdout().assert_read_until(PROMPT).await?;
+        if String::from_utf8_lossy(&result).contains("Stopped") {
+            break;
+        }
+    }
+
     // Shell should still work because cat is stopped, not consuming input
     let output = solaya.run_prog("prog1").await?;
     assert!(output.contains("Hello from Prog1\n"));
