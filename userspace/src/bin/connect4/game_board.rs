@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicI64, AtomicUsize, Ordering};
 
 const COLUMNS: u8 = 7;
 const ROWS: u8 = 6;
@@ -36,6 +36,12 @@ impl From<Player> for Position {
             Player::H => Position::H,
         }
     }
+}
+
+struct SearchContext {
+    player: Player,
+    counter: AtomicUsize,
+    shared_alpha: AtomicI64,
 }
 
 #[derive(Clone)]
@@ -210,6 +216,62 @@ impl GameBoard {
         None
     }
 
+    fn minimax_inner(
+        &self,
+        depth: u8,
+        alpha: i64,
+        beta: i64,
+        maximizing_player: bool,
+        ctx: &SearchContext,
+    ) -> i64 {
+        ctx.counter.fetch_add(1, Ordering::Relaxed);
+
+        // Tighten alpha with the best root-level score found by other threads
+        let mut alpha = alpha.max(ctx.shared_alpha.load(Ordering::Relaxed));
+        if alpha >= beta {
+            return alpha;
+        }
+
+        if depth == 0 || self.is_game_over().is_some() {
+            return self.calculate_score(ctx.player);
+        }
+
+        let mut beta = beta;
+
+        if maximizing_player {
+            let mut max_eval = i64::MIN;
+
+            self.for_valid_moves(|column| {
+                let mut new_state = self.clone();
+                new_state.put(ctx.player, column).unwrap();
+
+                let eval = new_state.minimax_inner(depth - 1, alpha, beta, false, ctx);
+                max_eval = max_eval.max(eval);
+                alpha = alpha.max(eval);
+
+                beta > alpha
+            });
+
+            max_eval
+        } else {
+            let opponent = ctx.player.opponent();
+            let mut min_eval = i64::MAX;
+
+            self.for_valid_moves(|column| {
+                let mut new_state = self.clone();
+                new_state.put(opponent, column).unwrap();
+
+                let eval = new_state.minimax_inner(depth - 1, alpha, beta, true, ctx);
+                min_eval = min_eval.min(eval);
+                beta = beta.min(eval);
+
+                beta > alpha
+            });
+
+            min_eval
+        }
+    }
+
     fn for_valid_moves(&self, mut f: impl FnMut(u8) -> bool) {
         for column in 0..COLUMNS {
             if self.board[0][column as usize] == Position::Empty && !f(column) {
@@ -218,80 +280,26 @@ impl GameBoard {
         }
     }
 
-    fn minimax(
-        &self,
-        depth: u8,
-        alpha: i64,
-        beta: i64,
-        maximizing_player: bool,
-        player: Player,
-        counter: &AtomicUsize,
-    ) -> i64 {
-        counter.fetch_add(1, Ordering::Relaxed);
+    pub fn find_best_move(&self, depth: u8, player: Player) -> (Option<u8>, usize) {
+        let ctx = SearchContext {
+            player,
+            counter: AtomicUsize::new(0),
+            shared_alpha: AtomicI64::new(i64::MIN),
+        };
 
-        // Check for terminal states or maximum depth
-        if depth == 0 || self.is_game_over().is_some() {
-            return self.calculate_score(player);
-        }
-
-        let mut alpha = alpha;
-        let mut beta = beta;
-
-        if maximizing_player {
-            let mut max_eval = i64::MIN;
-
-            self.for_valid_moves(|column| {
-                let mut new_state = self.clone();
-                new_state.put(player, column).unwrap();
-
-                let eval = new_state.minimax(depth - 1, alpha, beta, false, player, counter);
-                max_eval = max_eval.max(eval);
-                alpha = alpha.max(eval);
-
-                // Alpha-beta pruning
-                if beta <= alpha {
-                    return false;
-                }
-                true
-            });
-
-            max_eval
-        } else {
-            let opponent = player.opponent();
-            let mut min_eval = i64::MAX;
-
-            self.for_valid_moves(|column| {
-                let mut new_state = self.clone();
-                new_state.put(opponent, column).unwrap();
-
-                let eval = new_state.minimax(depth - 1, alpha, beta, true, player, counter);
-                min_eval = min_eval.min(eval);
-                beta = beta.min(eval);
-
-                // Alpha-beta pruning
-                if beta <= alpha {
-                    return false;
-                }
-                true
-            });
-
-            min_eval
-        }
-    }
-
-    pub fn find_best_move(&self, depth: u8, player: Player, counter: &AtomicUsize) -> Option<u8> {
         let mut best_move = None;
         let mut best_score = i64::MIN;
 
         std::thread::scope(|s| {
             let mut handles = Vec::new();
+            let ctx = &ctx;
             self.for_valid_moves(|column| {
                 let board = self.clone();
                 handles.push(s.spawn(move || {
                     let mut new_state = board;
                     new_state.put(player, column).unwrap();
-                    let score =
-                        new_state.minimax(depth - 1, i64::MIN, i64::MAX, false, player, counter);
+                    let score = new_state.minimax_inner(depth - 1, i64::MIN, i64::MAX, false, ctx);
+                    ctx.shared_alpha.fetch_max(score, Ordering::Relaxed);
                     (column, score)
                 }));
                 true
@@ -306,6 +314,6 @@ impl GameBoard {
             }
         });
 
-        best_move
+        (best_move, ctx.counter.load(Ordering::Relaxed))
     }
 }

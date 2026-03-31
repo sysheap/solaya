@@ -1,9 +1,6 @@
 mod game_board;
 
-use std::{
-    io::{Write, stdout},
-    sync::atomic::{AtomicUsize, Ordering},
-};
+use std::io::{Write, stdout};
 
 use game_board::{GameBoard, Player};
 use userspace::util::read_line;
@@ -77,15 +74,13 @@ fn computer(board: &mut GameBoard, depth: u8) {
         .map(|n| n.get())
         .unwrap_or(1);
     println!("Calculating moves using {num_threads} threads...");
-    let counter = AtomicUsize::new(0);
-    let best_move = board
-        .find_best_move(depth, Player::C, &counter)
-        .expect("Computer should always find a move - otherwise it is a draw.");
+    let (best_move, positions) = board.find_best_move(depth, Player::C);
+    let best_move =
+        best_move.expect("Computer should always find a move - otherwise it is a draw.");
     board.put(Player::C, best_move).unwrap();
     board.print();
     println!(
-        "Computer put into column {} (calculated {} positions)",
+        "Computer put into column {} (calculated {positions} positions)",
         best_move + 1,
-        counter.load(Ordering::Relaxed),
     );
 }
