@@ -253,9 +253,22 @@ fn start_other_harts(current_hart_id: usize, number_of_cpus: usize) {
             continue;
         }
 
-        // Skip harts without an MMU (e.g. SiFive S7 monitor core on JH7110)
-        if cpu_node.get_property("mmu-type").is_none() {
-            info!("Skipping hart {} (no mmu-type)", cpu_node.name);
+        // Skip harts marked as disabled in the device tree
+        if let Some(mut status) = cpu_node.get_property("status")
+            && let Some(status_str) = status.consume_str()
+            && status_str != "okay"
+        {
+            info!("Skipping hart {} (status: {status_str})", cpu_node.name);
+            continue;
+        }
+
+        // Skip harts without supervisor mode (e.g. SiFive S7 monitor core on JH7110)
+        if let Some(mut isa_prop) = cpu_node.get_property("riscv,isa")
+            && let Some(isa_str) = isa_prop.consume_str()
+            && let Some(isa) = arch::isa::IsaExtensions::parse(isa_str)
+            && !isa.has_supervisor()
+        {
+            info!("Skipping {} (no S-mode: {isa_str})", cpu_node.name);
             continue;
         }
 

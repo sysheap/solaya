@@ -36,7 +36,7 @@ impl Plic {
         }
     }
     fn disable_all(&mut self, num_sources: u32) {
-        let num_words = (num_sources + 31) / 32;
+        let num_words = num_sources.div_ceil(32);
         for word in 0..num_words as usize {
             self.enable_register
                 .add_within_region(word, *PLIC_SIZE / 4)

@@ -38,10 +38,10 @@ pub fn init() {
         .get() as u64;
     TIMEBASE_FREQ.initialize(clocks_per_sec);
 
-    if let Some(clint_node) = device_tree::THE.root_node().find_node("clint") {
-        if let Some(reg) = clint_node.parse_reg_property() {
-            *CLINT_REGION.lock() = Some((reg.address, reg.size));
-        }
+    if let Some(clint_node) = device_tree::THE.root_node().find_node("clint")
+        && let Some(reg) = clint_node.parse_reg_property()
+    {
+        *CLINT_REGION.lock() = Some((reg.address, reg.size));
     }
 }
 
