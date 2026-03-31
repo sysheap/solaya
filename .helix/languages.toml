@@ -2,6 +2,11 @@
 name = "rust"
 language-servers = ["rust-analyzer", "typos"]
 
+[language-server.rust-analyzer.config]
+check.command = "clippy"
+check.allTargets = false
+linkedProjects = ["system-tests/Cargo.toml"]
+
 [language-server.rust-analyzer.config.cfg]
 setTest = false
 
