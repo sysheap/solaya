@@ -70,12 +70,13 @@ pub fn kernel_device_mappings() -> alloc::vec::Vec<page_tables::MappingDescripti
                 });
             }
         }
-        // JH7110 clock/reset generators and system controllers
+        // JH7110 clock/reset generators, system controllers, and watchdog
         for name in [
             "clock-controller@13020000",
             "clock-controller@17000000",
             "sys_syscon@13030000",
             "aon_syscon@17010000",
+            "wdog@13070000",
         ] {
             if let Some(node) = soc.find_node(name)
                 && let Some(reg) = node.parse_reg_property()

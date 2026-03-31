@@ -163,10 +163,7 @@ pub fn on_uart_interrupt() {
     for &byte in &raw_bytes {
         if check_reboot_magic(byte) {
             crate::println!("\n[UART] Reboot magic received, rebooting...");
-            arch::sbi::extensions::srst_extension::sbi_system_reset(1, 0).assert_success();
-            loop {
-                core::hint::spin_loop();
-            }
+            crate::drivers::watchdog::trigger_reset();
         }
     }
 
@@ -240,10 +237,7 @@ pub fn poll_for_reboot() -> ! {
                 uart.write_byte(b);
             }
             drop(uart);
-            arch::sbi::extensions::srst_extension::sbi_system_reset(1, 0).assert_success();
-            loop {
-                core::hint::spin_loop();
-            }
+            crate::drivers::watchdog::trigger_reset();
         }
         core::hint::spin_loop();
     }
