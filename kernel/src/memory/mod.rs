@@ -55,6 +55,46 @@ pub fn kernel_device_mappings() -> alloc::vec::Vec<page_tables::MappingDescripti
         privileges: page_tables::XWRMode::ReadWrite,
         name: "UART",
     });
+    // Map ethernet controller and supporting hardware regions from device tree
+    let soc = device_tree::THE.root_node().find_node("soc");
+    if let Some(soc) = &soc {
+        for child in soc.children() {
+            if child.name.starts_with("ethernet@")
+                && let Some(reg) = child.parse_reg_property()
+            {
+                mappings.push(page_tables::MappingDescription {
+                    virtual_address_start: VirtAddr::new(reg.address),
+                    size: reg.size,
+                    privileges: page_tables::XWRMode::ReadWrite,
+                    name: "Ethernet",
+                });
+            }
+        }
+        // JH7110 clock/reset generators and system controllers
+        for name in [
+            "clock-controller@13020000",
+            "clock-controller@17000000",
+            "sys_syscon@13030000",
+            "aon_syscon@17010000",
+        ] {
+            if let Some(node) = soc.find_node(name)
+                && let Some(reg) = node.parse_reg_property()
+            {
+                let size = if reg.size < PAGE_SIZE {
+                    PAGE_SIZE
+                } else {
+                    reg.size
+                };
+                mappings.push(page_tables::MappingDescription {
+                    virtual_address_start: VirtAddr::new(reg.address),
+                    size,
+                    privileges: page_tables::XWRMode::ReadWrite,
+                    name: "JH7110 CRG/SYSCON",
+                });
+            }
+        }
+    }
+
     if device_tree::THE.root_node().find_node("test").is_some() {
         mappings.push(page_tables::MappingDescription {
             virtual_address_start: VirtAddr::new(TEST_DEVICE_ADDRESS),
