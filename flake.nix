@@ -129,7 +129,7 @@
           LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
         };
 
-        hook = ''
+        baseHook = ''
           rm -rf musl headers/linux_headers headers/musl_headers
 
           ln -sf ${musl-riscv}/src musl
@@ -140,7 +140,9 @@
           ln -sf "${dash}/bin/dash" "./kernel/compiled_userspace_nix/dash"
           ln -sf "${dash}/bin/dash" "./kernel/compiled_userspace_nix/sh"
           ln -sf "${doom-riscv}/bin/doom" "./kernel/compiled_userspace_nix/doom"
+        '';
 
+        hook = baseHook + ''
           just mcp-server
         '';
 
@@ -168,7 +170,7 @@
           commonEnv
           // {
             nativeBuildInputs = ciPackages;
-            shellHook = hook;
+            shellHook = baseHook;
           }
         );
       }

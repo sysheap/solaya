@@ -1,6 +1,6 @@
 # Codebase Index: solaya
 
-> Generated: 2026-03-31 12:28:21 UTC | Files: 289 | Lines: 47882
+> Generated: 2026-03-31 12:46:55 UTC | Files: 289 | Lines: 47882
 > Languages: C (2), Markdown (21), Python (4), Rust (248), Shell (1), TOML (13)
 
 ## Directory Structure
