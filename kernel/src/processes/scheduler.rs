@@ -62,9 +62,9 @@ impl CpuScheduler {
 
         debug!("Scheduling userspace process");
         if self.is_current_process_energy_saver() {
-            timer::set_timer(50);
+            timer::set_timer(200);
         } else {
-            timer::set_timer(10);
+            timer::set_timer(100);
         }
     }
 
