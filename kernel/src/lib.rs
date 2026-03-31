@@ -216,6 +216,9 @@ pub extern "C" fn kernel_init(hart_id: usize, device_tree_pointer: *const ()) ->
         drivers::init_all_pci_devices(pci_devices);
     }
 
+    // Initialize platform devices discovered from the device tree
+    drivers::init_dwmac_devices();
+
     processes::kernel_tasks::create_worker_thread();
 
     info!("kernel_init done! Starting other harts");
