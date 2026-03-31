@@ -228,6 +228,27 @@ fn check_reboot_magic(byte: u8) -> bool {
     }
 }
 
+#[cfg(target_arch = "riscv64")]
+pub fn poll_for_reboot() -> ! {
+    loop {
+        if let Some(byte) = CONSOLE_UART.lock().read()
+            && check_reboot_magic(byte)
+        {
+            crate::println!("\n[UART] Reboot magic received, rebooting...");
+            arch::sbi::extensions::srst_extension::sbi_system_reset(1, 0).assert_success();
+            loop {
+                core::hint::spin_loop();
+            }
+        }
+        core::hint::spin_loop();
+    }
+}
+
+#[cfg(not(target_arch = "riscv64"))]
+pub fn poll_for_reboot() -> ! {
+    sys::cpu::disable_interrupts_and_halt();
+}
+
 impl Write for Uart {
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
         if !self.is_init {

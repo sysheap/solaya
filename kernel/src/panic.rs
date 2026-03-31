@@ -1,5 +1,5 @@
 #![cfg_attr(miri, allow(unused_imports))]
-use crate::{println, test::qemu_exit::wait_for_the_end};
+use crate::println;
 use core::{
     panic::PanicInfo,
     sync::atomic::{AtomicIsize, AtomicU8},
@@ -64,7 +64,7 @@ pub fn panic_handler(info: &PanicInfo) -> ! {
     exit_failure(1);
 
     #[cfg(not(test))]
-    wait_for_the_end();
+    crate::io::uart::poll_for_reboot();
 }
 
 fn abort_if_double_panic() {
@@ -78,6 +78,6 @@ fn abort_if_double_panic() {
         exit_failure(1);
 
         #[cfg(not(test))]
-        wait_for_the_end();
+        crate::io::uart::poll_for_reboot();
     }
 }
