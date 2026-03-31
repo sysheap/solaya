@@ -53,7 +53,8 @@ macro_rules! sections {
                       virtual_address_start: LinkerInformation::${concat(__start_, $name)}(),
                       size: LinkerInformation::${concat($name, _size)}(),
                       privileges: $xwr,
-                      name: stringify!($name)
+                      name: stringify!($name),
+                      is_device: false,
                     },)*
                 ]
             }

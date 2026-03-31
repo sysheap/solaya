@@ -172,6 +172,7 @@ pub extern "C" fn kernel_init(hart_id: usize, device_tree_pointer: *const ()) ->
             size: pci_info.pci_host_bridge_length,
             privileges: page_tables::XWRMode::ReadWrite,
             name: "PCI Space",
+            is_device: true,
         });
 
         for range in &pci_info.ranges {
@@ -180,6 +181,7 @@ pub extern "C" fn kernel_init(hart_id: usize, device_tree_pointer: *const ()) ->
                 size: range.size,
                 privileges: page_tables::XWRMode::ReadWrite,
                 name: "PCI Range",
+                is_device: true,
             });
         }
     } else {

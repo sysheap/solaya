@@ -31,6 +31,7 @@ pub struct MappingDescription {
     pub size: usize,
     pub privileges: XWRMode,
     pub name: &'static str,
+    pub is_device: bool,
 }
 
 struct MappingEntry {
@@ -127,6 +128,7 @@ impl RootPageTableHolder {
                 mapping.size,
                 mapping.privileges,
                 mapping.name.to_string(),
+                mapping.is_device,
             );
         }
 
@@ -135,6 +137,7 @@ impl RootPageTableHolder {
             debugging::symbols::symbols_size(),
             XWRMode::ReadOnly,
             "SYMBOLS".to_string(),
+            false,
         );
 
         root_page_table_holder.map_identity_kernel(
@@ -142,6 +145,7 @@ impl RootPageTableHolder {
             heap_size(),
             XWRMode::ReadWrite,
             "HEAP".to_string(),
+            false,
         );
 
         for mapping in extra_mappings {
@@ -150,6 +154,7 @@ impl RootPageTableHolder {
                 mapping.size,
                 mapping.privileges,
                 mapping.name.to_string(),
+                mapping.is_device,
             );
         }
 
@@ -171,6 +176,7 @@ impl RootPageTableHolder {
             privileges,
             true,
             name,
+            false,
         );
     }
 
@@ -240,6 +246,7 @@ impl RootPageTableHolder {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn map(
         &mut self,
         virtual_address_start: VirtAddr,
@@ -248,6 +255,7 @@ impl RootPageTableHolder {
         privileges: XWRMode,
         is_user_mode_accessible: bool,
         name: String,
+        is_device: bool,
     ) {
         assert!(virtual_address_start.is_page_aligned());
         assert!(physical_address_start.is_page_aligned());
@@ -319,6 +327,9 @@ impl RootPageTableHolder {
                 first_level_entry.set_leaf_address(physical_address_with_offset(offset));
                 first_level_entry.set_user_mode_accessible(is_user_mode_accessible);
                 first_level_entry.set_accessed_and_dirty();
+                if is_device {
+                    first_level_entry.set_pbmt_io();
+                }
                 offset += GiB(1);
                 continue;
             }
@@ -346,6 +357,9 @@ impl RootPageTableHolder {
                 second_level_entry.set_leaf_address(physical_address_with_offset(offset));
                 second_level_entry.set_user_mode_accessible(is_user_mode_accessible);
                 second_level_entry.set_accessed_and_dirty();
+                if is_device {
+                    second_level_entry.set_pbmt_io();
+                }
                 offset += MiB(2);
                 continue;
             }
@@ -387,6 +401,9 @@ impl RootPageTableHolder {
             third_level_entry.set_leaf_address(physical_address_with_offset(offset));
             third_level_entry.set_user_mode_accessible(is_user_mode_accessible);
             third_level_entry.set_accessed_and_dirty();
+            if is_device {
+                third_level_entry.set_pbmt_io();
+            }
 
             offset += PAGE_SIZE;
         }
@@ -398,8 +415,16 @@ impl RootPageTableHolder {
         size: usize,
         privileges: XWRMode,
         name: String,
+        is_device: bool,
     ) {
-        self.map_identity(virtual_address_start, size, privileges, false, name);
+        self.map_identity(
+            virtual_address_start,
+            size,
+            privileges,
+            false,
+            name,
+            is_device,
+        );
     }
 
     fn map_identity(
@@ -409,6 +434,7 @@ impl RootPageTableHolder {
         privileges: XWRMode,
         is_user_mode_accessible: bool,
         name: String,
+        is_device: bool,
     ) {
         self.map(
             virtual_address_start,
@@ -417,6 +443,7 @@ impl RootPageTableHolder {
             privileges,
             is_user_mode_accessible,
             name,
+            is_device,
         );
     }
 

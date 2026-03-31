@@ -53,6 +53,7 @@ impl Cpu {
             crate::memory::page_tables::XWRMode::ReadWrite,
             false,
             format!("KERNEL_STACK CPU {cpu_id}"),
+            false,
         );
 
         let satp_value = page_tables.get_satp_value_from_page_tables();

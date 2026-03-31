@@ -40,6 +40,7 @@ pub fn kernel_device_mappings() -> alloc::vec::Vec<page_tables::MappingDescripti
         size: *plic::PLIC_SIZE,
         privileges: page_tables::XWRMode::ReadWrite,
         name: "PLIC",
+        is_device: true,
     });
     if let Some((clint_base, clint_size)) = timer::clint_region() {
         mappings.push(page_tables::MappingDescription {
@@ -47,6 +48,7 @@ pub fn kernel_device_mappings() -> alloc::vec::Vec<page_tables::MappingDescripti
             size: clint_size,
             privileges: page_tables::XWRMode::ReadWrite,
             name: "CLINT",
+            is_device: true,
         });
     }
     mappings.push(page_tables::MappingDescription {
@@ -54,6 +56,7 @@ pub fn kernel_device_mappings() -> alloc::vec::Vec<page_tables::MappingDescripti
         size: PAGE_SIZE,
         privileges: page_tables::XWRMode::ReadWrite,
         name: "UART",
+        is_device: true,
     });
     // Map ethernet controller and supporting hardware regions from device tree
     let soc = device_tree::THE.root_node().find_node("soc");
@@ -67,6 +70,7 @@ pub fn kernel_device_mappings() -> alloc::vec::Vec<page_tables::MappingDescripti
                     size: reg.size,
                     privileges: page_tables::XWRMode::ReadWrite,
                     name: "Ethernet",
+                    is_device: true,
                 });
             }
         }
@@ -85,6 +89,7 @@ pub fn kernel_device_mappings() -> alloc::vec::Vec<page_tables::MappingDescripti
                     size,
                     privileges: page_tables::XWRMode::ReadWrite,
                     name: "JH7110 CRG/SYSCON",
+                    is_device: true,
                 });
             }
         }
@@ -102,6 +107,7 @@ pub fn kernel_device_mappings() -> alloc::vec::Vec<page_tables::MappingDescripti
                     size,
                     privileges: page_tables::XWRMode::ReadWrite,
                     name: "JH7110 CRG/SYSCON",
+                    is_device: true,
                 });
             }
         }
@@ -113,6 +119,7 @@ pub fn kernel_device_mappings() -> alloc::vec::Vec<page_tables::MappingDescripti
             size: PAGE_SIZE,
             privileges: page_tables::XWRMode::ReadWrite,
             name: "Qemu Test Device",
+            is_device: true,
         });
     }
     for mapping in runtime_mappings::get_runtime_mappings() {
