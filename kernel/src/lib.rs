@@ -201,14 +201,14 @@ pub extern "C" fn kernel_init(hart_id: usize, device_tree_pointer: *const ()) ->
 
     plic::init_plic(boot_cpu_id);
 
-    if let Some(serial_node) = device_tree::THE.root_node().find_node("serial") {
-        if let Some(mut irq_prop) = serial_node.get_property("interrupts") {
-            let irq = irq_prop
-                .consume_sized_type::<klibc::big_endian::BigEndian<u32>>()
-                .expect("UART interrupts property must be a u32")
-                .get();
-            plic::register_interrupt(irq, io::uart::on_uart_interrupt);
-        }
+    if let Some(serial_node) = device_tree::THE.root_node().find_node("serial")
+        && let Some(mut irq_prop) = serial_node.get_property("interrupts")
+    {
+        let irq = irq_prop
+            .consume_sized_type::<klibc::big_endian::BigEndian<u32>>()
+            .expect("UART interrupts property must be a u32")
+            .get();
+        plic::register_interrupt(irq, io::uart::on_uart_interrupt);
     }
 
     if let Some(ref pci_info) = pci_information {
