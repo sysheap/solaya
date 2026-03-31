@@ -2,9 +2,8 @@ use userspace::spawn::spawn;
 
 fn main() {
     println!("init process started");
-    if let Ok(mut child) = spawn("dhcpd", &[]) {
-        let _ = child.wait();
-    }
+    // Spawn dhcpd in background (don't block shell startup)
+    let _ = spawn("dhcpd", &[]);
     println!("starting shell");
     let mut child = spawn("dash", &[]).expect("Failed to spawn shell");
     child.wait().expect("Failed to wait for shell");
