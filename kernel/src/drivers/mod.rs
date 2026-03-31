@@ -93,8 +93,11 @@ pub fn init_dwmac_devices() {
         // Initialize clocks, resets, and syscon
         dwmac::jh7110::init_gmac(gmac_index, &clock_ids, &reset_ids);
 
+        // PHY address matches GMAC index (ethernet-phy@0 / ethernet-phy@1)
+        let phy_addr = gmac_index as u32;
+
         // Initialize the DWMAC hardware (may fail if DMA reset is stuck)
-        let Some(device) = dwmac::DwmacDevice::new(reg.address, mac) else {
+        let Some(device) = dwmac::DwmacDevice::new(reg.address, mac, phy_addr) else {
             continue;
         };
         let isr_status = device.isr_status_mmio();

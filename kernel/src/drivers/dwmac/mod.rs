@@ -17,6 +17,8 @@ const MAC_RXQ_CTRL0: usize = 0x0A0;
 const MAC_RXQ_CTRL1: usize = 0x0A4;
 const MAC_RXQ_CTRL2: usize = 0x0A8;
 const MAC_HW_FEATURE1: usize = 0x120;
+const MAC_MDIO_ADDRESS: usize = 0x200;
+const MAC_MDIO_DATA: usize = 0x204;
 const MAC_ADDRESS0_HIGH: usize = 0x300;
 const MAC_ADDRESS0_LOW: usize = 0x304;
 
@@ -112,6 +114,25 @@ const DMA_CH0_IE_NIE: u32 = 1 << 15; // Normal interrupt summary enable
 const DMA_CH0_IE_RIE: u32 = 1 << 6; // Receive interrupt enable
 const DMA_CH0_IE_TIE: u32 = 1 << 0; // Transmit interrupt enable
 
+// MDIO address register bits
+const MDIO_PA_SHIFT: u32 = 21; // PHY address
+const MDIO_RDA_SHIFT: u32 = 16; // Register/device address
+const MDIO_CR_SHIFT: u32 = 8; // Clock rate
+const MDIO_CR_250_300: u32 = 5; // CSR clock 250-300 MHz (JH7110)
+const MDIO_GOC_SHIFT: u32 = 2; // Operation code
+const MDIO_GOC_READ: u32 = 3;
+const MDIO_GOC_WRITE: u32 = 1;
+const MDIO_GB: u32 = 1 << 0; // Go Busy
+
+// Standard PHY registers (IEEE 802.3)
+const PHY_BMCR: u32 = 0; // Basic Mode Control
+const PHY_BMSR: u32 = 1; // Basic Mode Status
+const PHY_BMCR_RESET: u16 = 1 << 15;
+const PHY_BMCR_AN_ENABLE: u16 = 1 << 12;
+const PHY_BMCR_AN_RESTART: u16 = 1 << 9;
+const PHY_BMSR_AN_COMPLETE: u16 = 1 << 5;
+const PHY_BMSR_LINK_STATUS: u16 = 1 << 2;
+
 // DMA descriptor flags
 const DESC3_OWN: u32 = 1 << 31;
 const DESC3_FD: u32 = 1 << 29;
@@ -174,7 +195,7 @@ impl DwmacDevice {
     /// Initialize a DWMAC device at the given MMIO base address.
     /// Clocks and resets must already be enabled before calling this.
     /// Returns None if DMA reset fails (hardware not functional).
-    pub fn new(base: usize, mac_address: MacAddress) -> Option<Self> {
+    pub fn new(base: usize, mac_address: MacAddress, phy_addr: u32) -> Option<Self> {
         info!("DWMAC: initializing at {:#x}, MAC {}", base, mac_address);
 
         // Issue DMA software reset and wait for completion
@@ -211,11 +232,12 @@ impl DwmacDevice {
             mac_address,
         };
 
-        dev.init_hardware();
+        dev.init_hardware(phy_addr);
         Some(dev)
     }
 
-    fn init_hardware(&mut self) {
+    fn init_hardware(&mut self, phy_addr: u32) {
+        self.init_phy(phy_addr);
         self.configure_mtl();
         self.configure_mac();
         self.write_mac_address();
@@ -233,6 +255,73 @@ impl DwmacDevice {
             core::hint::spin_loop();
         }
         false
+    }
+
+    fn mdio_wait_idle(&self) {
+        for _ in 0..100_000 {
+            if read_reg(self.base, MAC_MDIO_ADDRESS) & MDIO_GB == 0 {
+                return;
+            }
+            core::hint::spin_loop();
+        }
+    }
+
+    fn mdio_read(&self, phy_addr: u32, reg: u32) -> u16 {
+        self.mdio_wait_idle();
+        let val = (phy_addr << MDIO_PA_SHIFT)
+            | (reg << MDIO_RDA_SHIFT)
+            | (MDIO_CR_250_300 << MDIO_CR_SHIFT)
+            | (MDIO_GOC_READ << MDIO_GOC_SHIFT)
+            | MDIO_GB;
+        write_reg(self.base, MAC_MDIO_ADDRESS, val);
+        self.mdio_wait_idle();
+        read_reg(self.base, MAC_MDIO_DATA) as u16
+    }
+
+    fn mdio_write(&self, phy_addr: u32, reg: u32, data: u16) {
+        self.mdio_wait_idle();
+        write_reg(self.base, MAC_MDIO_DATA, data as u32);
+        let val = (phy_addr << MDIO_PA_SHIFT)
+            | (reg << MDIO_RDA_SHIFT)
+            | (MDIO_CR_250_300 << MDIO_CR_SHIFT)
+            | (MDIO_GOC_WRITE << MDIO_GOC_SHIFT)
+            | MDIO_GB;
+        write_reg(self.base, MAC_MDIO_ADDRESS, val);
+        self.mdio_wait_idle();
+    }
+
+    fn init_phy(&self, phy_addr: u32) {
+        // Reset PHY
+        self.mdio_write(phy_addr, PHY_BMCR, PHY_BMCR_RESET);
+        for _ in 0..100_000 {
+            if self.mdio_read(phy_addr, PHY_BMCR) & PHY_BMCR_RESET == 0 {
+                break;
+            }
+            core::hint::spin_loop();
+        }
+
+        // Enable and restart auto-negotiation
+        self.mdio_write(phy_addr, PHY_BMCR, PHY_BMCR_AN_ENABLE | PHY_BMCR_AN_RESTART);
+
+        // Wait for auto-negotiation to complete
+        for i in 0..1_000_000 {
+            let bmsr = self.mdio_read(phy_addr, PHY_BMSR);
+            if bmsr & PHY_BMSR_AN_COMPLETE != 0 {
+                let link = if bmsr & PHY_BMSR_LINK_STATUS != 0 {
+                    "up"
+                } else {
+                    "down"
+                };
+                info!("DWMAC: PHY auto-negotiation complete, link {}", link);
+                return;
+            }
+            if i % 200_000 == 0 && i > 0 {
+                info!("DWMAC: waiting for PHY auto-negotiation...");
+            }
+            core::hint::spin_loop();
+        }
+        let bmsr = self.mdio_read(phy_addr, PHY_BMSR);
+        info!("DWMAC: PHY auto-negotiation timed out (BMSR={:#06x})", bmsr);
     }
 
     fn configure_mtl(&self) {
