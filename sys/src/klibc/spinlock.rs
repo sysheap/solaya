@@ -66,6 +66,9 @@ impl<T> Spinlock<T> {
 
     #[cfg(all(target_arch = "riscv64", not(miri)))]
     fn detect_same_cpu_deadlock(&self) {
+        if crate::panic_support::is_panic_mode() {
+            return;
+        }
         if self.locked.load(Ordering::Relaxed) {
             let cpu_id = crate::cpu::cpu_id().as_usize();
             assert_ne!(
@@ -81,6 +84,9 @@ impl<T> Spinlock<T> {
 
     #[cfg(all(target_arch = "riscv64", not(miri)))]
     fn warn_possible_deadlock(&self, spin_count: u64) {
+        if crate::panic_support::is_panic_mode() {
+            return;
+        }
         if spin_count.is_multiple_of(10_000_000) {
             let cpu_id = crate::cpu::cpu_id();
             let owner = self.owner_cpu.load(Ordering::Relaxed);
@@ -118,7 +124,9 @@ impl<T> Spinlock<T> {
     }
 
     /// Forcibly unlocks during a panic. The lock holder will never resume.
+    /// Also disables deadlock detection globally for all spinlocks.
     pub fn panic_force_unlock(&self) {
+        crate::panic_support::enter_panic_mode();
         // SAFETY: Called during panic — the lock holder will never resume.
         unsafe { self.force_unlock() }
     }
