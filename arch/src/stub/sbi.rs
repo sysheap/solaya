@@ -69,6 +69,11 @@ pub mod extensions {
         }
 
         #[allow(dead_code)]
+        pub fn is_hart_stopped(_hart_id: usize) -> bool {
+            true
+        }
+
+        #[allow(dead_code)]
         pub fn start_hart(_hart_id: usize, _start_addr: usize, _opaque: usize) -> SbiRet {
             SbiRet::default()
         }
