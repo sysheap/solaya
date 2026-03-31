@@ -1,6 +1,6 @@
 # Codebase Index: solaya
 
-> Generated: 2026-03-29 21:39:22 UTC | Files: 289 | Lines: 47819
+> Generated: 2026-03-31 07:42:31 UTC | Files: 289 | Lines: 47821
 > Languages: C (2), Markdown (21), Python (4), Rust (248), Shell (1), TOML (13)
 
 ## Directory Structure
@@ -1650,7 +1650,7 @@ solaya/
 
 ## INDEX.md
 
-**Language:** Markdown | **Size:** 229.2 KB | **Lines:** 9766
+**Language:** Markdown | **Size:** 229.2 KB | **Lines:** 9768
 
 **Declarations:**
 

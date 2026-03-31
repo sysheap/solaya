@@ -8,6 +8,10 @@
       "command": "python",
       "args": ["-m", "gdb_mcp_server"],
       "cwd": "."
+    },
+    "indxr": {
+      "command": "indxr",
+      "args": ["serve", "."]
     }
   }
 }
