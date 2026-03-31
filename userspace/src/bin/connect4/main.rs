@@ -1,11 +1,9 @@
-// The main logic (minimax with alpha-beta pruning as well as the score function) was mostly implemented by ChatGPT.
-// I don't regard that as cheating because I'm not super interested in algorithms. However, what I manually want to do
-// is to improve the performance of the game by adding multicore support. However, this first requires multicore support
-// in the kernel. I will leave the game for now as it is.
-
 mod game_board;
 
-use std::io::{Write, stdout};
+use std::{
+    io::{Write, stdout},
+    sync::atomic::{AtomicUsize, Ordering},
+};
 
 use game_board::{GameBoard, Player};
 use userspace::util::read_line;
@@ -75,15 +73,19 @@ fn human(board: &mut GameBoard) {
 }
 
 fn computer(board: &mut GameBoard, depth: u8) {
-    println!("Calculating moves... ");
-    let mut counter = 0;
+    let num_threads = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1);
+    println!("Calculating moves using {num_threads} threads...");
+    let counter = AtomicUsize::new(0);
     let best_move = board
-        .find_best_move(depth, Player::C, &mut counter)
+        .find_best_move(depth, Player::C, &counter)
         .expect("Computer should always find a move - otherwise it is a draw.");
     board.put(Player::C, best_move).unwrap();
     board.print();
     println!(
-        "Computer put into column {} (calculated {counter} positions)",
-        best_move + 1
+        "Computer put into column {} (calculated {} positions)",
+        best_move + 1,
+        counter.load(Ordering::Relaxed),
     );
 }

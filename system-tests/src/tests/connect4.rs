@@ -11,7 +11,7 @@ async fn connect4() -> anyhow::Result<()> {
     solaya.write_and_wait_for("10\n", "(h)uman").await?;
 
     solaya
-        .write_and_wait_for("c\n", "Calculating moves...")
+        .write_and_wait_for("c\n", "Calculating moves")
         .await?;
 
     solaya.ctrl_c_and_assert_prompt().await?;

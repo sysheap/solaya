@@ -114,6 +114,10 @@ impl Cpu {
         sys::cpu::cpu_id()
     }
 
+    pub fn number_cpus(&self) -> usize {
+        self.number_cpus
+    }
+
     pub fn activate_kernel_page_table(&self) {
         self.kernel_page_tables.activate_page_table();
     }
