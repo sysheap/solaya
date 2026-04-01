@@ -14,9 +14,6 @@ const DOOM_HTML: &str = include_str!("../../static/doom.html");
 const FB_WIDTH: usize = 640;
 const FB_HEIGHT: usize = 480;
 const FB_SIZE: usize = FB_WIDTH * FB_HEIGHT * 4;
-const STREAM_WIDTH: usize = 320;
-const STREAM_HEIGHT: usize = 240;
-const STREAM_SIZE: usize = STREAM_WIDTH * STREAM_HEIGHT * 4;
 const WS_GUID: &str = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
 static NEXT_ID: AtomicU32 = AtomicU32::new(0);
@@ -127,6 +124,7 @@ fn base64_encode(data: &[u8]) -> String {
 // --- WebSocket framing ---
 
 fn send_ws_frame(stream: &mut TcpStream, payload: &[u8]) -> std::io::Result<()> {
+    println!("start writing ws_frame");
     let mut header = Vec::with_capacity(10);
     header.push(0x82); // FIN + binary opcode
     if payload.len() < 126 {
@@ -140,6 +138,11 @@ fn send_ws_frame(stream: &mut TcpStream, payload: &[u8]) -> std::io::Result<()> 
     }
     stream.write_all(&header)?;
     stream.write_all(payload)?;
+    stream.flush()?;
+    println!("done writing ws_frame");
+    // Print from DOOM content area (row 40), not the border (row 0)
+    let doom_start = 40 * 640 * 4;
+    println!("{:?}", &payload[doom_start..doom_start + 32]);
     Ok(())
 }
 
@@ -300,9 +303,10 @@ fn handle_websocket(mut stream: TcpStream, client_key: &str) {
 
     // Writer loop: read framebuffer file, convert BGRA→RGBA, send via WebSocket
     let mut fb_buf = vec![0u8; FB_SIZE];
-    let mut stream_buf = vec![0u8; STREAM_SIZE];
     let frame_interval = Duration::from_millis(33);
+    let mut counter = 0;
     loop {
+        counter += 1;
         let frame_start = Instant::now();
 
         // Reopen file each frame to ensure we see DOOM's writes
@@ -318,19 +322,16 @@ fn handle_websocket(mut stream: TcpStream, client_key: &str) {
             continue;
         }
 
-        // Downsample 640x480 → 320x240 with BGRA→RGBA conversion
-        for y in 0..STREAM_HEIGHT {
-            for x in 0..STREAM_WIDTH {
-                let src = (y * 2 * FB_WIDTH + x * 2) * 4;
-                let dst = (y * STREAM_WIDTH + x) * 4;
-                stream_buf[dst] = fb_buf[src + 2]; // R (was at offset 2 in BGRA)
-                stream_buf[dst + 1] = fb_buf[src + 1]; // G
-                stream_buf[dst + 2] = fb_buf[src]; // B (was at offset 0)
-                stream_buf[dst + 3] = 255; // A
-            }
+        // BGRA→RGBA conversion in-place
+        for i in (0..FB_SIZE).step_by(4) {
+            let b = fb_buf[i];
+            fb_buf[i] = fb_buf[i + 2]; // R
+            fb_buf[i + 2] = b; // B
+            fb_buf[i + 3] = 255; // A
         }
 
-        if send_ws_frame(&mut stream, &stream_buf).is_err() {
+        println!("before send_ws_frame");
+        if counter > 20 && send_ws_frame(&mut stream, &fb_buf).is_err() {
             break;
         }
 

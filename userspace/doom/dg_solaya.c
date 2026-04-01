@@ -98,6 +98,7 @@ void DG_Init(void)
     log_fd = open("/tmp/doom_fps.log", O_WRONLY | O_CREAT | O_TRUNC, 0644);
 
     fb_fd = open(g_fb_path, O_WRONLY);
+    printf("Got fb_fd=%d\n", fb_fd);
     if (fb_fd < 0) {
         fprintf(stderr, "Failed to open %s\n", g_fb_path);
         exit(1);
@@ -144,8 +145,10 @@ static uint32_t fps_last_time = 0;
 
 void DG_DrawFrame(void)
 {
+    printf("DG_DrawFrame\n");
     int y_offset = (FB_HEIGHT - DOOMGENERIC_RESY) / 2;
     lseek(fb_fd, y_offset * FB_WIDTH * sizeof(uint32_t), SEEK_SET);
+    printf("DG_DrawFrame: Before write %d %d %d %d\n", DG_ScreenBuffer[0], DG_ScreenBuffer[1], DG_ScreenBuffer[2], DG_ScreenBuffer[3]);
     write(fb_fd, DG_ScreenBuffer,
           DOOMGENERIC_RESX * DOOMGENERIC_RESY * sizeof(uint32_t));
 

@@ -32,14 +32,14 @@
     </style>
 </head>
 <body>
-    <canvas id="screen" width="320" height="240"></canvas>
+    <canvas id="screen" width="640" height="480"></canvas>
     <div id="status">Connecting...</div>
     <script>
 const canvas = document.getElementById('screen');
 const ctx = canvas.getContext('2d');
 const status = document.getElementById('status');
-const FRAME_W = 320;
-const FRAME_H = 240;
+const FRAME_W = 640;
+const FRAME_H = 480;
 const FRAME_SIZE = FRAME_W * FRAME_H * 4;
 
 const KEY_MAP = {
