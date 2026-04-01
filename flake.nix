@@ -144,6 +144,7 @@
 
         hook = baseHook + ''
           just mcp-server
+          indxr -o INDEX.md
         '';
 
       in
