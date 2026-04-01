@@ -91,12 +91,17 @@ impl QemuOptions {
         self.block_device.is_some()
     }
 
-    fn apply(self, command: &mut Command) -> Option<u16> {
+    fn apply(self, command: &mut Command) -> (Option<u16>, Option<u16>) {
         let mut network_port = None;
+        let mut web_port = None;
         if self.add_network_card {
             let port = find_available_port().expect("Failed to allocate network port");
             command.args(["--net", &port.to_string()]);
             network_port = Some(port);
+
+            let wp = find_available_port().expect("Failed to allocate web port");
+            command.args(["--web-port", &wp.to_string()]);
+            web_port = Some(wp);
         }
         if let Some(block_path) = &self.block_device {
             command.args(["--block", &block_path.to_string_lossy()]);
@@ -116,7 +121,7 @@ impl QemuOptions {
         if self.enable_gdb {
             command.arg("--gdb");
         }
-        network_port
+        (network_port, web_port)
     }
 }
 
@@ -125,6 +130,7 @@ pub struct QemuInstance {
     stdin: ChildStdin,
     stdout: ReadAsserter<ChildStdout>,
     network_port: Option<u16>,
+    web_port: Option<u16>,
     gdb_port: Option<u16>,
     qmp_socket: Option<PathBuf>,
 }
@@ -154,7 +160,7 @@ impl QemuInstance {
         let gdb_enabled = options.enable_gdb;
         let has_block_device = options.has_block_device();
         let qmp_socket = options.qmp_socket.clone();
-        let network_port = options.apply(&mut command);
+        let (network_port, web_port) = options.apply(&mut command);
 
         command.arg("target/riscv64gc-unknown-none-elf/release/boot");
 
@@ -185,9 +191,15 @@ impl QemuInstance {
         boot_tail.extend(stdout.assert_read_until("starting shell").await?);
         boot_tail.extend(stdout.assert_read_until(PROMPT).await?);
         if network_port.is_some() {
-            let seen = String::from_utf8_lossy(&boot_tail);
-            if !seen.contains("dhcpd: configured ip") {
-                boot_tail.extend(stdout.assert_read_until("dhcpd: configured ip").await?);
+            for marker in [
+                "dhcpd: configured ip",
+                "TCP listening on 1234",
+                "HTTP listening on 80",
+            ] {
+                let seen = String::from_utf8_lossy(&boot_tail);
+                if !seen.contains(marker) {
+                    boot_tail.extend(stdout.assert_read_until(marker).await?);
+                }
             }
         }
 
@@ -211,6 +223,7 @@ impl QemuInstance {
             stdin,
             stdout,
             network_port,
+            web_port,
             gdb_port,
             qmp_socket,
         })
@@ -226,6 +239,10 @@ impl QemuInstance {
 
     pub fn network_port(&self) -> Option<u16> {
         self.network_port
+    }
+
+    pub fn web_port(&self) -> Option<u16> {
+        self.web_port
     }
 
     pub fn gdb_port(&self) -> Option<u16> {

@@ -148,7 +148,7 @@ fn main() {
         Ok(s) => s,
         Err(e) => {
             eprintln!("dhcpd: bind failed: {e}");
-            std::process::exit(1);
+            std::process::exit(2);
         }
     };
 
@@ -156,10 +156,16 @@ fn main() {
         Some(m) => m,
         None => {
             eprintln!("dhcpd: no network device");
-            std::process::exit(1);
+            std::process::exit(2);
         }
     };
     let xid: u32 = 0x12345678;
+
+    std::thread::spawn(|| {
+        std::thread::sleep(std::time::Duration::from_secs(3));
+        eprintln!("dhcpd: no response within 3s");
+        std::process::exit(1);
+    });
 
     // Send DISCOVER
     let discover = build_discover(&mac, xid);
@@ -195,4 +201,5 @@ fn main() {
         "dhcpd: configured ip {}.{}.{}.{}",
         ip[0], ip[1], ip[2], ip[3]
     );
+    std::process::exit(0);
 }

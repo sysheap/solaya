@@ -54,6 +54,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --log          Log qemu events to /tmp/solaya.log"
             echo "  --capture      Capture network traffic into network.pcap"
             echo "  --net [PORT]   Enable network card with host port PORT (default: dynamic)"
+            echo "  --web-port PORT  Forward host PORT to guest port 80 (requires --net)"
             echo "  -h, --help     Show this help message"
             echo "  --wait         Wait cpu until gdb is attached"
             exit 0
@@ -85,7 +86,11 @@ while [[ $# -gt 0 ]]; do
             else
                 NET_PORT=$(python3 -c "import socket; s=socket.socket(socket.AF_INET, socket.SOCK_STREAM); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1); s.bind(('127.0.0.1', 0)); print(s.getsockname()[1]); s.close()")
             fi
-            QEMU_CMD+=" -netdev user,id=netdev1,hostfwd=udp::${NET_PORT}-:1234,hostfwd=tcp::${NET_PORT}-:1234 -device virtio-net-pci,netdev=netdev1"
+            ;;
+        --web-port)
+            shift
+            WEB_PORT="$1"
+            shift
             ;;
         --smp)
             QEMU_CMD+=" -smp $(nproc)"
@@ -106,6 +111,15 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+# Build network device if --net was specified
+if [[ -n "$NET_PORT" ]]; then
+    NETDEV="user,id=netdev1,hostfwd=udp::${NET_PORT}-:1234,hostfwd=tcp::${NET_PORT}-:1234"
+    if [[ -n "$WEB_PORT" ]]; then
+        NETDEV+=",hostfwd=tcp::${WEB_PORT}-:80"
+    fi
+    QEMU_CMD+=" -netdev ${NETDEV} -device virtio-net-pci,netdev=netdev1"
+fi
 
 # Validate kernel path
 if [[ -z "$KERNEL_PATH" ]]; then
@@ -130,6 +144,10 @@ echo "Executing: $QEMU_CMD"
 
 if [[ -n "$NET_PORT" ]]; then
     echo "Network host port: $NET_PORT" >&2
+fi
+
+if [[ -n "$WEB_PORT" ]]; then
+    echo "Web host port: $WEB_PORT" >&2
 fi
 
 if [[ -n "$GDB_PORT" ]]; then

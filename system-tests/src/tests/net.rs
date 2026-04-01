@@ -126,18 +126,11 @@ async fn udp() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn tcp_echo() -> anyhow::Result<()> {
-    let mut solaya =
-        QemuInstance::start_with(QemuOptions::default().add_network_card(true)).await?;
+    let solaya = QemuInstance::start_with(QemuOptions::default().add_network_card(true)).await?;
 
-    solaya
-        .run_prog_waiting_for("tcp_echo", "TCP listening on 1234\n")
-        .await
-        .expect("tcp_echo program must succeed to start");
-
+    // tcp_echo is auto-started by init after DHCP
     let port = solaya.network_port().expect("Network must be enabled");
     let mut stream = tokio::net::TcpStream::connect(format!("127.0.0.1:{}", port)).await?;
-
-    solaya.stdout().assert_read_until("Connection from").await?;
 
     stream.write_all(b"Hello TCP!").await?;
     let mut buf = [0u8; 64];
@@ -155,15 +148,10 @@ async fn tcp_echo() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn webserver() -> anyhow::Result<()> {
-    let mut solaya =
-        QemuInstance::start_with(QemuOptions::default().add_network_card(true)).await?;
+    let solaya = QemuInstance::start_with(QemuOptions::default().add_network_card(true)).await?;
 
-    solaya
-        .run_prog_waiting_for("webserver", "HTTP listening on 1234\n")
-        .await
-        .expect("webserver must succeed to start");
-
-    let port = solaya.network_port().expect("Network must be enabled");
+    // webserver is auto-started by init after DHCP (listens on port 80)
+    let port = solaya.web_port().expect("Web port must be available");
     let mut stream = tokio::net::TcpStream::connect(format!("127.0.0.1:{}", port)).await?;
 
     stream
