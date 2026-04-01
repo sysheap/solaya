@@ -8,7 +8,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-const PORT: u16 = 1234;
+const PORT: u16 = 80;
 const INDEX_HTML: &str = include_str!("../../static/index.html");
 const DOOM_HTML: &str = include_str!("../../static/doom.html");
 const FB_WIDTH: usize = 640;

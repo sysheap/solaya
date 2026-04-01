@@ -85,8 +85,8 @@ pub fn init_dwmac_devices() {
 
         // Determine GMAC index from base address
         let gmac_index = match reg.address {
-            // 0x1603_0000 => 0u8, // we only use one ethernet port right now
-            0x1604_0000 => 1u8,
+            0x1603_0000 => 0u8,
+            // 0x1604_0000 => 1u8, // we only use one ethernet port right now
             _ => continue,
         };
 

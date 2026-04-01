@@ -556,7 +556,7 @@ async fn server_connection_task(
     if let Some(w) = listener_waker {
         w.wake();
     }
-    info!("TCP connection established (server) {:?}", conn_id);
+    debug!("TCP connection established (server) {:?}", conn_id);
 
     established_loop(&conn).await;
     log_connection_stats(&conn);
@@ -1054,7 +1054,7 @@ pub async fn initiate_connect(
                         (c.send_seq, c.recv_ack)
                     };
                     send_data_packet(&conn, FLAG_ACK, seq, ack, &[]);
-                    info!("TCP connection established (client) {:?}", conn_id);
+                    debug!("TCP connection established (client) {:?}", conn_id);
                     let conn_for_task = conn.clone();
                     kernel_tasks::spawn(async move {
                         established_loop(&conn_for_task).await;
