@@ -9,7 +9,7 @@ use core::{
 use alloc::{boxed::Box, vec::Vec};
 
 use crate::{
-    debug,
+    debug, info,
     klibc::{MMIO, Spinlock, runtime_initialized::RuntimeInitializedData},
     net::{ipv4::IpV4Header, udp::UdpHeader},
 };
@@ -67,8 +67,11 @@ pub fn init_isr_status(isr: MMIO<u32>) {
 }
 
 pub fn on_network_interrupt() {
-    // Reading ISR status acknowledges the interrupt on the device side
-    let _isr = ISR_STATUS.read();
+    // Read interrupt status. For VirtIO this is read-to-clear.
+    // For DWMAC4 it's write-1-to-clear, so write back to acknowledge.
+    let isr = ISR_STATUS.read();
+    let mut ack = MMIO::<u32>::new(ISR_STATUS.addr());
+    ack.write(isr);
     NETWORK_INTERRUPT_COUNTER.fetch_add(1, Ordering::SeqCst);
     let wakers: Vec<Waker> = NETWORK_INTERRUPT_WAKERS.lock().drain(..).collect();
     for waker in wakers {
@@ -160,6 +163,9 @@ fn receive_and_process_packets() -> usize {
         .receive_packets();
 
     let count = packets.len();
+    if count > 0 {
+        info!("NET: received {} packets from driver", count);
+    }
     for packet in packets {
         process_packet(packet);
     }
@@ -194,15 +200,20 @@ pub fn current_mac_address() -> MacAddress {
 }
 
 fn process_packet(packet: Vec<u8>) {
+    info!(
+        "NET: process_packet len={} first14={:02x?}",
+        packet.len(),
+        &packet[..core::cmp::min(14, packet.len())]
+    );
     let (ethernet_header, rest) = match EthernetHeader::try_parse(&packet) {
         Ok(p) => p,
         Err(err) => {
-            debug!("Could not parse ethernet header: {:?}", err);
+            info!("NET: ethernet parse error: {:?}", err);
             return;
         }
     };
 
-    debug!("Received ethernet packet: {}", ethernet_header);
+    info!("NET: ethernet OK: {}", ethernet_header);
 
     let ether_type = ethernet_header.ether_type();
 

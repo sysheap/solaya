@@ -47,6 +47,10 @@ impl<T> MMIO<T> {
         }
     }
 
+    pub fn addr(&self) -> usize {
+        self.addr as usize
+    }
+
     /// # Safety
     /// The resulting address must be within the same MMIO region.
     pub const unsafe fn add(&self, count: usize) -> Self {

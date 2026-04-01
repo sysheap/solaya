@@ -135,6 +135,7 @@ const PHY_BMSR_LINK_STATUS: u16 = 1 << 2;
 
 // DMA descriptor flags
 const DESC3_OWN: u32 = 1 << 31;
+const DESC3_IOC: u32 = 1 << 30; // Interrupt on Completion (triggers RI in DMA status)
 const DESC3_FD: u32 = 1 << 29;
 const DESC3_LD: u32 = 1 << 28;
 const DESC3_BUF1V: u32 = 1 << 24;
@@ -500,7 +501,7 @@ impl DwmacDevice {
             desc.des0 = buf_addr as u32;
             desc.des1 = 0;
             desc.des2 = 0;
-            desc.des3 = DESC3_OWN | DESC3_BUF1V;
+            desc.des3 = DESC3_OWN | DESC3_IOC | DESC3_BUF1V;
         }
 
         // TX descriptors start empty
@@ -607,13 +608,27 @@ impl crate::net::NetworkDevice for DwmacDevice {
             }
 
             let length = (des3 & 0x7FFF) as usize;
+            info!(
+                "DWMAC RX[{}]: des3={:#x} len={} desc_addr={:#x}",
+                self.rx_idx, des3, length, desc_addr
+            );
             if length > 0 && length <= PACKET_BUF_SIZE {
                 // Invalidate RX buffer so CPU reads DMA-written packet data
                 let buf_addr = &self.rx_buffers[self.rx_idx].0 as *const _ as usize;
                 arch::cache::flush_range(buf_addr, length);
 
+                let first16: [u8; 16] = self.rx_buffers[self.rx_idx].0[..16]
+                    .try_into()
+                    .expect("16 bytes");
+                info!(
+                    "DWMAC RX[{}]: first16={:02x?} buf_addr={:#x}",
+                    self.rx_idx, first16, buf_addr
+                );
+
                 let data = self.rx_buffers[self.rx_idx].0[..length].to_vec();
                 received.push(data);
+            } else {
+                info!("DWMAC RX[{}]: SKIPPED (bad length {})", self.rx_idx, length);
             }
 
             // Re-arm descriptor
@@ -622,7 +637,7 @@ impl crate::net::NetworkDevice for DwmacDevice {
             desc.des0 = buf_addr as u32;
             desc.des1 = 0;
             desc.des2 = 0;
-            desc.des3 = DESC3_OWN | DESC3_BUF1V;
+            desc.des3 = DESC3_OWN | DESC3_IOC | DESC3_BUF1V;
 
             // Flush descriptor to RAM so DMA sees OWN bit
             let desc_addr = desc as *const _ as usize;
