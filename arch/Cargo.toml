@@ -9,4 +9,5 @@ description.workspace = true
 common = { path = "../common" }
 
 [lib]
+test = false
 bench = false
