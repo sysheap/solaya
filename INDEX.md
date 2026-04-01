@@ -1,6 +1,6 @@
 # Codebase Index: webserver
 
-> Generated: 2026-04-01 08:45:40 UTC | Files: 291 | Lines: 48007
+> Generated: 2026-04-01 12:19:43 UTC | Files: 291 | Lines: 48075
 > Languages: C (2), HTML (1), Markdown (21), Python (4), Rust (249), Shell (1), TOML (13)
 
 ## Directory Structure
@@ -374,7 +374,7 @@ webserver/
 - `[profile.dev]`
 
 **INDEX.md**
-- `# Codebase Index: solaya`
+- `# Codebase Index: webserver`
 
 **README.md**
 - `# Solaya`
@@ -1659,7 +1659,7 @@ webserver/
 
 ## INDEX.md
 
-**Language:** Markdown | **Size:** 229.7 KB | **Lines:** 9781
+**Language:** Markdown | **Size:** 230.3 KB | **Lines:** 9823
 
 **Declarations:**
 
@@ -5001,7 +5001,7 @@ webserver/
 
 ## kernel/src/net/tcp_connection.rs
 
-**Language:** Rust | **Size:** 19.3 KB | **Lines:** 681
+**Language:** Rust | **Size:** 18.9 KB | **Lines:** 678
 
 **Imports:**
 - `core::{
@@ -5107,6 +5107,10 @@ webserver/
 
 
 `async fn server_connection_task( conn: SharedTcpConnection, initial_syn: ReceivedSegment, listener: SharedTcpListener, )`
+
+`fn flush_send_buffer(conn: &SharedTcpConnection)`
+
+`fn send_fin(conn: &SharedTcpConnection)`
 
 `async fn established_loop(conn: &SharedTcpConnection)`
 
@@ -5420,7 +5424,7 @@ webserver/
 
 ## kernel/src/processes/fd_table.rs
 
-**Language:** Rust | **Size:** 10.2 KB | **Lines:** 337
+**Language:** Rust | **Size:** 10.7 KB | **Lines:** 355
 
 **Imports:**
 - `alloc::collections::BTreeMap`
@@ -5500,6 +5504,8 @@ webserver/
   `pub fn close_all(&mut self)`
 
   `pub fn close_cloexec_fds(&mut self)`
+
+  `fn close_tcp_if_needed(descriptor: &FileDescriptor)`
 
 
 ---
@@ -6490,7 +6496,7 @@ webserver/
 
 ## kernel/src/syscalls/linux.rs
 
-**Language:** Rust | **Size:** 32.7 KB | **Lines:** 1018
+**Language:** Rust | **Size:** 32.9 KB | **Lines:** 1028
 
 **Imports:**
 - `crate::{
@@ -6498,7 +6504,12 @@ webserver/
     debug, fs,
     klibc::util::{ByteInterpretable, UsizeExt},
     memory::{PAGE_SIZE, VirtAddr},
-    processes::{fd_table::FdFlags, process::ProcessRef, process_table, thread::ThreadRef},
+    processes::{
+        fd_table::{FdFlags, FileDescriptor},
+        process::ProcessRef,
+        process_table,
+        thread::ThreadRef,
+    },
     syscalls::macros::linux_syscalls,
 }`
 - `common::{
@@ -9759,12 +9770,12 @@ webserver/
 
 ## userspace/src/bin/webserver.rs
 
-**Language:** Rust | **Size:** 1.1 KB | **Lines:** 43
+**Language:** Rust | **Size:** 1.2 KB | **Lines:** 44
 
 **Imports:**
 - `std::{
     io::{Read, Write},
-    net::TcpListener,
+    net::{Shutdown, TcpListener},
     thread,
 }`
 

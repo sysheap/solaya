@@ -90,13 +90,13 @@ async fn webserver() -> anyhow::Result<()> {
         .write_all(b"GET / HTTP/1.1\r\nHost: localhost\r\n\r\n")
         .await?;
 
-    let mut buf = [0u8; 4096];
-    let n = stream.read(&mut buf).await?;
-    let response = String::from_utf8_lossy(&buf[..n]);
+    let mut response = Vec::new();
+    stream.read_to_end(&mut response).await?;
+    let response = String::from_utf8_lossy(&response);
 
     assert!(
         response.starts_with("HTTP/1.1 200 OK\r\n"),
-        "Expected 200 OK, got {n} bytes: {response}"
+        "Expected 200 OK, got: {response}"
     );
     assert!(response.contains("Content-Type: text/html"));
     assert!(response.contains("<title>Solaya</title>"));

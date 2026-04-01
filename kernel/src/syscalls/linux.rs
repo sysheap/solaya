@@ -3,7 +3,12 @@ use crate::{
     debug, fs,
     klibc::util::{ByteInterpretable, UsizeExt},
     memory::{PAGE_SIZE, VirtAddr},
-    processes::{fd_table::FdFlags, process::ProcessRef, process_table, thread::ThreadRef},
+    processes::{
+        fd_table::{FdFlags, FileDescriptor},
+        process::ProcessRef,
+        process_table,
+        thread::ThreadRef,
+    },
     syscalls::macros::linux_syscalls,
 };
 use common::{
@@ -202,7 +207,12 @@ impl LinuxSyscalls for LinuxSyscallHandler {
     }
 
     async fn close(&mut self, fd: c_int) -> Result<isize, Errno> {
-        self.current_process.with_lock(|p| p.fd_table().close(fd))?;
+        let entry = self.current_process.with_lock(|p| p.fd_table().close(fd))?;
+        if let FileDescriptor::TcpStream(conn) = &entry.descriptor {
+            if let Some(w) = conn.lock().request_close() {
+                w.wake();
+            }
+        }
         Ok(0)
     }
 
