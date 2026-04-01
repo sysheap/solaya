@@ -1,12 +1,12 @@
-# Codebase Index: solaya
+# Codebase Index: webserver
 
-> Generated: 2026-03-31 12:46:55 UTC | Files: 289 | Lines: 47882
-> Languages: C (2), Markdown (21), Python (4), Rust (248), Shell (1), TOML (13)
+> Generated: 2026-04-01 08:45:40 UTC | Files: 291 | Lines: 48007
+> Languages: C (2), HTML (1), Markdown (21), Python (4), Rust (249), Shell (1), TOML (13)
 
 ## Directory Structure
 
 ```
-solaya/
+webserver/
   CLAUDE.md
   Cargo.toml
   INDEX.md
@@ -350,9 +350,12 @@ solaya/
         thread-test.rs
         udp.rs
         vfs-test.rs
+        webserver.rs
       lib.rs
       spawn.rs
       util.rs
+    static/
+      index.html
 ```
 
 ---
@@ -1629,6 +1632,12 @@ solaya/
 
 **userspace/src/util.rs**
 - `pub fn read_line() -> String`
+
+**userspace/static/index.html**
+- `<head>`
+- `title: Solaya`
+- `<style>`
+- `<body>`
 
 ---
 
@@ -8808,7 +8817,7 @@ solaya/
 
 ## system-tests/src/tests/net.rs
 
-**Language:** Rust | **Size:** 2.2 KB | **Lines:** 74
+**Language:** Rust | **Size:** 3.2 KB | **Lines:** 105
 
 **Imports:**
 - `tokio::io::{AsyncReadExt, AsyncWriteExt}`
@@ -8821,6 +8830,8 @@ solaya/
 `async fn udp() -> anyhow::Result<()>`
 
 `async fn tcp_echo() -> anyhow::Result<()>`
+
+`async fn webserver() -> anyhow::Result<()>`
 
 ---
 
@@ -9746,6 +9757,29 @@ solaya/
 
 ---
 
+## userspace/src/bin/webserver.rs
+
+**Language:** Rust | **Size:** 1.1 KB | **Lines:** 43
+
+**Imports:**
+- `std::{
+    io::{Read, Write},
+    net::TcpListener,
+    thread,
+}`
+
+**Declarations:**
+
+`const PORT: u16 = 1234`
+
+`const INDEX_HTML: &str = include_str!("../../static/index.html")`
+
+`fn handle_connection(mut stream: std::net::TcpStream)`
+
+`fn main()`
+
+---
+
 ## userspace/src/lib.rs
 
 **Language:** Rust | **Size:** 29 B | **Lines:** 2
@@ -9778,4 +9812,12 @@ solaya/
 **Declarations:**
 
 `const DELETE: u8 = 127`
+
+---
+
+## userspace/static/index.html
+
+**Language:** HTML | **Size:** 1.7 KB | **Lines:** 51
+
+**Declarations:**
 
