@@ -9,7 +9,7 @@ use core::{
 use alloc::{boxed::Box, vec::Vec};
 
 use crate::{
-    debug, info,
+    debug,
     klibc::{MMIO, Spinlock, runtime_initialized::RuntimeInitializedData},
     net::{ipv4::IpV4Header, udp::UdpHeader},
 };
@@ -23,7 +23,6 @@ pub trait NetworkDevice: Send {
         }
     }
     fn get_mac_address(&self) -> mac::MacAddress;
-    fn dump(&self) {}
 }
 
 #[cfg(target_arch = "riscv64")]
@@ -148,12 +147,6 @@ pub fn assign_network_device(device: Box<dyn NetworkDevice>) {
     *NETWORK_STACK.device.lock() = Some(device);
 }
 
-pub fn dump() {
-    if let Some(device) = &*NETWORK_STACK.device.lock() {
-        device.dump();
-    }
-}
-
 fn receive_and_process_packets() -> usize {
     let packets = NETWORK_STACK
         .device
@@ -163,9 +156,6 @@ fn receive_and_process_packets() -> usize {
         .receive_packets();
 
     let count = packets.len();
-    if count > 0 {
-        info!("NET: received {} packets from driver", count);
-    }
     for packet in packets {
         process_packet(packet);
     }
@@ -200,20 +190,15 @@ pub fn current_mac_address() -> MacAddress {
 }
 
 fn process_packet(packet: Vec<u8>) {
-    info!(
-        "NET: process_packet len={} first14={:02x?}",
-        packet.len(),
-        &packet[..core::cmp::min(14, packet.len())]
-    );
     let (ethernet_header, rest) = match EthernetHeader::try_parse(&packet) {
         Ok(p) => p,
         Err(err) => {
-            info!("NET: ethernet parse error: {:?}", err);
+            debug!("Could not parse ethernet header: {:?}", err);
             return;
         }
     };
 
-    info!("NET: ethernet OK: {}", ethernet_header);
+    debug!("Received ethernet packet: {}", ethernet_header);
 
     let ether_type = ethernet_header.ether_type();
 

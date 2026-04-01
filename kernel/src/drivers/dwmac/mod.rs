@@ -568,20 +568,6 @@ impl DwmacDevice {
         set_bits(self.base, MAC_CONFIGURATION, MAC_CONFIG_TE | MAC_CONFIG_RE);
     }
 
-    pub fn dump_debug_status(&self) {
-        // MMC RX counters (offsets from DWMAC datasheet)
-        let rx_packets = read_reg(self.base, 0x780); // Rx Packets Good+Bad
-        let rx_crc_err = read_reg(self.base, 0x794); // Rx CRC Error
-        let dma_status = read_reg(self.base, DMA_CH0_STATUS);
-        let dma_cur_rx = read_reg(self.base, 0x114C); // DMA CH0 Current RX Desc
-        let dma_cur_rxbuf = read_reg(self.base, 0x1154); // DMA CH0 Current RX Buffer
-        let mtl_rxq_debug = read_reg(self.base, 0xD38); // MTL RXQ0 Debug
-        info!(
-            "DWMAC debug: rx_pkts={} rx_crc={} dma_status={:#x} cur_rxdesc={:#x} cur_rxbuf={:#x} mtl_rxq={:#x}",
-            rx_packets, rx_crc_err, dma_status, dma_cur_rx, dma_cur_rxbuf, mtl_rxq_debug
-        );
-    }
-
     /// Returns the MMIO address of the DMA CH0 status register.
     /// Reading this register acknowledges (write-to-clear) interrupt flags.
     pub fn isr_status_mmio(&self) -> MMIO<u32> {
@@ -608,27 +594,13 @@ impl crate::net::NetworkDevice for DwmacDevice {
             }
 
             let length = (des3 & 0x7FFF) as usize;
-            info!(
-                "DWMAC RX[{}]: des3={:#x} len={} desc_addr={:#x}",
-                self.rx_idx, des3, length, desc_addr
-            );
             if length > 0 && length <= PACKET_BUF_SIZE {
                 // Invalidate RX buffer so CPU reads DMA-written packet data
                 let buf_addr = &self.rx_buffers[self.rx_idx].0 as *const _ as usize;
                 arch::cache::flush_range(buf_addr, length);
 
-                let first16: [u8; 16] = self.rx_buffers[self.rx_idx].0[..16]
-                    .try_into()
-                    .expect("16 bytes");
-                info!(
-                    "DWMAC RX[{}]: first16={:02x?} buf_addr={:#x}",
-                    self.rx_idx, first16, buf_addr
-                );
-
                 let data = self.rx_buffers[self.rx_idx].0[..length].to_vec();
                 received.push(data);
-            } else {
-                info!("DWMAC RX[{}]: SKIPPED (bad length {})", self.rx_idx, length);
             }
 
             // Re-arm descriptor
@@ -694,9 +666,5 @@ impl crate::net::NetworkDevice for DwmacDevice {
 
     fn get_mac_address(&self) -> MacAddress {
         self.mac_address
-    }
-
-    fn dump(&self) {
-        self.dump_debug_status();
     }
 }

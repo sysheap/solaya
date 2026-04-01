@@ -12,7 +12,7 @@ use crate::{
     klibc::big_endian::BigEndian,
     net::{self, mac::MacAddress},
     pci::PCIDevice,
-    processes::{kernel_tasks, timer::sleep},
+    processes::kernel_tasks,
 };
 
 pub fn init_all_pci_devices(mut pci_devices: Vec<PCIDevice>) {
@@ -115,17 +115,6 @@ pub fn init_dwmac_devices() {
             net::init_isr_status(isr_status);
             plic::register_interrupt(plic_irq, net::on_network_interrupt);
             kernel_tasks::spawn(net::network_rx_task());
-            kernel_tasks::spawn(async {
-                loop {
-                    net::dump();
-                    sleep(&headers::syscall_types::timespec {
-                        tv_sec: 5,
-                        tv_nsec: 0,
-                    })
-                    .expect("foo")
-                    .await;
-                }
-            });
             info!("DWMAC: GMAC{} registered as network device", gmac_index);
         }
     }
