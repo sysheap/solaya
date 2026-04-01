@@ -29,7 +29,7 @@ just deadlock-hunt            # Run system tests in loop with GDB enabled
 
 ```
 boot/             # Entry point wrapper (#[no_mangle] fns, calls into kernel)
-kernel/           # Main kernel logic (RISC-V 64-bit, no_std, #![forbid(unsafe_code)])
+kernel/           # Main kernel logic (crate name: solaya, no_std, #![forbid(unsafe_code)])
 sys/              # Self-contained system library (page allocator, heap, spinlock, MMIO, logging)
 arch/             # Hardware abstraction (CSR, SBI, timer, trap causes, backtrace, linker symbols)
 userspace/        # Userspace programs (musl libc)
@@ -37,7 +37,9 @@ common/           # Shared no_std library
 system-tests/     # Integration tests (run on x86, test via QEMU)
 qemu-infra/       # Shared QEMU communication library (used by system-tests + mcp-server)
 mcp-server/       # MCP server for AI agent interaction with QEMU
+gdb_mcp_server/   # Python MCP server exposing GDB as tools (pygdbmi + FastMCP)
 headers/          # Linux C header bindings via bindgen
+musl/             # musl libc source (cross-compiled for RISC-V userspace)
 doc/ai/           # Detailed AI documentation (see OVERVIEW.md)
 ```
 
@@ -53,10 +55,13 @@ doc/ai/           # Detailed AI documentation (see OVERVIEW.md)
 | kernel/src/processes/ | Process, thread, scheduler, signals |
 | kernel/src/syscalls/ | Syscall handlers |
 | kernel/src/interrupts/ | Trap handling, PLIC, timer |
-| kernel/src/fs/ | VFS layer (tmpfs, procfs, devfs) |
+| kernel/src/fs/ | VFS layer (tmpfs, procfs, devfs, ext2) |
 | kernel/src/net/ | Network stack (UDP, TCP) |
-| kernel/src/drivers/ | VirtIO drivers, consolidated init_all_pci_devices() |
+| kernel/src/drivers/ | VirtIO drivers, dwmac ethernet, JH7110 SoC reset |
 | kernel/src/io/ | UART, TtyDevice (terminal subsystem) |
+| kernel/src/pci/ | PCI bus enumeration, address types, BAR allocator |
+| kernel/src/klibc/ | ELF parser, BTreeMap, BigEndian, ConsumableBuffer |
+| kernel/src/debugging/ | Backtrace, symbol resolver, eh_frame parser, unwinder |
 
 ## Debugging
 
@@ -66,10 +71,13 @@ doc/ai/           # Detailed AI documentation (see OVERVIEW.md)
 - `warn!()` - Always printed.
 
 ### Enable Debug Output for a Module
-Edit `sys/src/logging/configuration.rs`:
+There are two logging configs — one per crate:
+- `sys/src/logging/configuration.rs` — uses `"solaya::"` module paths
+- `kernel/src/logging/configuration.rs` — uses `"kernel::"` module paths
+
 ```rust
 // Add to LOG_FOLLOWING_MODULES to enable:
-const LOG_FOLLOWING_MODULES: &[&str] = &["kernel::processes::scheduler"];
+const LOG_FOLLOWING_MODULES: &[&str] = &["solaya::processes::scheduler"];
 
 // Or remove from DONT_LOG_FOLLOWING_MODULES if blocked there
 ```
@@ -83,8 +91,9 @@ All syscalls by those processes are logged with `[SYSCALL ENTER]` / `[SYSCALL EX
 
 ### GDB Debugging
 ```bash
-just debug        # Start QEMU + GDB in tmux
-just debugf FUNC  # Debug with breakpoint on function
+just debug              # Start QEMU + GDB in tmux
+just debugf FUNC        # Debug with breakpoint on function
+just debuguf BIN FUNC   # Debug userspace binary with breakpoint on function
 ```
 
 ### GDB MCP Server (Programmatic Debugging)
@@ -129,7 +138,7 @@ async fn my_test() -> anyhow::Result<()> {
 Kernel unit tests use `#[test_case]` macro (custom test framework).
 
 ### Kani Model Checking
-Kani verifies correctness of pure functions via bounded model checking. Run with `just kani`. Existing proofs are in `kernel/src/memory/address.rs`, `kernel/src/memory/page_table_entry.rs`, and `kernel/src/klibc/util.rs`.
+Kani verifies correctness of pure functions via bounded model checking. Run with `just kani`. Existing proofs are in `kernel/src/memory/page_table_entry.rs` and `kernel/src/klibc/util.rs`.
 
 When adding or modifying pure logic (bit manipulation, arithmetic, data structure invariants, encoding/decoding), add Kani proof harnesses. Good candidates: functions with bitwise operations, numeric conversions, invariants that must hold for all inputs. Not suited for: code requiring hardware, allocators, or complex kernel state.
 
@@ -182,7 +191,8 @@ The `arch` crate provides no-op stubs for non-riscv64 targets so Kani can compil
 | Spinlock | sys/src/klibc/spinlock.rs |
 | ValidatedPtr | sys/src/klibc/validated_ptr.rs |
 | Logging | sys/src/logging/mod.rs |
-| Log config | sys/src/logging/configuration.rs |
+| Log config (sys) | sys/src/logging/configuration.rs |
+| Log config (kernel) | kernel/src/logging/configuration.rs |
 | QEMU infra | qemu-infra/src/qemu.rs |
 | MCP server | mcp-server/src/server.rs |
 | Signals | kernel/src/processes/signal.rs |
