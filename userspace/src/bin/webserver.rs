@@ -1,6 +1,6 @@
 use std::{
     io::{Read, Write},
-    net::TcpListener,
+    net::{Shutdown, TcpListener},
     thread,
 };
 
@@ -26,6 +26,7 @@ fn handle_connection(mut stream: std::net::TcpStream) {
         body.len()
     );
     let _ = stream.write_all(response.as_bytes());
+    let _ = stream.shutdown(Shutdown::Write);
 }
 
 fn main() {
