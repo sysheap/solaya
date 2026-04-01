@@ -253,8 +253,7 @@ fn handle_websocket(mut stream: TcpStream, client_key: &str) {
 
     // Spawn DOOM
     let mut child = match Command::new("/doom")
-        .env("DOOM_FB_PATH", &fb_path)
-        .env("DOOM_INPUT_PATH", &key_path)
+        .args(["--fb-path", &fb_path, "--input-path", &key_path])
         .spawn()
     {
         Ok(c) => c,

@@ -20,6 +20,9 @@ static int log_fd = -1;
 static int web_input_fd = -1;
 static struct termios orig_termios;
 
+static const char *g_fb_path = "/dev/fb0";
+static const char *g_input_path = NULL;
+
 #define FB_WIDTH  640
 #define FB_HEIGHT 480
 #define WAD_PATH  "/tmp/doom1.wad"
@@ -94,11 +97,9 @@ void DG_Init(void)
 {
     log_fd = open("/tmp/doom_fps.log", O_WRONLY | O_CREAT | O_TRUNC, 0644);
 
-    const char *fb_env = getenv("DOOM_FB_PATH");
-    const char *fb_path = fb_env ? fb_env : "/dev/fb0";
-    fb_fd = open(fb_path, O_WRONLY);
+    fb_fd = open(g_fb_path, O_WRONLY);
     if (fb_fd < 0) {
-        fprintf(stderr, "Failed to open %s\n", fb_path);
+        fprintf(stderr, "Failed to open %s\n", g_fb_path);
         exit(1);
     }
 
@@ -114,11 +115,10 @@ void DG_Init(void)
         free(black);
     }
 
-    const char *input_env = getenv("DOOM_INPUT_PATH");
-    if (input_env) {
-        web_input_fd = open(input_env, O_RDONLY | O_NONBLOCK);
+    if (g_input_path) {
+        web_input_fd = open(g_input_path, O_RDONLY | O_NONBLOCK);
         if (web_input_fd >= 0)
-            fprintf(stderr, "Using web input from %s\n", input_env);
+            fprintf(stderr, "Using web input from %s\n", g_input_path);
     }
 
     kb_fd = open("/dev/keyboard0", O_RDONLY | O_NONBLOCK);
@@ -326,16 +326,30 @@ void DG_SetWindowTitle(const char *title)
 
 int main(int argc, char **argv)
 {
+    /* Parse our custom args before passing the rest to doomgeneric */
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--fb-path") == 0 && i + 1 < argc) {
+            g_fb_path = argv[++i];
+        } else if (strcmp(argv[i], "--input-path") == 0 && i + 1 < argc) {
+            g_input_path = argv[++i];
+        }
+    }
+
     extract_wad();
 
-    /* Build argv for doomgeneric: doom -iwad /tmp/doom1.wad [user args...] */
-    int new_argc = argc + 2;
-    char **new_argv = malloc(sizeof(char *) * (new_argc + 1));
+    /* Build argv for doomgeneric: doom -iwad /tmp/doom1.wad [filtered user args] */
+    int new_argc = 3; /* argv[0] + -iwad + WAD_PATH */
+    char **new_argv = malloc(sizeof(char *) * (argc + 3));
     new_argv[0] = argv[0];
     new_argv[1] = "-iwad";
     new_argv[2] = WAD_PATH;
-    for (int i = 1; i < argc; i++)
-        new_argv[i + 2] = argv[i];
+    for (int i = 1; i < argc; i++) {
+        if ((strcmp(argv[i], "--fb-path") == 0 || strcmp(argv[i], "--input-path") == 0) && i + 1 < argc) {
+            i++; /* skip value */
+            continue;
+        }
+        new_argv[new_argc++] = argv[i];
+    }
     new_argv[new_argc] = NULL;
 
     doomgeneric_Create(new_argc, new_argv);
