@@ -1,7 +1,7 @@
 # Codebase Index: fix-diagnostics-for-llm
 
-> Generated: 2026-04-01 08:57:42 UTC | Files: 289 | Lines: 47882
-> Languages: C (2), Markdown (21), Python (4), Rust (248), Shell (1), TOML (13)
+> Generated: 2026-04-01 12:18:34 UTC | Files: 290 | Lines: 47886
+> Languages: C (2), Markdown (21), Python (4), Rust (248), Shell (1), TOML (14)
 
 ## Directory Structure
 
@@ -237,6 +237,7 @@ fix-diagnostics-for-llm/
       read_asserter.rs
       searchable_buffer.rs
   qemu_wrapper.sh
+  rust-analyzer.toml
   rustfmt.toml
   sys/
     Cargo.toml
@@ -371,7 +372,7 @@ fix-diagnostics-for-llm/
 - `[profile.dev]`
 
 **INDEX.md**
-- `# Codebase Index: solaya`
+- `# Codebase Index: fix-diagnostics-for-llm`
 
 **README.md**
 - `# Solaya`
@@ -1365,6 +1366,9 @@ fix-diagnostics-for-llm/
 
 **qemu-infra/src/searchable_buffer.rs**
 - `pub struct SearchableBuffer`
+
+**rust-analyzer.toml**
+- `[check]`
 
 **sys/Cargo.toml**
 - `[package]`
@@ -7598,6 +7602,14 @@ fix-diagnostics-for-llm/
 
 ---
 
+## rust-analyzer.toml
+
+**Language:** TOML | **Size:** 46 B | **Lines:** 3
+
+**Declarations:**
+
+---
+
 ## rustfmt.toml
 
 **Language:** TOML | **Size:** 43 B | **Lines:** 2
@@ -7612,7 +7624,7 @@ fix-diagnostics-for-llm/
 
 ## sys/Cargo.toml
 
-**Language:** TOML | **Size:** 337 B | **Lines:** 17
+**Language:** TOML | **Size:** 350 B | **Lines:** 18
 
 **Imports:**
 - `arch`

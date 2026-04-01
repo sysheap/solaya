@@ -2,9 +2,6 @@
 name = "rust"
 language-servers = ["rust-analyzer", "typos"]
 
-[language-server.rust-analyzer.config]
-check.command = "clippy"
-
 [language-server.typos]
 # typos-lsp must be on your PATH, or otherwise change this to an absolute path to typos-lsp
 command = "typos-lsp"

@@ -9,6 +9,7 @@ description.workspace = true
 default-target = "riscv64gc-unknown-none-elf"
 
 [lib]
+test = false
 bench = false
 
 [dependencies]
