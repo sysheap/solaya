@@ -27,6 +27,7 @@ use crate::{
 use alloc::vec::Vec;
 
 use super::virtqueue::QueueError;
+use crate::net::DRIVER_HEADER_RESERVE;
 
 const EXPECTED_QUEUE_SIZE: usize = 0x100;
 
@@ -345,14 +346,11 @@ impl NetworkDevice {
         received_packets
     }
 
-    pub fn send_packet(&mut self, data: Vec<u8>) -> Result<u16, QueueError> {
-        // First free all already transmitted packets
-        debug!("Going to free all buffers which were used to send packets.");
-        for transmitted_packet in self.transmit_queue.receive_buffer() {
-            debug!("Transmitted packet: {:?}", transmitted_packet.index);
-            drop(transmitted_packet);
-        }
-
+    fn fill_net_header(mut data: Vec<u8>) -> Vec<u8> {
+        assert!(
+            data.len() >= DRIVER_HEADER_RESERVE,
+            "Packet must have pre-reserved driver header space"
+        );
         let header = virtio_net_hdr {
             flags: 0,
             gso_type: VIRTIO_NET_HDR_GSO_NONE,
@@ -362,8 +360,19 @@ impl NetworkDevice {
             csum_offset: 0,
             num_buffers: 0,
         };
+        data[..DRIVER_HEADER_RESERVE].copy_from_slice(header.as_slice());
+        data
+    }
 
-        let data = [header.as_slice(), data.as_slice()].concat();
+    pub fn send_packet(&mut self, data: Vec<u8>) -> Result<u16, QueueError> {
+        // First free all already transmitted packets
+        debug!("Going to free all buffers which were used to send packets.");
+        for transmitted_packet in self.transmit_queue.receive_buffer() {
+            debug!("Transmitted packet: {:?}", transmitted_packet.index);
+            drop(transmitted_packet);
+        }
+
+        let data = Self::fill_net_header(data);
         let index = self
             .transmit_queue
             .put_buffer(data, BufferDirection::DriverWritable);
@@ -381,17 +390,7 @@ impl NetworkDevice {
         }
 
         for data in packets {
-            let header = virtio_net_hdr {
-                flags: 0,
-                gso_type: VIRTIO_NET_HDR_GSO_NONE,
-                hdr_len: 0,
-                gso_size: 0,
-                csum_start: 0,
-                csum_offset: 0,
-                num_buffers: 0,
-            };
-
-            let data = [header.as_slice(), data.as_slice()].concat();
+            let data = Self::fill_net_header(data);
             let _ = self
                 .transmit_queue
                 .put_buffer(data, BufferDirection::DriverWritable);

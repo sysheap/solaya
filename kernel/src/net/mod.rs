@@ -30,6 +30,11 @@ pub mod tcp;
 pub mod tcp_connection;
 pub mod udp;
 
+/// Bytes reserved at the start of packet buffers for the driver-level header
+/// (e.g., virtio_net_hdr). Avoids a second allocation when the driver prepends
+/// its header.
+pub const DRIVER_HEADER_RESERVE: usize = 12;
+
 struct NetworkStack {
     device: Spinlock<Option<NetworkDevice>>,
     ip_addr: Spinlock<Ipv4Addr>,
