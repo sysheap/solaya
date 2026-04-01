@@ -3,6 +3,39 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use crate::infra::qemu::{QemuInstance, QemuOptions};
 
 #[tokio::test]
+async fn tcp_throughput_send() -> anyhow::Result<()> {
+    let mut solaya =
+        QemuInstance::start_with(QemuOptions::default().add_network_card(true)).await?;
+
+    solaya
+        .run_prog_waiting_for("tcp_bench_send", "tcp_bench_send listening on 1234\n")
+        .await
+        .expect("tcp_bench_send must succeed to start");
+
+    let port = solaya.network_port().expect("Network must be enabled");
+    let mut stream = tokio::net::TcpStream::connect(format!("127.0.0.1:{port}")).await?;
+
+    solaya.stdout().assert_read_until("Connection from").await?;
+
+    let mut total = 0usize;
+    let mut buf = vec![0u8; 65536];
+    let start = std::time::Instant::now();
+    loop {
+        match stream.read(&mut buf).await? {
+            0 => break,
+            n => total += n,
+        }
+    }
+    let elapsed = start.elapsed();
+    let throughput_mib = total as f64 / elapsed.as_secs_f64() / (1024.0 * 1024.0);
+    eprintln!("Guest->Host: {total} bytes in {elapsed:?} = {throughput_mib:.1} MiB/s");
+
+    assert_eq!(total, 4 * 1024 * 1024, "Expected 4MB received");
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn tcp_throughput() -> anyhow::Result<()> {
     let mut solaya =
         QemuInstance::start_with(QemuOptions::default().add_network_card(true)).await?;
