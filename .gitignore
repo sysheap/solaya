@@ -19,3 +19,7 @@ __pycache__/
 disk.img
 .indxr-cache/
 INDEX.md
+node_modules/
+package.json
+package-lock.json
+debug-doom.mjs
