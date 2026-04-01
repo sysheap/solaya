@@ -56,6 +56,10 @@ impl TcpHeader {
         self.data_offset_and_flags.get() & 0x1FF
     }
 
+    pub fn window_size(&self) -> u16 {
+        self.window_size.get()
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn create_tcp_packet(
         destination_ip: Ipv4Addr,

@@ -55,6 +55,7 @@ struct ReceivedSegment {
     seq: u32,
     ack: u32,
     flags: u16,
+    window_size: u16,
     data: Vec<u8>,
 }
 
@@ -75,6 +76,7 @@ pub struct TcpConnection {
     closed: bool,
     user_close_requested: bool,
     send_buffer: VecDeque<u8>,
+    remote_window: u32,
 }
 
 pub type SharedTcpConnection = Arc<Spinlock<TcpConnection>>;
@@ -96,6 +98,7 @@ impl TcpConnection {
             closed: false,
             user_close_requested: false,
             send_buffer: VecDeque::new(),
+            remote_window: WINDOW_SIZE as u32,
         }
     }
 
@@ -219,6 +222,7 @@ pub fn process_tcp_packet(ip_header: &IpV4Header, data: &[u8], source_mac: MacAd
         seq: tcp_header.sequence_number(),
         ack: tcp_header.acknowledgment_number(),
         flags: tcp_header.flags(),
+        window_size: tcp_header.window_size(),
         data: payload.to_vec(),
     };
 
@@ -295,7 +299,7 @@ impl Future for WaitForSegment {
         // Only wake for send if there's data AND window space to send it
         if !conn.send_buffer.is_empty() {
             let in_flight = conn.send_seq.wrapping_sub(conn.send_unacked) as usize;
-            if in_flight < WINDOW_SIZE as usize {
+            if in_flight < conn.remote_window as usize {
                 return Poll::Ready(None);
             }
         }
@@ -437,7 +441,7 @@ fn flush_send_buffer(conn: &SharedTcpConnection) {
                 break;
             }
             let in_flight = c.send_seq.wrapping_sub(c.send_unacked) as usize;
-            let window = WINDOW_SIZE as usize;
+            let window = c.remote_window as usize;
             if in_flight >= window {
                 break;
             }
@@ -529,6 +533,7 @@ async fn established_loop(conn: &SharedTcpConnection) {
                         if acked_to.wrapping_sub(unacked) <= c.send_seq.wrapping_sub(unacked) {
                             c.send_unacked = acked_to;
                         }
+                        c.remote_window = seg.window_size as u32;
                     }
 
                     let mut need_ack = false;
