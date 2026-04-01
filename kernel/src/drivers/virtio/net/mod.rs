@@ -374,6 +374,33 @@ impl NetworkDevice {
         index
     }
 
+    pub fn send_packet_batch(&mut self, packets: Vec<Vec<u8>>) {
+        // Reclaim completed TX buffers once
+        for transmitted_packet in self.transmit_queue.receive_buffer() {
+            drop(transmitted_packet);
+        }
+
+        for data in packets {
+            let header = virtio_net_hdr {
+                flags: 0,
+                gso_type: VIRTIO_NET_HDR_GSO_NONE,
+                hdr_len: 0,
+                gso_size: 0,
+                csum_start: 0,
+                csum_offset: 0,
+                num_buffers: 0,
+            };
+
+            let data = [header.as_slice(), data.as_slice()].concat();
+            let _ = self
+                .transmit_queue
+                .put_buffer(data, BufferDirection::DriverWritable);
+        }
+
+        // Single notify for the entire batch
+        self.transmit_queue.notify();
+    }
+
     pub fn get_mac_address(&self) -> MacAddress {
         self.mac_address
     }
