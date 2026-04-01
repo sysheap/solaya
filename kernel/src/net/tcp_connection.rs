@@ -25,6 +25,7 @@ use crate::{
 use super::ipv4::IpV4Header;
 
 const WINDOW_SIZE: u16 = 8192;
+const MSS: usize = 1460;
 const MAX_RETRANSMITS: usize = 5;
 
 static NEXT_EPHEMERAL_PORT: AtomicU16 = AtomicU16::new(49152);
@@ -393,9 +394,13 @@ async fn server_connection_task(
 }
 
 fn flush_send_buffer(conn: &SharedTcpConnection) {
-    let mut c = conn.lock();
-    if !c.send_buffer.is_empty() {
-        let data: Vec<u8> = c.send_buffer.drain(..).collect();
+    loop {
+        let mut c = conn.lock();
+        if c.send_buffer.is_empty() {
+            break;
+        }
+        let chunk_len = c.send_buffer.len().min(MSS);
+        let data: Vec<u8> = c.send_buffer.drain(..chunk_len).collect();
         let seq = c.send_seq;
         let ack = c.recv_ack;
         c.send_seq = seq.wrapping_add(len_as_seq(data.len()));
