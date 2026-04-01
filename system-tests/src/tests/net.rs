@@ -72,3 +72,34 @@ async fn tcp_echo() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+async fn webserver() -> anyhow::Result<()> {
+    let mut solaya =
+        QemuInstance::start_with(QemuOptions::default().add_network_card(true)).await?;
+
+    solaya
+        .run_prog_waiting_for("webserver", "HTTP listening on 1234\n")
+        .await
+        .expect("webserver must succeed to start");
+
+    let port = solaya.network_port().expect("Network must be enabled");
+    let mut stream = tokio::net::TcpStream::connect(format!("127.0.0.1:{}", port)).await?;
+
+    stream
+        .write_all(b"GET / HTTP/1.1\r\nHost: localhost\r\n\r\n")
+        .await?;
+
+    let mut buf = [0u8; 4096];
+    let n = stream.read(&mut buf).await?;
+    let response = String::from_utf8_lossy(&buf[..n]);
+
+    assert!(
+        response.starts_with("HTTP/1.1 200 OK\r\n"),
+        "Expected 200 OK, got {n} bytes: {response}"
+    );
+    assert!(response.contains("Content-Type: text/html"));
+    assert!(response.contains("<title>Solaya</title>"));
+
+    Ok(())
+}
