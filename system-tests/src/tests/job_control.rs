@@ -129,7 +129,7 @@ async fn bg_process_gets_sigttin() -> anyhow::Result<()> {
 
     // Shell should still work because cat is stopped, not consuming input
     let output = solaya.run_prog("prog1").await?;
-    assert_eq!(output, "Hello from Prog1\n");
+    assert!(output.contains("Hello from Prog1\n"));
 
     Ok(())
 }

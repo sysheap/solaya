@@ -1,6 +1,6 @@
 # Codebase Index: webserver
 
-> Generated: 2026-04-01 12:27:37 UTC | Files: 291 | Lines: 48116
+> Generated: 2026-04-01 12:48:24 UTC | Files: 291 | Lines: 48116
 > Languages: C (2), HTML (1), Markdown (21), Python (4), Rust (249), Shell (1), TOML (13)
 
 ## Directory Structure
