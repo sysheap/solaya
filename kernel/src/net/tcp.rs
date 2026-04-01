@@ -15,6 +15,63 @@ pub const FLAG_SYN: u16 = headers::socket::TH_SYN as u16;
 pub const FLAG_RST: u16 = headers::socket::TH_RST as u16;
 pub const FLAG_ACK: u16 = headers::socket::TH_ACK as u16;
 
+const OPT_END: u8 = 0;
+const OPT_NOP: u8 = 1;
+const OPT_MSS: u8 = 2;
+const OPT_WINDOW_SCALE: u8 = 3;
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct TcpOptions {
+    pub mss: Option<u16>,
+    pub window_scale: Option<u8>,
+}
+
+impl TcpOptions {
+    fn parse(data: &[u8]) -> Self {
+        let mut opts = Self::default();
+        let mut i = 0;
+        while i < data.len() {
+            match data[i] {
+                OPT_END => break,
+                OPT_NOP => i += 1,
+                OPT_MSS if i + 3 < data.len() && data[i + 1] == 4 => {
+                    opts.mss = Some(u16::from_be_bytes([data[i + 2], data[i + 3]]));
+                    i += 4;
+                }
+                OPT_WINDOW_SCALE if i + 2 < data.len() && data[i + 1] == 3 => {
+                    opts.window_scale = Some(data[i + 2]);
+                    i += 3;
+                }
+                _ => {
+                    if i + 1 >= data.len() {
+                        break;
+                    }
+                    let len = data[i + 1] as usize;
+                    if len < 2 || i + len > data.len() {
+                        break;
+                    }
+                    i += len;
+                }
+            }
+        }
+        opts
+    }
+}
+
+pub fn build_syn_options(mss: u16, window_scale: u8) -> [u8; 8] {
+    let mss_bytes = mss.to_be_bytes();
+    [
+        OPT_MSS,
+        4,
+        mss_bytes[0],
+        mss_bytes[1],
+        OPT_NOP,
+        OPT_WINDOW_SCALE,
+        3,
+        window_scale,
+    ]
+}
+
 #[derive(Debug, Clone, Copy)]
 #[repr(C)]
 pub struct TcpHeader {
@@ -71,8 +128,14 @@ impl TcpHeader {
         flags: u16,
         window: u16,
         data: &[u8],
+        options: &[u8],
     ) -> Vec<u8> {
-        let data_offset_and_flags = (5u16 << 12) | (flags & 0x1FF);
+        assert!(
+            options.len().is_multiple_of(4),
+            "TCP options must be 4-byte aligned"
+        );
+        let data_offset = 5 + (options.len() / 4) as u16;
+        let data_offset_and_flags = (data_offset << 12) | (flags & 0x1FF);
         let mut tcp_header = Self {
             source_port: BigEndian::from_little_endian(source_port),
             destination_port: BigEndian::from_little_endian(destination_port),
@@ -87,11 +150,15 @@ impl TcpHeader {
         let mut ip_header = IpV4Header::new(
             destination_ip,
             Self::TCP_PROTOCOL,
-            Self::HEADER_SIZE + data.len(),
+            Self::HEADER_SIZE + options.len() + data.len(),
         );
 
-        tcp_header.checksum =
-            BigEndian::from_little_endian(Self::compute_checksum(data, &tcp_header, &ip_header));
+        tcp_header.checksum = BigEndian::from_little_endian(Self::compute_checksum(
+            options,
+            data,
+            &tcp_header,
+            &ip_header,
+        ));
 
         ip_header.header_checksum = BigEndian::from_little_endian(ip_header.calculate_checksum());
 
@@ -104,12 +171,14 @@ impl TcpHeader {
         let frame_len = ethernet_header.as_slice().len()
             + ip_header.as_slice().len()
             + tcp_header.as_slice().len()
+            + options.len()
             + data.len();
         let mut packet = Vec::with_capacity(DRIVER_HEADER_RESERVE + frame_len);
         packet.extend_from_slice(&[0u8; DRIVER_HEADER_RESERVE]);
         packet.extend_from_slice(ethernet_header.as_slice());
         packet.extend_from_slice(ip_header.as_slice());
         packet.extend_from_slice(tcp_header.as_slice());
+        packet.extend_from_slice(options);
         packet.extend_from_slice(data);
 
         debug!("Sending TCP packet with size {}", frame_len);
@@ -120,7 +189,7 @@ impl TcpHeader {
     pub fn process<'a>(
         data: &'a [u8],
         ip_header: &IpV4Header,
-    ) -> Result<(TcpHeader, &'a [u8]), TcpParseError> {
+    ) -> Result<(TcpHeader, TcpOptions, &'a [u8]), TcpParseError> {
         if data.len() < Self::HEADER_SIZE {
             return Err(TcpParseError::PacketTooSmall);
         }
@@ -136,6 +205,13 @@ impl TcpHeader {
         if data.len() < header_bytes {
             return Err(TcpParseError::PacketTooSmall);
         }
+
+        let options = if header_bytes > Self::HEADER_SIZE {
+            TcpOptions::parse(&data[Self::HEADER_SIZE..header_bytes])
+        } else {
+            TcpOptions::default()
+        };
+
         let payload = &data[header_bytes..];
 
         let total_tcp_len =
@@ -148,7 +224,7 @@ impl TcpHeader {
             return Err(TcpParseError::InvalidChecksum);
         }
 
-        Ok((tcp_header, payload))
+        Ok((tcp_header, options, payload))
     }
 
     fn pseudo_header(ip_header: &IpV4Header, tcp_length: usize) -> [u8; 12] {
@@ -164,10 +240,15 @@ impl TcpHeader {
         pseudo_header
     }
 
-    fn compute_checksum(data: &[u8], tcp_header: &TcpHeader, ip_header: &IpV4Header) -> u16 {
-        let tcp_length = Self::HEADER_SIZE + data.len();
+    fn compute_checksum(
+        options: &[u8],
+        data: &[u8],
+        tcp_header: &TcpHeader,
+        ip_header: &IpV4Header,
+    ) -> u16 {
+        let tcp_length = Self::HEADER_SIZE + options.len() + data.len();
         let pseudo = Self::pseudo_header(ip_header, tcp_length);
-        super::checksum::ones_complement_checksum(&[&pseudo, tcp_header.as_slice(), data])
+        super::checksum::ones_complement_checksum(&[&pseudo, tcp_header.as_slice(), options, data])
     }
 
     fn compute_checksum_raw(tcp_bytes: &[u8], ip_header: &IpV4Header, tcp_length: usize) -> u16 {
@@ -217,14 +298,14 @@ mod tests {
         };
 
         let data = b"";
-        let checksum = TcpHeader::compute_checksum(data, &tcp_header, &ip_header);
+        let checksum = TcpHeader::compute_checksum(&[], data, &tcp_header, &ip_header);
 
         let tcp_header_with_checksum = TcpHeader {
             checksum: BigEndian::from_little_endian(checksum),
             ..tcp_header
         };
 
-        let verify = TcpHeader::compute_checksum(data, &tcp_header_with_checksum, &ip_header);
+        let verify = TcpHeader::compute_checksum(&[], data, &tcp_header_with_checksum, &ip_header);
         assert_eq!(verify, 0);
     }
 
@@ -255,14 +336,14 @@ mod tests {
         };
 
         let data = b"Hello TCP!";
-        let checksum = TcpHeader::compute_checksum(data, &tcp_header, &ip_header);
+        let checksum = TcpHeader::compute_checksum(&[], data, &tcp_header, &ip_header);
 
         let tcp_header_with_checksum = TcpHeader {
             checksum: BigEndian::from_little_endian(checksum),
             ..tcp_header
         };
 
-        let verify = TcpHeader::compute_checksum(data, &tcp_header_with_checksum, &ip_header);
+        let verify = TcpHeader::compute_checksum(&[], data, &tcp_header_with_checksum, &ip_header);
         assert_eq!(verify, 0);
     }
 
