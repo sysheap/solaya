@@ -340,6 +340,67 @@ fn wait_for_segment(conn: &SharedTcpConnection) -> WaitForSegment {
     WaitForSegment { conn: conn.clone() }
 }
 
+struct WaitForMailboxOnly {
+    conn: SharedTcpConnection,
+}
+
+impl Future for WaitForMailboxOnly {
+    type Output = ReceivedSegment;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let mut conn = self.conn.lock();
+        if let Some(seg) = conn.segment_mailbox.pop_front() {
+            return Poll::Ready(seg);
+        }
+        conn.segment_waker = Some(cx.waker().clone());
+        Poll::Pending
+    }
+}
+
+async fn wait_for_mailbox_or_timeout(
+    conn: &SharedTcpConnection,
+    seconds: i64,
+) -> Option<ReceivedSegment> {
+    let timeout = crate::processes::timer::sleep(&timespec {
+        tv_sec: seconds,
+        tv_nsec: 0,
+    })
+    .expect("timer must work");
+
+    MailboxOrTimeout {
+        mailbox: WaitForMailboxOnly { conn: conn.clone() },
+        timeout,
+        done: false,
+    }
+    .await
+}
+
+struct MailboxOrTimeout {
+    mailbox: WaitForMailboxOnly,
+    timeout: crate::processes::timer::Sleep,
+    done: bool,
+}
+
+impl Future for MailboxOrTimeout {
+    type Output = Option<ReceivedSegment>;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let this = self.get_mut();
+        if this.done {
+            return Poll::Ready(None);
+        }
+        if let Poll::Ready(seg) = Pin::new(&mut this.mailbox).poll(cx) {
+            this.done = true;
+            return Poll::Ready(Some(seg));
+        }
+        if let Poll::Ready(()) = Pin::new(&mut this.timeout).poll(cx) {
+            this.done = true;
+            return Poll::Ready(None);
+        }
+        Poll::Pending
+    }
+}
+
 async fn wait_for_segment_or_timeout(
     conn: &SharedTcpConnection,
     seconds: i64,
@@ -532,6 +593,37 @@ fn flush_send_buffer(conn: &SharedTcpConnection) {
     }
 }
 
+async fn drain_and_close(conn: &SharedTcpConnection) {
+    loop {
+        flush_send_buffer(conn);
+        let buf_len = conn.lock().send_buffer.len();
+        if buf_len == 0 {
+            break;
+        }
+        match wait_for_mailbox_or_timeout(conn, 5).await {
+            Some(seg) => {
+                if seg.flags & FLAG_RST != 0 {
+                    conn.lock().closed = true;
+                    return;
+                }
+                if seg.flags & FLAG_ACK != 0 {
+                    let mut c = conn.lock();
+                    let acked_to = seg.ack;
+                    let unacked = c.send_unacked;
+                    if acked_to.wrapping_sub(unacked) <= c.send_seq.wrapping_sub(unacked) {
+                        c.send_unacked = acked_to;
+                    }
+                    c.remote_window = seg.window_size as u32;
+                }
+            }
+            None => break,
+        }
+    }
+    send_fin(conn);
+    wait_for_fin_ack(conn).await;
+    conn.lock().closed = true;
+}
+
 fn send_fin(conn: &SharedTcpConnection) {
     let mut c = conn.lock();
     let seq = c.send_seq;
@@ -628,19 +720,13 @@ async fn established_loop(conn: &SharedTcpConnection) {
                     return;
                 }
                 if do_user_close {
-                    flush_send_buffer(conn);
-                    send_fin(conn);
-                    wait_for_fin_ack(conn).await;
-                    conn.lock().closed = true;
+                    drain_and_close(conn).await;
                     return;
                 }
             }
             None => {
                 if conn.lock().user_close_requested {
-                    flush_send_buffer(conn);
-                    send_fin(conn);
-                    wait_for_fin_ack(conn).await;
-                    conn.lock().closed = true;
+                    drain_and_close(conn).await;
                     return;
                 }
             }

@@ -48,8 +48,8 @@ impl LinuxSyscallHandler {
             .current_process
             .with_lock(|p| p.fd_table().get_descriptor(fd))?;
         let data = buf.validate_slice(count)?;
-        descriptor.write(&data).await?;
-        Ok(count as isize)
+        let written = descriptor.write(&data).await?;
+        Ok(written as isize)
     }
 
     pub(super) async fn do_readv(
@@ -112,9 +112,8 @@ impl LinuxSyscallHandler {
             data.append(&mut buf);
         }
 
-        let len = data.len();
-        descriptor.write(&data).await?;
-        Ok(len as isize)
+        let written = descriptor.write(&data).await?;
+        Ok(written as isize)
     }
 
     pub(super) async fn do_pread64(
