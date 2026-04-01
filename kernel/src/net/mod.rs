@@ -209,7 +209,13 @@ fn process_packet(packet: Vec<u8>) {
 }
 
 fn process_ipv4_packet(data: &[u8], source_mac: MacAddress) {
-    let (ipv4_header, rest) = IpV4Header::process(data).expect("IPv4 packet must be processed.");
+    let (ipv4_header, rest) = match IpV4Header::process(data) {
+        Ok(result) => result,
+        Err(err) => {
+            debug!("Dropping IPv4 packet: {:?}", err);
+            return;
+        }
+    };
     arp::cache_insert(ipv4_header.source_ip, source_mac);
 
     match ipv4_header.upper_protocol.get() {

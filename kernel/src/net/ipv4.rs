@@ -31,6 +31,7 @@ impl ByteInterpretable for IpV4Header {}
 #[derive(Debug)]
 pub enum IpV4ParseError {
     PacketTooSmall,
+    FragmentedPacket,
 }
 
 pub const PROTOCOL_TCP: u8 = headers::socket::IPPROTO_TCP as u8;
@@ -71,10 +72,9 @@ impl IpV4Header {
 
         assert!(ipv4_header.total_packet_length.get() as usize <= data.len());
 
-        assert!(
-            ipv4_header.flags_and_offset.get() & 0b100 == 0,
-            "We don't support fragmented packets yet."
-        );
+        if ipv4_header.flags_and_offset.get() & 0x3FFF != 0 {
+            return Err(IpV4ParseError::FragmentedPacket);
+        }
 
         let our_ip = super::ip_addr();
         assert!(
