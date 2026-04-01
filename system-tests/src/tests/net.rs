@@ -3,6 +3,46 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use crate::infra::qemu::{QemuInstance, QemuOptions};
 
 #[tokio::test]
+async fn tcp_throughput() -> anyhow::Result<()> {
+    let mut solaya =
+        QemuInstance::start_with(QemuOptions::default().add_network_card(true)).await?;
+
+    solaya
+        .run_prog_waiting_for("tcp_bench", "tcp_bench listening on 1234\n")
+        .await
+        .expect("tcp_bench program must succeed to start");
+
+    let port = solaya.network_port().expect("Network must be enabled");
+    let mut stream = tokio::net::TcpStream::connect(format!("127.0.0.1:{port}")).await?;
+
+    solaya.stdout().assert_read_until("Connection from").await?;
+
+    // Send 4MB of data
+    let chunk = vec![0xABu8; 65536];
+    let total_to_send: usize = 4 * 1024 * 1024;
+    let mut sent = 0;
+    while sent < total_to_send {
+        let n = chunk.len().min(total_to_send - sent);
+        stream.write_all(&chunk[..n]).await?;
+        sent += n;
+    }
+    drop(stream);
+
+    // Read the benchmark result from guest stdout
+    solaya.stdout().assert_read_until("BENCH_RESULT: ").await?;
+    let result_line = solaya.stdout().assert_read_until("\n").await?;
+    let result = String::from_utf8_lossy(&result_line);
+    eprintln!("TCP throughput: {}", result.trim());
+
+    assert!(
+        result.contains(&format!("bytes={total_to_send}")),
+        "Expected all {total_to_send} bytes received, got: {result}"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn dhcp() -> anyhow::Result<()> {
     // start_with asserts "dhcpd: configured ip" when network is enabled
     let _solaya = QemuInstance::start_with(QemuOptions::default().add_network_card(true)).await?;
