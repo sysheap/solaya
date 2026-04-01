@@ -24,7 +24,7 @@ use crate::{
 
 use super::ipv4::IpV4Header;
 
-const WINDOW_SIZE: u16 = 8192;
+const WINDOW_SIZE: u16 = 65535;
 const MSS: usize = 1460;
 const MAX_RETRANSMITS: usize = 5;
 
@@ -58,15 +58,19 @@ struct ReceivedSegment {
     data: Vec<u8>,
 }
 
+const MAX_SEND_BUFFER: usize = 128 * 1024;
+
 pub struct TcpConnection {
     id: ConnectionId,
     remote_mac: MacAddress,
     send_seq: u32,
+    send_unacked: u32,
     recv_ack: u32,
     recv_buffer: VecDeque<u8>,
     recv_waker: Option<Waker>,
     segment_mailbox: VecDeque<ReceivedSegment>,
     segment_waker: Option<Waker>,
+    send_space_waker: Option<Waker>,
     established: bool,
     closed: bool,
     user_close_requested: bool,
@@ -81,11 +85,13 @@ impl TcpConnection {
             id,
             remote_mac,
             send_seq: initial_seq,
+            send_unacked: initial_seq,
             recv_ack: 0,
             recv_buffer: VecDeque::new(),
             recv_waker: None,
             segment_mailbox: VecDeque::new(),
             segment_waker: None,
+            send_space_waker: None,
             established: false,
             closed: false,
             user_close_requested: false,
@@ -130,6 +136,14 @@ impl TcpConnection {
     pub fn queue_send_data(&mut self, data: &[u8]) -> Option<Waker> {
         self.send_buffer.extend(data);
         self.segment_waker.take()
+    }
+
+    pub fn send_buffer_has_space(&self) -> bool {
+        self.send_buffer.len() < MAX_SEND_BUFFER
+    }
+
+    pub fn register_send_space_waker(&mut self, waker: Waker) {
+        self.send_space_waker = Some(waker);
     }
 
     pub fn request_close(&mut self) -> Option<Waker> {
@@ -271,8 +285,15 @@ impl Future for WaitForSegment {
         if let Some(seg) = conn.segment_mailbox.pop_front() {
             return Poll::Ready(Some(seg));
         }
-        if conn.user_close_requested || !conn.send_buffer.is_empty() {
+        if conn.user_close_requested {
             return Poll::Ready(None);
+        }
+        // Only wake for send if there's data AND window space to send it
+        if !conn.send_buffer.is_empty() {
+            let in_flight = conn.send_seq.wrapping_sub(conn.send_unacked) as usize;
+            if in_flight < WINDOW_SIZE as usize {
+                return Poll::Ready(None);
+            }
         }
         conn.segment_waker = Some(cx.waker().clone());
         Poll::Pending
@@ -353,7 +374,10 @@ async fn server_connection_task(
         match wait_for_segment_or_timeout(&conn, 1).await {
             Some(seg) => {
                 if seg.flags & FLAG_ACK != 0 && seg.ack == iss.wrapping_add(1) {
-                    conn.lock().send_seq = iss.wrapping_add(1);
+                    let mut c = conn.lock();
+                    c.send_seq = iss.wrapping_add(1);
+                    c.send_unacked = iss.wrapping_add(1);
+                    drop(c);
                     break;
                 }
                 if seg.flags & FLAG_RST != 0 {
@@ -394,18 +418,35 @@ async fn server_connection_task(
 }
 
 fn flush_send_buffer(conn: &SharedTcpConnection) {
+    let mut drained_any = false;
     loop {
         let mut c = conn.lock();
         if c.send_buffer.is_empty() {
             break;
         }
-        let chunk_len = c.send_buffer.len().min(MSS);
-        let data: Vec<u8> = c.send_buffer.drain(..chunk_len).collect();
+        let in_flight = c.send_seq.wrapping_sub(c.send_unacked) as usize;
+        let window = WINDOW_SIZE as usize;
+        if in_flight >= window {
+            break;
+        }
+        let allowed = (window - in_flight).min(MSS).min(c.send_buffer.len());
+        if allowed == 0 {
+            break;
+        }
+        let data: Vec<u8> = c.send_buffer.drain(..allowed).collect();
+        drained_any = true;
         let seq = c.send_seq;
         let ack = c.recv_ack;
         c.send_seq = seq.wrapping_add(len_as_seq(data.len()));
         drop(c);
         send_data_packet(conn, FLAG_ACK, seq, ack, &data);
+    }
+    // Wake any writer blocked on send buffer space
+    if drained_any {
+        let waker = conn.lock().send_space_waker.take();
+        if let Some(w) = waker {
+            w.wake();
+        }
     }
 }
 
@@ -438,6 +479,15 @@ async fn established_loop(conn: &SharedTcpConnection) {
 
                 let (send_ack, waker, do_fin_ack, do_user_close) = {
                     let mut c = conn.lock();
+
+                    // Advance send window based on remote's ACK
+                    if seg.flags & FLAG_ACK != 0 {
+                        let acked_to = seg.ack;
+                        let unacked = c.send_unacked;
+                        if acked_to.wrapping_sub(unacked) <= c.send_seq.wrapping_sub(unacked) {
+                            c.send_unacked = acked_to;
+                        }
+                    }
 
                     let mut need_ack = false;
                     let mut waker = None;
@@ -601,6 +651,7 @@ pub async fn initiate_connect(
                         let mut c = conn.lock();
                         c.recv_ack = seg.seq.wrapping_add(1);
                         c.send_seq = iss.wrapping_add(1);
+                        c.send_unacked = iss.wrapping_add(1);
                         c.established = true;
                         (c.send_seq, c.recv_ack)
                     };
@@ -680,4 +731,25 @@ pub fn wait_for_recv_data(conn: &SharedTcpConnection, count: usize) -> WaitForRe
         conn: conn.clone(),
         count,
     }
+}
+
+pub struct WaitForSendSpace {
+    conn: SharedTcpConnection,
+}
+
+impl Future for WaitForSendSpace {
+    type Output = ();
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let mut c = self.conn.lock();
+        if c.send_buffer_has_space() || c.is_closed() {
+            return Poll::Ready(());
+        }
+        c.register_send_space_waker(cx.waker().clone());
+        Poll::Pending
+    }
+}
+
+pub fn wait_for_send_space(conn: &SharedTcpConnection) -> WaitForSendSpace {
+    WaitForSendSpace { conn: conn.clone() }
 }
