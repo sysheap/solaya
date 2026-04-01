@@ -392,20 +392,30 @@ async fn server_connection_task(
     cleanup_connection(conn_id);
 }
 
+fn flush_send_buffer(conn: &SharedTcpConnection) {
+    let mut c = conn.lock();
+    if !c.send_buffer.is_empty() {
+        let data: Vec<u8> = c.send_buffer.drain(..).collect();
+        let seq = c.send_seq;
+        let ack = c.recv_ack;
+        c.send_seq = seq.wrapping_add(len_as_seq(data.len()));
+        drop(c);
+        send_data_packet(conn, FLAG_ACK, seq, ack, &data);
+    }
+}
+
+fn send_fin(conn: &SharedTcpConnection) {
+    let mut c = conn.lock();
+    let seq = c.send_seq;
+    let ack = c.recv_ack;
+    c.send_seq = seq.wrapping_add(1);
+    drop(c);
+    send_data_packet(conn, FLAG_FIN | FLAG_ACK, seq, ack, &[]);
+}
+
 async fn established_loop(conn: &SharedTcpConnection) {
     loop {
-        // Drain and send any queued user data while not holding the lock across send_packet
-        {
-            let mut c = conn.lock();
-            if !c.send_buffer.is_empty() {
-                let data: Vec<u8> = c.send_buffer.drain(..).collect();
-                let seq = c.send_seq;
-                let ack = c.recv_ack;
-                c.send_seq = seq.wrapping_add(len_as_seq(data.len()));
-                drop(c);
-                send_data_packet(conn, FLAG_ACK, seq, ack, &data);
-            }
-        }
+        flush_send_buffer(conn);
 
         match wait_for_segment(conn).await {
             Some(seg) => {
@@ -443,11 +453,12 @@ async fn established_loop(conn: &SharedTcpConnection) {
                         let ack_info = Some((c.send_seq, c.recv_ack));
                         (ack_info, waker, true, false)
                     } else if c.user_close_requested {
-                        let seq = c.send_seq;
-                        let ack = c.recv_ack;
-                        c.send_seq = seq.wrapping_add(1);
                         (
-                            if need_ack { Some((seq, ack)) } else { None },
+                            if need_ack {
+                                Some((c.send_seq, c.recv_ack))
+                            } else {
+                                None
+                            },
                             waker,
                             false,
                             true,
@@ -477,31 +488,17 @@ async fn established_loop(conn: &SharedTcpConnection) {
                     return;
                 }
                 if do_user_close {
-                    let (seq, ack) = {
-                        let c = conn.lock();
-                        (c.send_seq.wrapping_sub(1), c.recv_ack)
-                    };
-                    send_data_packet(conn, FLAG_FIN | FLAG_ACK, seq, ack, &[]);
+                    flush_send_buffer(conn);
+                    send_fin(conn);
                     wait_for_fin_ack(conn).await;
                     conn.lock().closed = true;
                     return;
                 }
             }
             None => {
-                // User close (no segment)
-                let close_info = {
-                    let mut c = conn.lock();
-                    if c.user_close_requested {
-                        let seq = c.send_seq;
-                        let ack = c.recv_ack;
-                        c.send_seq = seq.wrapping_add(1);
-                        Some((seq, ack))
-                    } else {
-                        None
-                    }
-                };
-                if let Some((seq, ack)) = close_info {
-                    send_data_packet(conn, FLAG_FIN | FLAG_ACK, seq, ack, &[]);
+                if conn.lock().user_close_requested {
+                    flush_send_buffer(conn);
+                    send_fin(conn);
                     wait_for_fin_ack(conn).await;
                     conn.lock().closed = true;
                     return;

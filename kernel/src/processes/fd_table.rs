@@ -328,10 +328,28 @@ impl FdTable {
     }
 
     pub fn close_all(&mut self) {
+        for entry in self.table.values() {
+            Self::close_tcp_if_needed(&entry.descriptor);
+        }
         self.table.clear();
     }
 
     pub fn close_cloexec_fds(&mut self) {
-        self.table.retain(|_, entry| !entry.flags.is_cloexec());
+        self.table.retain(|_, entry| {
+            if entry.flags.is_cloexec() {
+                Self::close_tcp_if_needed(&entry.descriptor);
+                false
+            } else {
+                true
+            }
+        });
+    }
+
+    fn close_tcp_if_needed(descriptor: &FileDescriptor) {
+        if let FileDescriptor::TcpStream(conn) = descriptor {
+            if let Some(w) = conn.lock().request_close() {
+                w.wake();
+            }
+        }
     }
 }
