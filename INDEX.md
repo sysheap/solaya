@@ -1,6 +1,6 @@
 # Codebase Index: webserver
 
-> Generated: 2026-04-01 12:19:43 UTC | Files: 291 | Lines: 48075
+> Generated: 2026-04-01 12:27:37 UTC | Files: 291 | Lines: 48116
 > Languages: C (2), HTML (1), Markdown (21), Python (4), Rust (249), Shell (1), TOML (13)
 
 ## Directory Structure
@@ -1659,7 +1659,7 @@ webserver/
 
 ## INDEX.md
 
-**Language:** Markdown | **Size:** 230.3 KB | **Lines:** 9823
+**Language:** Markdown | **Size:** 230.6 KB | **Lines:** 9834
 
 **Declarations:**
 
@@ -9828,7 +9828,7 @@ webserver/
 
 ## userspace/static/index.html
 
-**Language:** HTML | **Size:** 1.7 KB | **Lines:** 51
+**Language:** HTML | **Size:** 2.9 KB | **Lines:** 81
 
 **Declarations:**
 
