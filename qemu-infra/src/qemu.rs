@@ -182,11 +182,14 @@ impl QemuInstance {
         // with the init process. Accumulate boot output to check if the ext2 init
         // message was already seen before the prompt.
         let mut boot_tail = stdout.assert_read_until("init process started").await?;
-        if network_port.is_some() {
-            boot_tail.extend(stdout.assert_read_until("dhcpd: configured ip").await?);
-        }
         boot_tail.extend(stdout.assert_read_until("starting shell").await?);
         boot_tail.extend(stdout.assert_read_until(PROMPT).await?);
+        if network_port.is_some() {
+            let seen = String::from_utf8_lossy(&boot_tail);
+            if !seen.contains("dhcpd: configured ip") {
+                boot_tail.extend(stdout.assert_read_until("dhcpd: configured ip").await?);
+            }
+        }
 
         if has_block_device {
             let seen = String::from_utf8_lossy(&boot_tail);
