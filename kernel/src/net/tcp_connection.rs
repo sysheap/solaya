@@ -24,6 +24,32 @@ use crate::{
 
 use super::ipv4::IpV4Header;
 
+use headers::syscall_types::timespec;
+
+struct TcpStats {
+    bytes_sent: u64,
+    bytes_received: u64,
+    packets_sent: u64,
+    packets_received: u64,
+    flushes: u64,
+    segments_flushed: u64,
+    start_time: timespec,
+}
+
+impl TcpStats {
+    fn new() -> Self {
+        Self {
+            bytes_sent: 0,
+            bytes_received: 0,
+            packets_sent: 0,
+            packets_received: 0,
+            flushes: 0,
+            segments_flushed: 0,
+            start_time: crate::processes::timer::current_time(),
+        }
+    }
+}
+
 const WINDOW_SIZE: u16 = 65535;
 const MSS: usize = 1460;
 const MAX_RETRANSMITS: usize = 5;
@@ -77,6 +103,7 @@ pub struct TcpConnection {
     user_close_requested: bool,
     send_buffer: VecDeque<u8>,
     remote_window: u32,
+    stats: TcpStats,
 }
 
 pub type SharedTcpConnection = Arc<Spinlock<TcpConnection>>;
@@ -99,6 +126,7 @@ impl TcpConnection {
             user_close_requested: false,
             send_buffer: VecDeque::new(),
             remote_window: WINDOW_SIZE as u32,
+            stats: TcpStats::new(),
         }
     }
 
@@ -312,8 +340,6 @@ fn wait_for_segment(conn: &SharedTcpConnection) -> WaitForSegment {
     WaitForSegment { conn: conn.clone() }
 }
 
-use headers::syscall_types::timespec;
-
 async fn wait_for_segment_or_timeout(
     conn: &SharedTcpConnection,
     seconds: i64,
@@ -422,6 +448,7 @@ async fn server_connection_task(
     info!("TCP connection established (server) {:?}", conn_id);
 
     established_loop(&conn).await;
+    log_connection_stats(&conn);
     cleanup_connection(conn_id);
 }
 
@@ -468,6 +495,9 @@ fn flush_send_buffer(conn: &SharedTcpConnection) {
         return;
     }
 
+    let segment_count = segments.len() as u64;
+    let total_bytes: u64 = segments.iter().map(|s| s.data.len() as u64).sum();
+
     // Build all packets outside the connection lock
     let packets: Vec<Vec<u8>> = segments
         .into_iter()
@@ -489,8 +519,14 @@ fn flush_send_buffer(conn: &SharedTcpConnection) {
     // Send all packets in one batch (single device lock + single notify)
     super::send_packets(packets);
 
-    // Wake any writer blocked on send buffer space
-    let waker = conn.lock().send_space_waker.take();
+    // Update stats and wake any writer blocked on send buffer space
+    let mut c = conn.lock();
+    c.stats.flushes += 1;
+    c.stats.segments_flushed += segment_count;
+    c.stats.packets_sent += segment_count;
+    c.stats.bytes_sent += total_bytes;
+    let waker = c.send_space_waker.take();
+    drop(c);
     if let Some(w) = waker {
         w.wake();
     }
@@ -541,6 +577,8 @@ async fn established_loop(conn: &SharedTcpConnection) {
 
                     // Process incoming data (drop out-of-order per minimal TCP)
                     if !seg.data.is_empty() && seg.seq == c.recv_ack {
+                        c.stats.bytes_received += seg.data.len() as u64;
+                        c.stats.packets_received += 1;
                         c.recv_ack = c.recv_ack.wrapping_add(len_as_seq(seg.data.len()));
                         c.recv_buffer.extend(&seg.data);
                         waker = c.recv_waker.take();
@@ -657,6 +695,34 @@ async fn wait_for_fin_ack(conn: &SharedTcpConnection) {
     }
 }
 
+fn log_connection_stats(conn: &SharedTcpConnection) {
+    let c = conn.lock();
+    let now = crate::processes::timer::current_time();
+    let elapsed_ms = (now.tv_sec - c.stats.start_time.tv_sec) * 1000
+        + (now.tv_nsec - c.stats.start_time.tv_nsec) / 1_000_000;
+    let avg_seg_per_flush = c
+        .stats
+        .segments_flushed
+        .checked_div(c.stats.flushes)
+        .unwrap_or(0);
+    let elapsed_ms_u64 = u64::try_from(elapsed_ms).unwrap_or(0);
+    let throughput_kbps = (c.stats.bytes_sent * 8)
+        .checked_div(elapsed_ms_u64)
+        .unwrap_or(0);
+    info!(
+        "TCP {:?} closed: sent={}B/{}pkts recv={}B/{}pkts flushes={} avg_seg/flush={} {}ms {}kbit/s",
+        c.id,
+        c.stats.bytes_sent,
+        c.stats.packets_sent,
+        c.stats.bytes_received,
+        c.stats.packets_received,
+        c.stats.flushes,
+        avg_seg_per_flush,
+        elapsed_ms,
+        throughput_kbps,
+    );
+}
+
 fn cleanup_connection(id: ConnectionId) {
     TCP_CONNECTIONS.lock().remove(&id);
     debug!("TCP connection cleaned up: {:?}", id);
@@ -707,6 +773,7 @@ pub async fn initiate_connect(
                     let conn_for_task = conn.clone();
                     kernel_tasks::spawn(async move {
                         established_loop(&conn_for_task).await;
+                        log_connection_stats(&conn_for_task);
                         cleanup_connection(conn_id);
                     });
                     return Some(conn);
