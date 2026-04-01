@@ -17,6 +17,7 @@ extern char _binary_doom1_wad_end[];
 static int fb_fd = -1;
 static int kb_fd = -1;
 static int log_fd = -1;
+static int web_input_fd = -1;
 static struct termios orig_termios;
 
 #define FB_WIDTH  640
@@ -93,9 +94,11 @@ void DG_Init(void)
 {
     log_fd = open("/tmp/doom_fps.log", O_WRONLY | O_CREAT | O_TRUNC, 0644);
 
-    fb_fd = open("/dev/fb0", O_WRONLY);
+    const char *fb_env = getenv("DOOM_FB_PATH");
+    const char *fb_path = fb_env ? fb_env : "/dev/fb0";
+    fb_fd = open(fb_path, O_WRONLY);
     if (fb_fd < 0) {
-        fprintf(stderr, "Failed to open /dev/fb0\n");
+        fprintf(stderr, "Failed to open %s\n", fb_path);
         exit(1);
     }
 
@@ -109,6 +112,13 @@ void DG_Init(void)
         lseek(fb_fd, (border + DOOMGENERIC_RESY) * FB_WIDTH * sizeof(uint32_t), SEEK_SET);
         write(fb_fd, black, border_bytes);
         free(black);
+    }
+
+    const char *input_env = getenv("DOOM_INPUT_PATH");
+    if (input_env) {
+        web_input_fd = open(input_env, O_RDONLY | O_NONBLOCK);
+        if (web_input_fd >= 0)
+            fprintf(stderr, "Using web input from %s\n", input_env);
     }
 
     kb_fd = open("/dev/keyboard0", O_RDONLY | O_NONBLOCK);
@@ -238,11 +248,37 @@ static struct virtio_input_event event_buf[MAX_EVENTS];
 static int event_count = 0;
 static int event_index = 0;
 
+/* Buffer for web input events: [keycode, pressed] pairs */
+static uint8_t web_buf[64];
+static int web_count = 0;
+static int web_idx = 0;
+
 static int pending_release = 0;
 static unsigned char pending_release_key = 0;
 
 int DG_GetKey(int *pressed, unsigned char *doomKey)
 {
+    /* Web input path: 2-byte events [linux_keycode, is_pressed] */
+    if (web_input_fd >= 0) {
+        if (web_idx >= web_count) {
+            ssize_t n = read(web_input_fd, web_buf, sizeof(web_buf));
+            if (n > 0) {
+                web_count = (n / 2) * 2;
+                web_idx = 0;
+            }
+        }
+        if (web_idx < web_count) {
+            unsigned char key = linux_keycode_to_doom(web_buf[web_idx]);
+            uint8_t is_pressed = web_buf[web_idx + 1];
+            web_idx += 2;
+            if (key) {
+                *doomKey = key;
+                *pressed = is_pressed ? 1 : 0;
+                return 1;
+            }
+        }
+    }
+
     if (kb_fd >= 0) {
         /* VirtIO keyboard path: real press/release events */
         if (event_index >= event_count) {
