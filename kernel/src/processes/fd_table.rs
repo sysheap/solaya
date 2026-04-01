@@ -168,6 +168,7 @@ impl FileDescriptor {
             }
             FileDescriptor::PipeWrite(buf) => buf.shared_buffer().lock().write(data),
             FileDescriptor::TcpStream(conn) => {
+                crate::net::tcp_connection::wait_for_send_space(conn).await;
                 let waker = conn.lock().queue_send_data(data);
                 if let Some(w) = waker {
                     w.wake();
