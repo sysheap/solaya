@@ -346,10 +346,10 @@ impl FdTable {
     }
 
     fn close_tcp_if_needed(descriptor: &FileDescriptor) {
-        if let FileDescriptor::TcpStream(conn) = descriptor {
-            if let Some(w) = conn.lock().request_close() {
-                w.wake();
-            }
+        if let FileDescriptor::TcpStream(conn) = descriptor
+            && let Some(w) = conn.lock().request_close()
+        {
+            w.wake();
         }
     }
 }
