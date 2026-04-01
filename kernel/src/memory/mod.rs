@@ -111,6 +111,23 @@ pub fn kernel_device_mappings() -> alloc::vec::Vec<page_tables::MappingDescripti
                 });
             }
         }
+        // SiFive L2 cache controller — needed for DMA cache coherency
+        if let Some(node) = soc.find_node("cache-controller")
+            && let Some(reg) = node.parse_reg_property()
+        {
+            let size = if reg.size < PAGE_SIZE {
+                PAGE_SIZE
+            } else {
+                reg.size
+            };
+            mappings.push(page_tables::MappingDescription {
+                virtual_address_start: VirtAddr::new(reg.address),
+                size,
+                privileges: page_tables::XWRMode::ReadWrite,
+                name: "L2 Cache Controller",
+                is_device: true,
+            });
+        }
     }
 
     if device_tree::THE.root_node().find_node("test").is_some() {

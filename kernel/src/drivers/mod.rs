@@ -4,6 +4,7 @@ pub mod jh7110;
 pub mod virtio;
 
 use alloc::{boxed::Box, vec::Vec};
+use core::sync::atomic::{AtomicBool, Ordering};
 
 use crate::{
     device_tree, fs, info,
@@ -96,6 +97,9 @@ pub fn init_dwmac_devices() {
 
         // Initialize clocks, resets, and syscon
         dwmac::jh7110::init_gmac(gmac_index, &clock_ids, &reset_ids);
+
+        // Initialize L2 cache controller for DMA coherency (once)
+        init_l2_cache_from_device_tree(&soc);
 
         // PHY address matches GMAC index (ethernet-phy@0 / ethernet-phy@1)
         let phy_addr = gmac_index as u32;
@@ -195,6 +199,19 @@ fn init_rng_device(pci_devices: &mut Vec<PCIDevice>) {
             .expect("RNG device initialization must work.");
         virtio::rng::set_device(rng);
         virtio::rng::register_devfs_node();
+    }
+}
+
+fn init_l2_cache_from_device_tree(soc: &device_tree::Node<'_>) {
+    static INITIALIZED: AtomicBool = AtomicBool::new(false);
+    if INITIALIZED.swap(true, Ordering::Relaxed) {
+        return;
+    }
+    if let Some(node) = soc.find_node("cache-controller")
+        && let Some(reg) = node.parse_reg_property()
+    {
+        arch::cache::init(reg.address);
+        info!("L2 cache controller initialized at {:#x}", reg.address);
     }
 }
 

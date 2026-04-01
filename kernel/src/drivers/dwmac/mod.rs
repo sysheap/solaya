@@ -1,7 +1,6 @@
 pub mod jh7110;
 
 use alloc::{boxed::Box, vec::Vec};
-use core::sync::atomic::{Ordering, fence};
 
 use crate::{debug, info, klibc::MMIO, net::mac::MacAddress};
 
@@ -501,7 +500,6 @@ impl DwmacDevice {
             desc.des0 = buf_addr as u32;
             desc.des1 = 0;
             desc.des2 = 0;
-            fence(Ordering::Release);
             desc.des3 = DESC3_OWN | DESC3_BUF1V;
         }
 
@@ -513,10 +511,17 @@ impl DwmacDevice {
             desc.des3 = 0;
         }
 
-        fence(Ordering::Release);
-
-        let tx_base = &self.tx_ring.descriptors[0] as *const _ as usize;
+        // Flush descriptor rings from CPU cache to RAM so DMA sees them
         let rx_base = &self.rx_ring.descriptors[0] as *const _ as usize;
+        arch::cache::flush_range(
+            rx_base,
+            RX_RING_SIZE * core::mem::size_of::<DmaDescriptor>(),
+        );
+        let tx_base = &self.tx_ring.descriptors[0] as *const _ as usize;
+        arch::cache::flush_range(
+            tx_base,
+            TX_RING_SIZE * core::mem::size_of::<DmaDescriptor>(),
+        );
 
         // TX descriptor list
         write_reg(self.base, DMA_CH0_TXDESC_LIST_HADDR, 0);
@@ -588,9 +593,14 @@ impl crate::net::NetworkDevice for DwmacDevice {
         let mut received = Vec::new();
 
         loop {
-            let desc = &self.rx_ring.descriptors[self.rx_idx];
-            fence(Ordering::Acquire);
-            let des3 = MMIO::<u32>::new(&desc.des3 as *const u32 as usize).read();
+            // Invalidate descriptor so CPU reads DMA's writes from RAM
+            let desc_addr = &self.rx_ring.descriptors[self.rx_idx] as *const _ as usize;
+            arch::cache::flush_range(desc_addr, core::mem::size_of::<DmaDescriptor>());
+
+            let des3 = MMIO::<u32>::new(
+                &self.rx_ring.descriptors[self.rx_idx].des3 as *const u32 as usize,
+            )
+            .read();
 
             if des3 & DESC3_OWN != 0 {
                 break;
@@ -598,6 +608,10 @@ impl crate::net::NetworkDevice for DwmacDevice {
 
             let length = (des3 & 0x7FFF) as usize;
             if length > 0 && length <= PACKET_BUF_SIZE {
+                // Invalidate RX buffer so CPU reads DMA-written packet data
+                let buf_addr = &self.rx_buffers[self.rx_idx].0 as *const _ as usize;
+                arch::cache::flush_range(buf_addr, length);
+
                 let data = self.rx_buffers[self.rx_idx].0[..length].to_vec();
                 received.push(data);
             }
@@ -608,11 +622,13 @@ impl crate::net::NetworkDevice for DwmacDevice {
             desc.des0 = buf_addr as u32;
             desc.des1 = 0;
             desc.des2 = 0;
-            fence(Ordering::Release);
             desc.des3 = DESC3_OWN | DESC3_BUF1V;
 
-            // Update tail pointer
+            // Flush descriptor to RAM so DMA sees OWN bit
             let desc_addr = desc as *const _ as usize;
+            arch::cache::flush_range(desc_addr, core::mem::size_of::<DmaDescriptor>());
+
+            // Update tail pointer
             write_reg(self.base, DMA_CH0_RXDESC_TAIL_PTR, desc_addr as u32);
 
             self.rx_idx = (self.rx_idx + 1) % RX_RING_SIZE;
@@ -624,11 +640,14 @@ impl crate::net::NetworkDevice for DwmacDevice {
     fn send_packet(&mut self, data: Vec<u8>) {
         let length = data.len().min(PACKET_BUF_SIZE);
 
-        let desc = &self.tx_ring.descriptors[self.tx_idx];
         // Wait for descriptor to be available (OWN cleared by hardware)
         for _ in 0..1_000_000 {
-            fence(Ordering::Acquire);
-            let des3 = MMIO::<u32>::new(&desc.des3 as *const u32 as usize).read();
+            let desc_addr = &self.tx_ring.descriptors[self.tx_idx] as *const _ as usize;
+            arch::cache::flush_range(desc_addr, core::mem::size_of::<DmaDescriptor>());
+            let des3 = MMIO::<u32>::new(
+                &self.tx_ring.descriptors[self.tx_idx].des3 as *const u32 as usize,
+            )
+            .read();
             if des3 & DESC3_OWN == 0 {
                 break;
             }
@@ -638,15 +657,19 @@ impl crate::net::NetworkDevice for DwmacDevice {
         // Copy data to TX buffer
         self.tx_buffers[self.tx_idx].0[..length].copy_from_slice(&data[..length]);
 
+        // Flush TX buffer to RAM so DMA reads actual packet data
         let buf_addr = &self.tx_buffers[self.tx_idx].0 as *const _ as usize;
+        arch::cache::flush_range(buf_addr, length);
+
         let desc = &mut self.tx_ring.descriptors[self.tx_idx];
         desc.des0 = buf_addr as u32;
         desc.des1 = 0;
         desc.des2 = length as u32;
-        fence(Ordering::Release);
         desc.des3 = DESC3_OWN | DESC3_FD | DESC3_LD | length as u32;
 
-        fence(Ordering::Release);
+        // Flush descriptor to RAM so DMA sees OWN bit and buffer address
+        let desc_addr = desc as *const _ as usize;
+        arch::cache::flush_range(desc_addr, core::mem::size_of::<DmaDescriptor>());
 
         // Advance TX index and write tail pointer to trigger DMA
         self.tx_idx = (self.tx_idx + 1) % TX_RING_SIZE;
