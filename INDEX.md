@@ -1,6 +1,6 @@
 # Codebase Index: fix-diagnostics-for-llm
 
-> Generated: 2026-04-01 12:23:40 UTC | Files: 290 | Lines: 47898
+> Generated: 2026-04-01 12:24:51 UTC | Files: 290 | Lines: 47902
 > Languages: C (2), Markdown (21), Python (4), Rust (248), Shell (1), TOML (14)
 
 ## Directory Structure
@@ -510,6 +510,7 @@ fix-diagnostics-for-llm/
 
 **boot/Cargo.toml**
 - `[package]`
+- `[[bin]]`
 - `[dependencies]`
 
 **common/Cargo.toml**
@@ -2013,7 +2014,7 @@ fix-diagnostics-for-llm/
 
 ## boot/Cargo.toml
 
-**Language:** TOML | **Size:** 255 B | **Lines:** 12
+**Language:** TOML | **Size:** 291 B | **Lines:** 16
 
 **Imports:**
 - `solaya`
