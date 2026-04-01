@@ -1,6 +1,3 @@
 [check]
 command = "clippy"
 allTargets = false
-
-[cfg]
-setTest = false

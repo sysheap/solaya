@@ -1,6 +1,6 @@
 # Codebase Index: fix-diagnostics-for-llm
 
-> Generated: 2026-04-01 12:42:02 UTC | Files: 290 | Lines: 47900
+> Generated: 2026-04-01 12:24:51 UTC | Files: 290 | Lines: 47902
 > Languages: C (2), Markdown (21), Python (4), Rust (248), Shell (1), TOML (14)
 
 ## Directory Structure
@@ -510,6 +510,7 @@ fix-diagnostics-for-llm/
 
 **boot/Cargo.toml**
 - `[package]`
+- `[[bin]]`
 - `[dependencies]`
 
 **common/Cargo.toml**
@@ -1369,7 +1370,6 @@ fix-diagnostics-for-llm/
 
 **rust-analyzer.toml**
 - `[check]`
-- `[cfg]`
 
 **sys/Cargo.toml**
 - `[package]`
@@ -1655,7 +1655,7 @@ fix-diagnostics-for-llm/
 
 ## INDEX.md
 
-**Language:** Markdown | **Size:** 229.9 KB | **Lines:** 9794
+**Language:** Markdown | **Size:** 229.9 KB | **Lines:** 9793
 
 **Declarations:**
 
@@ -1671,7 +1671,7 @@ fix-diagnostics-for-llm/
 
 ## arch/Cargo.toml
 
-**Language:** TOML | **Size:** 189 B | **Lines:** 12
+**Language:** TOML | **Size:** 202 B | **Lines:** 13
 
 **Imports:**
 - `common`
@@ -2014,7 +2014,7 @@ fix-diagnostics-for-llm/
 
 ## boot/Cargo.toml
 
-**Language:** TOML | **Size:** 255 B | **Lines:** 12
+**Language:** TOML | **Size:** 291 B | **Lines:** 16
 
 **Imports:**
 - `solaya`
@@ -7605,7 +7605,7 @@ fix-diagnostics-for-llm/
 
 ## rust-analyzer.toml
 
-**Language:** TOML | **Size:** 69 B | **Lines:** 6
+**Language:** TOML | **Size:** 46 B | **Lines:** 3
 
 **Declarations:**
 
@@ -7625,7 +7625,7 @@ fix-diagnostics-for-llm/
 
 ## sys/Cargo.toml
 
-**Language:** TOML | **Size:** 337 B | **Lines:** 17
+**Language:** TOML | **Size:** 350 B | **Lines:** 18
 
 **Imports:**
 - `arch`
