@@ -169,11 +169,15 @@ impl FileDescriptor {
             FileDescriptor::PipeWrite(buf) => buf.shared_buffer().lock().write(data),
             FileDescriptor::TcpStream(conn) => {
                 crate::net::tcp_connection::wait_for_send_space(conn).await;
-                let waker = conn.lock().queue_send_data(data);
+                let mut c = conn.lock();
+                let space = c.send_buffer_space();
+                let to_write = data.len().min(space).max(1);
+                let waker = c.queue_send_data(&data[..to_write]);
+                drop(c);
                 if let Some(w) = waker {
                     w.wake();
                 }
-                Ok(data.len())
+                Ok(to_write)
             }
             FileDescriptor::VfsFile(file) => {
                 let block_info = {

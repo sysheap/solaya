@@ -142,6 +142,10 @@ impl TcpConnection {
         self.send_buffer.len() < MAX_SEND_BUFFER
     }
 
+    pub fn send_buffer_space(&self) -> usize {
+        MAX_SEND_BUFFER.saturating_sub(self.send_buffer.len())
+    }
+
     pub fn register_send_space_waker(&mut self, waker: Waker) {
         self.send_space_waker = Some(waker);
     }
