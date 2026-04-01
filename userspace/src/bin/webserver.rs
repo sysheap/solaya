@@ -1,6 +1,6 @@
 use std::{
     fs::{self, File, OpenOptions},
-    io::{Read, Seek, SeekFrom, Write},
+    io::{Read, Write},
     net::{Shutdown, TcpListener, TcpStream},
     process::Command,
     sync::atomic::{AtomicU32, Ordering},
@@ -173,6 +173,10 @@ fn read_ws_frame(stream: &mut TcpStream) -> Option<Vec<u8>> {
         u64::from_be_bytes(buf) as usize
     };
 
+    if payload_len > 65536 {
+        return None;
+    }
+
     let mask_key = if masked {
         let mut mk = [0u8; 4];
         if stream.read_exact(&mut mk).is_err() {
@@ -295,15 +299,6 @@ fn handle_websocket(mut stream: TcpStream, client_key: &str) {
     });
 
     // Writer loop: read framebuffer file, convert BGRA→RGBA, send via WebSocket
-    let mut fb = match File::open(&fb_path) {
-        Ok(f) => f,
-        Err(_) => {
-            let _ = child.kill();
-            let _ = fs::remove_file(&fb_path);
-            let _ = fs::remove_file(&key_path);
-            return;
-        }
-    };
     let mut fb_buf = vec![0u8; FB_SIZE];
     let mut stream_buf = vec![0u8; STREAM_SIZE];
     let frame_interval = Duration::from_millis(33);
@@ -311,10 +306,15 @@ fn handle_websocket(mut stream: TcpStream, client_key: &str) {
     loop {
         let frame_start = Instant::now();
 
-        if fb.seek(SeekFrom::Start(0)).is_err() {
-            break;
-        }
-        if fb.read_exact(&mut fb_buf).is_err() {
+        // Reopen file each frame to ensure we see DOOM's writes
+        let read_ok = (|| {
+            let mut fb = match File::open(&fb_path) {
+                Ok(f) => f,
+                Err(_) => return false,
+            };
+            fb.read_exact(&mut fb_buf).is_ok()
+        })();
+        if !read_ok {
             thread::sleep(Duration::from_millis(100));
             continue;
         }
