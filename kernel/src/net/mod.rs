@@ -127,7 +127,10 @@ pub fn open_sockets() -> &'static Spinlock<LazyCell<OpenSockets>> {
     &NETWORK_STACK.open_sockets
 }
 
+static CACHED_MAC: Spinlock<Option<MacAddress>> = Spinlock::new(None);
+
 pub fn assign_network_device(device: NetworkDevice) {
+    *CACHED_MAC.lock() = Some(device.get_mac_address());
     *NETWORK_STACK.device.lock() = Some(device);
 }
 
@@ -169,12 +172,9 @@ pub fn send_packets(packets: Vec<Vec<u8>>) {
 }
 
 pub fn current_mac_address() -> MacAddress {
-    NETWORK_STACK
-        .device
+    CACHED_MAC
         .lock()
-        .as_ref()
-        .expect("There must be a configured network device.")
-        .get_mac_address()
+        .expect("MAC address must be cached after device init")
 }
 
 fn process_packet(packet: Vec<u8>) {
