@@ -1,2 +1,2 @@
 [editor]
-workspace-lsp-roots = ["./kernel", "./system-tests", "./userspace", "./qemu-infra", "./mcp-server"]
+workspace-lsp-roots = ["./system-tests", "./qemu-infra", "./mcp-server"]

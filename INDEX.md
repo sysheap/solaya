@@ -1,12 +1,12 @@
-# Codebase Index: webserver
+# Codebase Index: fix-diagnostics-for-llm
 
-> Generated: 2026-04-01 12:48:24 UTC | Files: 291 | Lines: 48116
-> Languages: C (2), HTML (1), Markdown (21), Python (4), Rust (249), Shell (1), TOML (13)
+> Generated: 2026-04-01 08:57:42 UTC | Files: 289 | Lines: 47882
+> Languages: C (2), Markdown (21), Python (4), Rust (248), Shell (1), TOML (13)
 
 ## Directory Structure
 
 ```
-webserver/
+fix-diagnostics-for-llm/
   CLAUDE.md
   Cargo.toml
   INDEX.md
@@ -350,12 +350,9 @@ webserver/
         thread-test.rs
         udp.rs
         vfs-test.rs
-        webserver.rs
       lib.rs
       spawn.rs
       util.rs
-    static/
-      index.html
 ```
 
 ---
@@ -374,7 +371,7 @@ webserver/
 - `[profile.dev]`
 
 **INDEX.md**
-- `# Codebase Index: webserver`
+- `# Codebase Index: solaya`
 
 **README.md**
 - `# Solaya`
@@ -1633,12 +1630,6 @@ webserver/
 **userspace/src/util.rs**
 - `pub fn read_line() -> String`
 
-**userspace/static/index.html**
-- `<head>`
-- `title: Solaya`
-- `<style>`
-- `<body>`
-
 ---
 
 ## CLAUDE.md
@@ -1659,7 +1650,7 @@ webserver/
 
 ## INDEX.md
 
-**Language:** Markdown | **Size:** 230.6 KB | **Lines:** 9834
+**Language:** Markdown | **Size:** 229.7 KB | **Lines:** 9781
 
 **Declarations:**
 
@@ -5001,7 +4992,7 @@ webserver/
 
 ## kernel/src/net/tcp_connection.rs
 
-**Language:** Rust | **Size:** 18.9 KB | **Lines:** 678
+**Language:** Rust | **Size:** 19.3 KB | **Lines:** 681
 
 **Imports:**
 - `core::{
@@ -5107,10 +5098,6 @@ webserver/
 
 
 `async fn server_connection_task( conn: SharedTcpConnection, initial_syn: ReceivedSegment, listener: SharedTcpListener, )`
-
-`fn flush_send_buffer(conn: &SharedTcpConnection)`
-
-`fn send_fin(conn: &SharedTcpConnection)`
 
 `async fn established_loop(conn: &SharedTcpConnection)`
 
@@ -5424,7 +5411,7 @@ webserver/
 
 ## kernel/src/processes/fd_table.rs
 
-**Language:** Rust | **Size:** 10.7 KB | **Lines:** 355
+**Language:** Rust | **Size:** 10.2 KB | **Lines:** 337
 
 **Imports:**
 - `alloc::collections::BTreeMap`
@@ -5504,8 +5491,6 @@ webserver/
   `pub fn close_all(&mut self)`
 
   `pub fn close_cloexec_fds(&mut self)`
-
-  `fn close_tcp_if_needed(descriptor: &FileDescriptor)`
 
 
 ---
@@ -6496,7 +6481,7 @@ webserver/
 
 ## kernel/src/syscalls/linux.rs
 
-**Language:** Rust | **Size:** 32.9 KB | **Lines:** 1028
+**Language:** Rust | **Size:** 32.7 KB | **Lines:** 1018
 
 **Imports:**
 - `crate::{
@@ -6504,12 +6489,7 @@ webserver/
     debug, fs,
     klibc::util::{ByteInterpretable, UsizeExt},
     memory::{PAGE_SIZE, VirtAddr},
-    processes::{
-        fd_table::{FdFlags, FileDescriptor},
-        process::ProcessRef,
-        process_table,
-        thread::ThreadRef,
-    },
+    processes::{fd_table::FdFlags, process::ProcessRef, process_table, thread::ThreadRef},
     syscalls::macros::linux_syscalls,
 }`
 - `common::{
@@ -8828,7 +8808,7 @@ webserver/
 
 ## system-tests/src/tests/net.rs
 
-**Language:** Rust | **Size:** 3.2 KB | **Lines:** 105
+**Language:** Rust | **Size:** 2.2 KB | **Lines:** 74
 
 **Imports:**
 - `tokio::io::{AsyncReadExt, AsyncWriteExt}`
@@ -8841,8 +8821,6 @@ webserver/
 `async fn udp() -> anyhow::Result<()>`
 
 `async fn tcp_echo() -> anyhow::Result<()>`
-
-`async fn webserver() -> anyhow::Result<()>`
 
 ---
 
@@ -9768,29 +9746,6 @@ webserver/
 
 ---
 
-## userspace/src/bin/webserver.rs
-
-**Language:** Rust | **Size:** 1.2 KB | **Lines:** 44
-
-**Imports:**
-- `std::{
-    io::{Read, Write},
-    net::{Shutdown, TcpListener},
-    thread,
-}`
-
-**Declarations:**
-
-`const PORT: u16 = 1234`
-
-`const INDEX_HTML: &str = include_str!("../../static/index.html")`
-
-`fn handle_connection(mut stream: std::net::TcpStream)`
-
-`fn main()`
-
----
-
 ## userspace/src/lib.rs
 
 **Language:** Rust | **Size:** 29 B | **Lines:** 2
@@ -9823,12 +9778,4 @@ webserver/
 **Declarations:**
 
 `const DELETE: u8 = 127`
-
----
-
-## userspace/static/index.html
-
-**Language:** HTML | **Size:** 2.9 KB | **Lines:** 81
-
-**Declarations:**
 
