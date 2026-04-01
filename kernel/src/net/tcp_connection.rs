@@ -17,7 +17,7 @@ use crate::{
     net::{
         arp,
         mac::MacAddress,
-        tcp::{FLAG_ACK, FLAG_FIN, FLAG_RST, FLAG_SYN, TcpHeader},
+        tcp::{FLAG_ACK, FLAG_FIN, FLAG_RST, FLAG_SYN, TcpHeader, TcpOptions, build_syn_options},
     },
     processes::kernel_tasks,
 };
@@ -50,9 +50,9 @@ impl TcpStats {
     }
 }
 
-const WINDOW_SIZE: u16 = 65535;
 const MSS: usize = 1460;
 const MAX_RETRANSMITS: usize = 5;
+const WINDOW_SCALE_SHIFT: u8 = 7;
 
 static NEXT_EPHEMERAL_PORT: AtomicU16 = AtomicU16::new(49152);
 
@@ -82,6 +82,7 @@ struct ReceivedSegment {
     ack: u32,
     flags: u16,
     window_size: u16,
+    options: TcpOptions,
     data: Vec<u8>,
 }
 
@@ -103,6 +104,8 @@ pub struct TcpConnection {
     user_close_requested: bool,
     send_buffer: VecDeque<u8>,
     remote_window: u32,
+    send_window_scale: u8,
+    recv_window_scale: u8,
     stats: TcpStats,
 }
 
@@ -125,9 +128,19 @@ impl TcpConnection {
             closed: false,
             user_close_requested: false,
             send_buffer: VecDeque::new(),
-            remote_window: WINDOW_SIZE as u32,
+            remote_window: 65535,
+            send_window_scale: 0,
+            recv_window_scale: 0,
             stats: TcpStats::new(),
         }
+    }
+
+    fn advertised_window(&self) -> u16 {
+        // Always advertise max window. With window scaling (shift=7), the
+        // effective window is 65535 * 128 = ~8MB. Dynamic windowing would
+        // require sending window updates after userspace drains recv_buffer,
+        // which we don't implement yet.
+        65535
     }
 
     fn deliver_segment(&mut self, segment: ReceivedSegment) -> Option<Waker> {
@@ -232,7 +245,7 @@ pub fn register_listener(listener: SharedTcpListener) {
 }
 
 pub fn process_tcp_packet(ip_header: &IpV4Header, data: &[u8], source_mac: MacAddress) {
-    let (tcp_header, payload) = match TcpHeader::process(data, ip_header) {
+    let (tcp_header, options, payload) = match TcpHeader::process(data, ip_header) {
         Ok(result) => result,
         Err(e) => {
             debug!("TCP parse error: {:?}", e);
@@ -251,6 +264,7 @@ pub fn process_tcp_packet(ip_header: &IpV4Header, data: &[u8], source_mac: MacAd
         ack: tcp_header.acknowledgment_number(),
         flags: tcp_header.flags(),
         window_size: tcp_header.window_size(),
+        options,
         data: payload.to_vec(),
     };
 
@@ -304,6 +318,7 @@ fn send_rst(
         ack,
         FLAG_RST | FLAG_ACK,
         0,
+        &[],
         &[],
     );
     super::send_packet(packet);
@@ -454,14 +469,19 @@ async fn server_connection_task(
     initial_syn: ReceivedSegment,
     listener: SharedTcpListener,
 ) {
+    let syn_options = build_syn_options(MSS as u16, WINDOW_SCALE_SHIFT);
     let (conn_id, iss, recv_ack) = {
         let mut c = conn.lock();
         c.recv_ack = initial_syn.seq.wrapping_add(1);
+        if let Some(shift) = initial_syn.options.window_scale {
+            c.send_window_scale = shift.min(14);
+            c.recv_window_scale = WINDOW_SCALE_SHIFT;
+        }
         let iss = c.send_seq;
         let recv_ack = c.recv_ack;
         (c.id, iss, recv_ack)
     };
-    send_data_packet(&conn, FLAG_SYN | FLAG_ACK, iss, recv_ack, &[]);
+    send_syn_packet(&conn, FLAG_SYN | FLAG_ACK, iss, recv_ack, &syn_options);
 
     // Wait for ACK to complete handshake
     let mut retransmits = 0;
@@ -472,6 +492,7 @@ async fn server_connection_task(
                     let mut c = conn.lock();
                     c.send_seq = iss.wrapping_add(1);
                     c.send_unacked = iss.wrapping_add(1);
+                    c.remote_window = (seg.window_size as u32) << c.send_window_scale;
                     drop(c);
                     break;
                 }
@@ -488,7 +509,7 @@ async fn server_connection_task(
                     return;
                 }
                 let recv_ack = conn.lock().recv_ack;
-                send_data_packet(&conn, FLAG_SYN | FLAG_ACK, iss, recv_ack, &[]);
+                send_syn_packet(&conn, FLAG_SYN | FLAG_ACK, iss, recv_ack, &syn_options);
             }
         }
     }
@@ -521,7 +542,7 @@ struct SegmentToSend {
 
 fn flush_send_buffer(conn: &SharedTcpConnection) {
     // Lock once, drain all sendable segments, cache connection metadata
-    let (segments, remote_ip, remote_mac, local_port, remote_port) = {
+    let (segments, remote_ip, remote_mac, local_port, remote_port, window_adv) = {
         let mut c = conn.lock();
         let mut segments = Vec::new();
         loop {
@@ -543,12 +564,14 @@ fn flush_send_buffer(conn: &SharedTcpConnection) {
             c.send_seq = seq.wrapping_add(len_as_seq(data.len()));
             segments.push(SegmentToSend { seq, ack, data });
         }
+        let window_adv = c.advertised_window();
         (
             segments,
             c.id.remote_ip,
             c.remote_mac,
             c.id.local_port,
             c.id.remote_port,
+            window_adv,
         )
     };
 
@@ -571,8 +594,9 @@ fn flush_send_buffer(conn: &SharedTcpConnection) {
                 seg.seq,
                 seg.ack,
                 FLAG_ACK,
-                WINDOW_SIZE,
+                window_adv,
                 &seg.data,
+                &[],
             )
         })
         .collect();
@@ -613,7 +637,7 @@ async fn drain_and_close(conn: &SharedTcpConnection) {
                     if acked_to.wrapping_sub(unacked) <= c.send_seq.wrapping_sub(unacked) {
                         c.send_unacked = acked_to;
                     }
-                    c.remote_window = seg.window_size as u32;
+                    c.remote_window = (seg.window_size as u32) << c.send_window_scale;
                 }
             }
             None => break,
@@ -633,90 +657,126 @@ fn send_fin(conn: &SharedTcpConnection) {
     send_data_packet(conn, FLAG_FIN | FLAG_ACK, seq, ack, &[]);
 }
 
+struct SegmentResult {
+    need_ack: bool,
+    waker: Option<Waker>,
+    is_fin: bool,
+    is_rst: bool,
+    is_user_close: bool,
+}
+
+fn process_one_segment(conn: &SharedTcpConnection, seg: &ReceivedSegment) -> SegmentResult {
+    let mut c = conn.lock();
+
+    if seg.flags & FLAG_RST != 0 {
+        c.closed = true;
+        return SegmentResult {
+            need_ack: false,
+            waker: c.recv_waker.take(),
+            is_fin: false,
+            is_rst: true,
+            is_user_close: false,
+        };
+    }
+
+    if seg.flags & FLAG_ACK != 0 {
+        let acked_to = seg.ack;
+        let unacked = c.send_unacked;
+        if acked_to.wrapping_sub(unacked) <= c.send_seq.wrapping_sub(unacked) {
+            c.send_unacked = acked_to;
+        }
+        c.remote_window = (seg.window_size as u32) << c.send_window_scale;
+    }
+
+    let mut need_ack = false;
+    let mut waker = None;
+
+    if !seg.data.is_empty() && seg.seq == c.recv_ack {
+        c.stats.bytes_received += seg.data.len() as u64;
+        c.stats.packets_received += 1;
+        c.recv_ack = c.recv_ack.wrapping_add(len_as_seq(seg.data.len()));
+        c.recv_buffer.extend(&seg.data);
+        waker = c.recv_waker.take();
+        need_ack = true;
+    }
+
+    if seg.flags & FLAG_FIN != 0 {
+        c.recv_ack = c.recv_ack.wrapping_add(1);
+        c.closed = true;
+        waker = waker.or_else(|| c.recv_waker.take());
+        return SegmentResult {
+            need_ack: true,
+            waker,
+            is_fin: true,
+            is_rst: false,
+            is_user_close: false,
+        };
+    }
+
+    SegmentResult {
+        need_ack,
+        waker,
+        is_fin: false,
+        is_rst: false,
+        is_user_close: c.user_close_requested,
+    }
+}
+
 async fn established_loop(conn: &SharedTcpConnection) {
     loop {
         flush_send_buffer(conn);
 
         match wait_for_segment(conn).await {
-            Some(seg) => {
-                if seg.flags & FLAG_RST != 0 {
-                    let waker = {
-                        let mut c = conn.lock();
-                        c.closed = true;
-                        c.recv_waker.take()
-                    };
-                    if let Some(w) = waker {
-                        w.wake();
-                    }
-                    return;
+            Some(first_seg) => {
+                let mut need_ack = false;
+                let mut do_fin = false;
+                let mut do_rst = false;
+                let mut do_user_close = false;
+                let mut wakers: Vec<Waker> = Vec::new();
+
+                let r = process_one_segment(conn, &first_seg);
+                need_ack |= r.need_ack;
+                do_fin |= r.is_fin;
+                do_rst |= r.is_rst;
+                do_user_close |= r.is_user_close;
+                if let Some(w) = r.waker {
+                    wakers.push(w);
                 }
 
-                let (send_ack, waker, do_fin_ack, do_user_close) = {
-                    let mut c = conn.lock();
-
-                    // Advance send window based on remote's ACK
-                    if seg.flags & FLAG_ACK != 0 {
-                        let acked_to = seg.ack;
-                        let unacked = c.send_unacked;
-                        if acked_to.wrapping_sub(unacked) <= c.send_seq.wrapping_sub(unacked) {
-                            c.send_unacked = acked_to;
+                // Drain remaining queued segments for batch processing
+                if !do_rst && !do_fin {
+                    loop {
+                        // Pop under its own scope so lock is released before process_one_segment
+                        let next = conn.lock().segment_mailbox.pop_front();
+                        let Some(seg) = next else { break };
+                        let r = process_one_segment(conn, &seg);
+                        need_ack |= r.need_ack;
+                        do_fin |= r.is_fin;
+                        do_rst |= r.is_rst;
+                        do_user_close |= r.is_user_close;
+                        if let Some(w) = r.waker {
+                            wakers.push(w);
                         }
-                        c.remote_window = seg.window_size as u32;
+                        if do_rst || do_fin {
+                            break;
+                        }
                     }
+                }
 
-                    let mut need_ack = false;
-                    let mut waker = None;
-
-                    // Process incoming data (drop out-of-order per minimal TCP)
-                    if !seg.data.is_empty() && seg.seq == c.recv_ack {
-                        c.stats.bytes_received += seg.data.len() as u64;
-                        c.stats.packets_received += 1;
-                        c.recv_ack = c.recv_ack.wrapping_add(len_as_seq(seg.data.len()));
-                        c.recv_buffer.extend(&seg.data);
-                        waker = c.recv_waker.take();
-                        need_ack = true;
-                    }
-
-                    // Process FIN
-                    if seg.flags & FLAG_FIN != 0 {
-                        c.recv_ack = c.recv_ack.wrapping_add(1);
-                        c.closed = true;
-                        waker = waker.or_else(|| c.recv_waker.take());
-                        let ack_info = Some((c.send_seq, c.recv_ack));
-                        (ack_info, waker, true, false)
-                    } else if c.user_close_requested {
-                        (
-                            if need_ack {
-                                Some((c.send_seq, c.recv_ack))
-                            } else {
-                                None
-                            },
-                            waker,
-                            false,
-                            true,
-                        )
-                    } else {
-                        (
-                            if need_ack {
-                                Some((c.send_seq, c.recv_ack))
-                            } else {
-                                None
-                            },
-                            waker,
-                            false,
-                            false,
-                        )
-                    }
-                };
-
-                // All waker.wake() and send_packet calls happen outside the lock
-                if let Some(w) = waker {
+                for w in wakers {
                     w.wake();
                 }
-                if let Some((seq, ack)) = send_ack {
+                if do_rst {
+                    return;
+                }
+                if need_ack {
+                    let (seq, ack) = {
+                        let c = conn.lock();
+                        (c.send_seq, c.recv_ack)
+                    };
                     send_data_packet(conn, FLAG_ACK, seq, ack, &[]);
                 }
-                if do_fin_ack {
+                if do_fin {
                     return;
                 }
                 if do_user_close {
@@ -736,6 +796,7 @@ async fn established_loop(conn: &SharedTcpConnection) {
 
 fn send_data_packet(conn: &SharedTcpConnection, flags: u16, seq: u32, ack: u32, data: &[u8]) {
     let c = conn.lock();
+    let window = c.advertised_window();
     let packet = TcpHeader::create_tcp_packet(
         c.id.remote_ip,
         c.remote_mac,
@@ -744,8 +805,28 @@ fn send_data_packet(conn: &SharedTcpConnection, flags: u16, seq: u32, ack: u32, 
         seq,
         ack,
         flags,
-        WINDOW_SIZE,
+        window,
         data,
+        &[],
+    );
+    drop(c);
+    super::send_packet(packet);
+}
+
+fn send_syn_packet(conn: &SharedTcpConnection, flags: u16, seq: u32, ack: u32, options: &[u8]) {
+    let c = conn.lock();
+    let window = c.advertised_window();
+    let packet = TcpHeader::create_tcp_packet(
+        c.id.remote_ip,
+        c.remote_mac,
+        c.id.local_port,
+        c.id.remote_port,
+        seq,
+        ack,
+        flags,
+        window,
+        &[],
+        options,
     );
     drop(c);
     super::send_packet(packet);
@@ -827,6 +908,7 @@ pub async fn initiate_connect(
 ) -> Option<SharedTcpConnection> {
     let dest_mac = arp::cache_lookup(&dest_ip)?;
     let iss = generate_iss();
+    let syn_options = build_syn_options(MSS as u16, WINDOW_SCALE_SHIFT);
 
     let conn_id = ConnectionId {
         local_port,
@@ -837,8 +919,8 @@ pub async fn initiate_connect(
     let conn = Arc::new(Spinlock::new(TcpConnection::new(conn_id, dest_mac, iss)));
     TCP_CONNECTIONS.lock().insert(conn_id, conn.clone());
 
-    // Send SYN
-    send_data_packet(&conn, FLAG_SYN, iss, 0, &[]);
+    // Send SYN with MSS and window scale options
+    send_syn_packet(&conn, FLAG_SYN, iss, 0, &syn_options);
 
     // Wait for SYN-ACK
     let mut retransmits = 0;
@@ -852,6 +934,11 @@ pub async fn initiate_connect(
                         c.send_seq = iss.wrapping_add(1);
                         c.send_unacked = iss.wrapping_add(1);
                         c.established = true;
+                        if let Some(shift) = seg.options.window_scale {
+                            c.send_window_scale = shift.min(14);
+                            c.recv_window_scale = WINDOW_SCALE_SHIFT;
+                        }
+                        c.remote_window = (seg.window_size as u32) << c.send_window_scale;
                         (c.send_seq, c.recv_ack)
                     };
                     send_data_packet(&conn, FLAG_ACK, seq, ack, &[]);
@@ -875,7 +962,7 @@ pub async fn initiate_connect(
                     cleanup_connection(conn_id);
                     return None;
                 }
-                send_data_packet(&conn, FLAG_SYN, iss, 0, &[]);
+                send_syn_packet(&conn, FLAG_SYN, iss, 0, &syn_options);
             }
         }
     }
