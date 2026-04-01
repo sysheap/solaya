@@ -15,23 +15,41 @@
             min-height: 100vh;
             margin: 0;
         }
-        .container { text-align: center; max-width: 600px; padding: 2rem; }
+        .container { text-align: center; max-width: 700px; padding: 2rem; }
         h1 {
             font-size: 3rem;
             background: linear-gradient(135deg, #f7931a, #ff6b6b);
             -webkit-background-clip: text;
             background-clip: text;
             -webkit-text-fill-color: transparent;
-            margin-bottom: 0.5rem;
+            margin-bottom: 0.25rem;
         }
-        .subtitle { color: #888; font-size: 1.1rem; margin-bottom: 2rem; }
-        .info {
+        .saas { color: #f7931a; font-size: 1.3rem; font-weight: 600; margin-bottom: 0.25rem; }
+        .subtitle { color: #888; font-size: 1rem; margin-bottom: 0.5rem; }
+        .author { color: #666; font-size: 0.9rem; margin-bottom: 2rem; }
+        .author a { color: #f7931a; text-decoration: none; }
+        .author a:hover { text-decoration: underline; }
+        .features {
             background: #1a1a1a;
             border: 1px solid #333;
             border-radius: 8px;
             padding: 1.5rem;
             text-align: left;
-            line-height: 1.8;
+        }
+        .features ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            columns: 2;
+            column-gap: 2rem;
+        }
+        .features li {
+            padding: 0.35rem 0;
+            break-inside: avoid;
+        }
+        .features li::before {
+            content: "\25B8 ";
+            color: #f7931a;
         }
         code { background: #2a2a2a; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
     </style>
@@ -39,12 +57,24 @@
 <body>
     <div class="container">
         <h1>Solaya</h1>
-        <p class="subtitle">A RISC-V operating system serving HTTP</p>
-        <div class="info">
-            <p>Architecture: <code>riscv64gc</code></p>
-            <p>Kernel: <code>Solaya</code></p>
-            <p>Userspace: <code>Rust + musl libc</code></p>
-            <p>Network: <code>VirtIO + custom TCP/IP</code></p>
+        <p class="saas">SaaS &mdash; Solaya as a Service</p>
+        <p class="subtitle">Homebrew OS written in Rust with no third-party runtime dependencies</p>
+        <p class="author">by <a href="https://github.com/sysheap/solaya">sysheap</a></p>
+        <div class="features">
+            <ul>
+                <li><code>riscv64gc</code> with multi-core SMP</li>
+                <li>Preemptive scheduler</li>
+                <li>Sv39 virtual memory with CoW fork</li>
+                <li>108 Linux-compatible syscalls</li>
+                <li>ELF loading &amp; musl libc userspace</li>
+                <li>Custom TCP/IP network stack</li>
+                <li>VirtIO drivers (block, net, input, RNG)</li>
+                <li>ext2, tmpfs, procfs, devfs</li>
+                <li>Signals, pipes, futexes</li>
+                <li>TTY with line discipline</li>
+                <li>DHCP &amp; HTTP server</li>
+                <li>It runs Doom</li>
+            </ul>
         </div>
     </div>
 </body>
