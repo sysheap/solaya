@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DOOM - Solaya</title>
+    <style>
+        body {
+            background: #000;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            color: #e0e0e0;
+        }
+        canvas {
+            image-rendering: pixelated;
+            border: 1px solid #333;
+        }
+        #status {
+            margin-top: 1rem;
+            font-size: 0.9rem;
+            color: #888;
+        }
+        #status.connected { color: #4a4; }
+        #status.error { color: #a44; }
+    </style>
+</head>
+<body>
+    <canvas id="screen" width="640" height="480"></canvas>
+    <div id="status">Connecting...</div>
+    <script>
+const canvas = document.getElementById('screen');
+const ctx = canvas.getContext('2d');
+const status = document.getElementById('status');
+const FRAME_SIZE = 640 * 480 * 4;
+
+const KEY_MAP = {
+    'ArrowUp':103, 'ArrowDown':108, 'ArrowLeft':105, 'ArrowRight':106,
+    'KeyW':17, 'KeyS':31, 'KeyA':30, 'KeyD':32,
+    'Space':57, 'Enter':28, 'Escape':1, 'Tab':15,
+    'Comma':51, 'Period':52, 'KeyE':18,
+    'ShiftLeft':42, 'ShiftRight':54,
+    'KeyY':21, 'KeyQ':16, 'KeyF':33, 'KeyR':19, 'KeyT':20,
+    'Minus':12, 'Equal':13,
+    'Digit1':2, 'Digit2':3, 'Digit3':4, 'Digit4':5, 'Digit5':6,
+    'Digit6':7, 'Digit7':8, 'Digit8':9, 'Digit9':10, 'Digit0':11
+};
+
+let ws = null;
+let frames = 0;
+let lastFpsTime = performance.now();
+
+function connect() {
+    ws = new WebSocket('ws://' + location.host + '/ws');
+    ws.binaryType = 'arraybuffer';
+
+    ws.onopen = function() {
+        status.textContent = 'Connected - click here then use WASD/Arrows to move, Space to shoot, E to use';
+        status.className = 'connected';
+    };
+
+    ws.onmessage = function(e) {
+        if (e.data.byteLength !== FRAME_SIZE) return;
+        const pixels = new Uint8ClampedArray(e.data);
+        const img = new ImageData(pixels, 640, 480);
+        ctx.putImageData(img, 0, 0);
+
+        frames++;
+        const now = performance.now();
+        if (now - lastFpsTime >= 2000) {
+            const fps = (frames * 1000 / (now - lastFpsTime)).toFixed(1);
+            status.textContent = fps + ' FPS';
+            status.className = 'connected';
+            frames = 0;
+            lastFpsTime = now;
+        }
+    };
+
+    ws.onclose = function() {
+        status.textContent = 'Disconnected. Reconnecting...';
+        status.className = 'error';
+        setTimeout(connect, 2000);
+    };
+
+    ws.onerror = function() {
+        status.textContent = 'Connection error';
+        status.className = 'error';
+    };
+}
+
+document.addEventListener('keydown', function(e) {
+    const code = KEY_MAP[e.code];
+    if (code !== undefined && ws && ws.readyState === WebSocket.OPEN) {
+        e.preventDefault();
+        ws.send(new Uint8Array([code, 1]));
+    }
+});
+
+document.addEventListener('keyup', function(e) {
+    const code = KEY_MAP[e.code];
+    if (code !== undefined && ws && ws.readyState === WebSocket.OPEN) {
+        e.preventDefault();
+        ws.send(new Uint8Array([code, 0]));
+    }
+});
+
+connect();
+    </script>
+</body>
+</html>
