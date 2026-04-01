@@ -1,6 +1,6 @@
 # Codebase Index: fix-diagnostics-for-llm
 
-> Generated: 2026-04-01 12:18:34 UTC | Files: 290 | Lines: 47886
+> Generated: 2026-04-01 12:23:40 UTC | Files: 290 | Lines: 47898
 > Languages: C (2), Markdown (21), Python (4), Rust (248), Shell (1), TOML (14)
 
 ## Directory Structure
@@ -1654,7 +1654,7 @@ fix-diagnostics-for-llm/
 
 ## INDEX.md
 
-**Language:** Markdown | **Size:** 229.7 KB | **Lines:** 9781
+**Language:** Markdown | **Size:** 229.9 KB | **Lines:** 9793
 
 **Declarations:**
 

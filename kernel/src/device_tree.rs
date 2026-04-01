@@ -452,7 +452,7 @@ mod tests {
 
         assert_eq!(
             interrupt_controller_cpu0, interrupt_controller_root_node,
-            "Node must be the same indepdendent where we got it from."
+            "Node must be the same independent where we got it from."
         );
     }
 
