@@ -151,6 +151,18 @@ pub fn send_packet(packet: Vec<u8>) {
         .expect("Packet must be sendable");
 }
 
+pub fn send_packets(packets: Vec<Vec<u8>>) {
+    if packets.is_empty() {
+        return;
+    }
+    NETWORK_STACK
+        .device
+        .lock()
+        .as_mut()
+        .expect("There must be a configured network device.")
+        .send_packet_batch(packets);
+}
+
 pub fn current_mac_address() -> MacAddress {
     NETWORK_STACK
         .device

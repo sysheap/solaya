@@ -58,7 +58,7 @@ struct ReceivedSegment {
     data: Vec<u8>,
 }
 
-const MAX_SEND_BUFFER: usize = 128 * 1024;
+const MAX_SEND_BUFFER: usize = 512 * 1024;
 
 pub struct TcpConnection {
     id: ConnectionId,
@@ -421,36 +421,74 @@ async fn server_connection_task(
     cleanup_connection(conn_id);
 }
 
+struct SegmentToSend {
+    seq: u32,
+    ack: u32,
+    data: Vec<u8>,
+}
+
 fn flush_send_buffer(conn: &SharedTcpConnection) {
-    let mut drained_any = false;
-    loop {
+    // Lock once, drain all sendable segments, cache connection metadata
+    let (segments, remote_ip, remote_mac, local_port, remote_port) = {
         let mut c = conn.lock();
-        if c.send_buffer.is_empty() {
-            break;
+        let mut segments = Vec::new();
+        loop {
+            if c.send_buffer.is_empty() {
+                break;
+            }
+            let in_flight = c.send_seq.wrapping_sub(c.send_unacked) as usize;
+            let window = WINDOW_SIZE as usize;
+            if in_flight >= window {
+                break;
+            }
+            let allowed = (window - in_flight).min(MSS).min(c.send_buffer.len());
+            if allowed == 0 {
+                break;
+            }
+            let data: Vec<u8> = c.send_buffer.drain(..allowed).collect();
+            let seq = c.send_seq;
+            let ack = c.recv_ack;
+            c.send_seq = seq.wrapping_add(len_as_seq(data.len()));
+            segments.push(SegmentToSend { seq, ack, data });
         }
-        let in_flight = c.send_seq.wrapping_sub(c.send_unacked) as usize;
-        let window = WINDOW_SIZE as usize;
-        if in_flight >= window {
-            break;
-        }
-        let allowed = (window - in_flight).min(MSS).min(c.send_buffer.len());
-        if allowed == 0 {
-            break;
-        }
-        let data: Vec<u8> = c.send_buffer.drain(..allowed).collect();
-        drained_any = true;
-        let seq = c.send_seq;
-        let ack = c.recv_ack;
-        c.send_seq = seq.wrapping_add(len_as_seq(data.len()));
-        drop(c);
-        send_data_packet(conn, FLAG_ACK, seq, ack, &data);
+        (
+            segments,
+            c.id.remote_ip,
+            c.remote_mac,
+            c.id.local_port,
+            c.id.remote_port,
+        )
+    };
+
+    if segments.is_empty() {
+        return;
     }
+
+    // Build all packets outside the connection lock
+    let packets: Vec<Vec<u8>> = segments
+        .into_iter()
+        .map(|seg| {
+            TcpHeader::create_tcp_packet(
+                remote_ip,
+                remote_mac,
+                local_port,
+                remote_port,
+                seg.seq,
+                seg.ack,
+                FLAG_ACK,
+                WINDOW_SIZE,
+                &seg.data,
+            )
+        })
+        .collect();
+
+    // Send all packets in one batch (single device lock + single notify)
+    super::send_packets(packets);
+
     // Wake any writer blocked on send buffer space
-    if drained_any {
-        let waker = conn.lock().send_space_waker.take();
-        if let Some(w) = waker {
-            w.wake();
-        }
+    let waker = conn.lock().send_space_waker.take();
+    if let Some(w) = waker {
+        w.wake();
     }
 }
 
