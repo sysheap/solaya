@@ -94,7 +94,10 @@ impl<T: Copy> MMIO<T> {
     pub fn read(&self) -> T {
         // SAFETY: The MMIO address was provided at construction and is
         // guaranteed to be valid for volatile reads of type T.
-        unsafe { self.addr.read_volatile() }
+        unsafe {
+            core::arch::asm!("fence i, i", options(nostack, preserves_flags));
+            self.addr.read_volatile()
+        }
     }
 
     pub fn write(&mut self, value: T) {
@@ -102,6 +105,7 @@ impl<T: Copy> MMIO<T> {
         // guaranteed to be valid for volatile writes of type T.
         unsafe {
             self.addr.write_volatile(value);
+            core::arch::asm!("fence o, o", options(nostack, preserves_flags));
         }
     }
 }

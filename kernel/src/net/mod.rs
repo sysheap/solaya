@@ -23,6 +23,7 @@ pub trait NetworkDevice: Send {
         }
     }
     fn get_mac_address(&self) -> mac::MacAddress;
+    fn dump(&self) {}
 }
 
 #[cfg(target_arch = "riscv64")]
@@ -142,6 +143,12 @@ static CACHED_MAC: Spinlock<Option<MacAddress>> = Spinlock::new(None);
 pub fn assign_network_device(device: Box<dyn NetworkDevice>) {
     *CACHED_MAC.lock() = Some(device.get_mac_address());
     *NETWORK_STACK.device.lock() = Some(device);
+}
+
+pub fn dump() {
+    if let Some(device) = &*NETWORK_STACK.device.lock() {
+        device.dump();
+    }
 }
 
 fn receive_and_process_packets() -> usize {

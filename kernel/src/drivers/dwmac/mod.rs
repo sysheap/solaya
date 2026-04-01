@@ -657,4 +657,8 @@ impl crate::net::NetworkDevice for DwmacDevice {
     fn get_mac_address(&self) -> MacAddress {
         self.mac_address
     }
+
+    fn dump(&self) {
+        self.dump_debug_status();
+    }
 }
