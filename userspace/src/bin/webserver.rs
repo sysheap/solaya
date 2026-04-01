@@ -302,7 +302,6 @@ fn handle_websocket(mut stream: TcpStream, client_key: &str) {
     let mut fb_buf = vec![0u8; FB_SIZE];
     let mut stream_buf = vec![0u8; STREAM_SIZE];
     let frame_interval = Duration::from_millis(33);
-
     loop {
         let frame_start = Instant::now();
 
