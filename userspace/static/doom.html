@@ -19,6 +19,8 @@
         canvas {
             image-rendering: pixelated;
             border: 1px solid #333;
+            width: 640px;
+            height: 480px;
         }
         #status {
             margin-top: 1rem;
@@ -30,13 +32,15 @@
     </style>
 </head>
 <body>
-    <canvas id="screen" width="640" height="480"></canvas>
+    <canvas id="screen" width="320" height="240"></canvas>
     <div id="status">Connecting...</div>
     <script>
 const canvas = document.getElementById('screen');
 const ctx = canvas.getContext('2d');
 const status = document.getElementById('status');
-const FRAME_SIZE = 640 * 480 * 4;
+const FRAME_W = 320;
+const FRAME_H = 240;
+const FRAME_SIZE = FRAME_W * FRAME_H * 4;
 
 const KEY_MAP = {
     'ArrowUp':103, 'ArrowDown':108, 'ArrowLeft':105, 'ArrowRight':106,
@@ -66,7 +70,7 @@ function connect() {
     ws.onmessage = function(e) {
         if (e.data.byteLength !== FRAME_SIZE) return;
         const pixels = new Uint8ClampedArray(e.data);
-        const img = new ImageData(pixels, 640, 480);
+        const img = new ImageData(pixels, FRAME_W, FRAME_H);
         ctx.putImageData(img, 0, 0);
 
         frames++;

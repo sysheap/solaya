@@ -5,13 +5,18 @@ use std::{
     process::Command,
     sync::atomic::{AtomicU32, Ordering},
     thread,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 const PORT: u16 = 1234;
 const INDEX_HTML: &str = include_str!("../../static/index.html");
 const DOOM_HTML: &str = include_str!("../../static/doom.html");
-const FB_SIZE: usize = 640 * 480 * 4;
+const FB_WIDTH: usize = 640;
+const FB_HEIGHT: usize = 480;
+const FB_SIZE: usize = FB_WIDTH * FB_HEIGHT * 4;
+const STREAM_WIDTH: usize = 320;
+const STREAM_HEIGHT: usize = 240;
+const STREAM_SIZE: usize = STREAM_WIDTH * STREAM_HEIGHT * 4;
 const WS_GUID: &str = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
 static NEXT_ID: AtomicU32 = AtomicU32::new(0);
@@ -300,29 +305,41 @@ fn handle_websocket(mut stream: TcpStream, client_key: &str) {
             return;
         }
     };
-    let mut buf = vec![0u8; FB_SIZE];
+    let mut fb_buf = vec![0u8; FB_SIZE];
+    let mut stream_buf = vec![0u8; STREAM_SIZE];
+    let frame_interval = Duration::from_millis(33);
 
     loop {
+        let frame_start = Instant::now();
+
         if fb.seek(SeekFrom::Start(0)).is_err() {
             break;
         }
-        if fb.read_exact(&mut buf).is_err() {
-            // File might not be fully written yet, send what we have as black
+        if fb.read_exact(&mut fb_buf).is_err() {
             thread::sleep(Duration::from_millis(100));
             continue;
         }
 
-        // Convert BGRA → RGBA and set alpha to 255
-        for chunk in buf.chunks_exact_mut(4) {
-            chunk.swap(0, 2);
-            chunk[3] = 255;
+        // Downsample 640x480 → 320x240 with BGRA→RGBA conversion
+        for y in 0..STREAM_HEIGHT {
+            for x in 0..STREAM_WIDTH {
+                let src = (y * 2 * FB_WIDTH + x * 2) * 4;
+                let dst = (y * STREAM_WIDTH + x) * 4;
+                stream_buf[dst] = fb_buf[src + 2]; // R (was at offset 2 in BGRA)
+                stream_buf[dst + 1] = fb_buf[src + 1]; // G
+                stream_buf[dst + 2] = fb_buf[src]; // B (was at offset 0)
+                stream_buf[dst + 3] = 255; // A
+            }
         }
 
-        if send_ws_frame(&mut stream, &buf).is_err() {
+        if send_ws_frame(&mut stream, &stream_buf).is_err() {
             break;
         }
 
-        thread::sleep(Duration::from_millis(33));
+        let elapsed = frame_start.elapsed();
+        if elapsed < frame_interval {
+            thread::sleep(frame_interval - elapsed);
+        }
     }
 
     // Cleanup
