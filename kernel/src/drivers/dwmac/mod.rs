@@ -628,7 +628,7 @@ impl crate::net::NetworkDevice for DwmacDevice {
         let length = data.len().min(PACKET_BUF_SIZE);
 
         // Wait for descriptor to be available (OWN cleared by hardware)
-        for _ in 0..1_000_000 {
+        for i in 0..=1_000_000 {
             let desc_addr = &self.tx_ring.descriptors[self.tx_idx] as *const _ as usize;
             arch::cache::flush_range(desc_addr, core::mem::size_of::<DmaDescriptor>());
             let des3 = MMIO::<u32>::new(
@@ -638,6 +638,7 @@ impl crate::net::NetworkDevice for DwmacDevice {
             if des3 & DESC3_OWN == 0 {
                 break;
             }
+            assert!(i < 1_000_000, "No free descriptor");
             core::hint::spin_loop();
         }
 
