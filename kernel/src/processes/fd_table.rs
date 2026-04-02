@@ -141,7 +141,12 @@ impl FileDescriptor {
             FileDescriptor::TcpStream(conn) => {
                 let mut c = conn.lock();
                 if c.has_recv_data() {
-                    Ok(c.recv_data(count))
+                    let (data, waker) = c.recv_data(count);
+                    drop(c);
+                    if let Some(w) = waker {
+                        w.wake();
+                    }
+                    Ok(data)
                 } else {
                     Err(Errno::EAGAIN)
                 }
@@ -167,18 +172,21 @@ impl FileDescriptor {
                 Ok(data.len())
             }
             FileDescriptor::PipeWrite(buf) => buf.shared_buffer().lock().write(data),
-            FileDescriptor::TcpStream(conn) => {
+            FileDescriptor::TcpStream(conn) => loop {
                 crate::net::tcp_connection::wait_for_send_space(conn).await;
                 let mut c = conn.lock();
                 let space = c.send_buffer_space();
-                let to_write = data.len().min(space).max(1);
+                if space == 0 {
+                    continue;
+                }
+                let to_write = data.len().min(space);
                 let waker = c.queue_send_data(&data[..to_write]);
                 drop(c);
                 if let Some(w) = waker {
                     w.wake();
                 }
-                Ok(to_write)
-            }
+                return Ok(to_write);
+            },
             FileDescriptor::VfsFile(file) => {
                 let block_info = {
                     let mut inner = file.lock();

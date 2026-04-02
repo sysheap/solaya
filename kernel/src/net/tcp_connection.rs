@@ -87,6 +87,7 @@ struct ReceivedSegment {
 }
 
 const MAX_SEND_BUFFER: usize = 512 * 1024;
+const MAX_RECV_BUFFER: usize = 512 * 1024;
 
 pub struct TcpConnection {
     id: ConnectionId,
@@ -106,6 +107,7 @@ pub struct TcpConnection {
     remote_window: u32,
     send_window_scale: u8,
     recv_window_scale: u8,
+    window_update_needed: bool,
     stats: TcpStats,
 }
 
@@ -131,16 +133,15 @@ impl TcpConnection {
             remote_window: 65535,
             send_window_scale: 0,
             recv_window_scale: 0,
+            window_update_needed: false,
             stats: TcpStats::new(),
         }
     }
 
     fn advertised_window(&self) -> u16 {
-        // Always advertise max window. With window scaling (shift=7), the
-        // effective window is 65535 * 128 = ~8MB. Dynamic windowing would
-        // require sending window updates after userspace drains recv_buffer,
-        // which we don't implement yet.
-        65535
+        let available = MAX_RECV_BUFFER.saturating_sub(self.recv_buffer.len());
+        let scaled = available >> self.recv_window_scale;
+        scaled.min(65535) as u16
     }
 
     fn deliver_segment(&mut self, segment: ReceivedSegment) -> Option<Waker> {
@@ -164,9 +165,16 @@ impl TcpConnection {
         self.closed
     }
 
-    pub fn recv_data(&mut self, count: usize) -> Vec<u8> {
+    pub fn recv_data(&mut self, count: usize) -> (Vec<u8>, Option<Waker>) {
         let n = count.min(self.recv_buffer.len());
-        self.recv_buffer.drain(..n).collect()
+        let data: Vec<u8> = self.recv_buffer.drain(..n).collect();
+        let waker = if n > 0 && self.recv_buffer.len() < MAX_RECV_BUFFER / 2 {
+            self.window_update_needed = true;
+            self.segment_waker.take()
+        } else {
+            None
+        };
+        (data, waker)
     }
 
     pub fn has_recv_data(&self) -> bool {
@@ -354,13 +362,16 @@ impl Future for WaitForSegment {
         if let Some(seg) = conn.segment_mailbox.pop_front() {
             return Poll::Ready(Some(seg));
         }
-        if conn.user_close_requested {
+        if conn.user_close_requested || conn.window_update_needed {
             return Poll::Ready(None);
         }
-        // Only wake for send if there's data AND window space to send it
         if !conn.send_buffer.is_empty() {
             let in_flight = conn.send_seq.wrapping_sub(conn.send_unacked) as usize;
             if in_flight < conn.remote_window as usize {
+                return Poll::Ready(None);
+            }
+            // Zero-window: wake to send a probe
+            if conn.remote_window == 0 {
                 return Poll::Ready(None);
             }
         }
@@ -635,13 +646,70 @@ fn flush_send_buffer(conn: &SharedTcpConnection) {
     }
 }
 
+fn send_zero_window_probe(conn: &SharedTcpConnection) {
+    let mut c = conn.lock();
+    if c.send_buffer.is_empty() {
+        return;
+    }
+    let probe_byte = c.send_buffer.pop_front().unwrap();
+    let seq = c.send_seq;
+    let ack = c.recv_ack;
+    c.send_seq = seq.wrapping_add(1);
+    let window_adv = c.advertised_window();
+    let packet = TcpHeader::create_tcp_packet(
+        c.id.remote_ip,
+        c.remote_mac,
+        c.id.local_port,
+        c.id.remote_port,
+        seq,
+        ack,
+        FLAG_ACK,
+        window_adv,
+        &[probe_byte],
+        &[],
+    );
+    c.stats.packets_sent += 1;
+    c.stats.bytes_sent += 1;
+    drop(c);
+    super::send_packet(packet);
+}
+
 async fn drain_and_close(conn: &SharedTcpConnection) {
     loop {
         flush_send_buffer(conn);
-        let buf_len = conn.lock().send_buffer.len();
-        if buf_len == 0 {
+        let buf_empty = conn.lock().send_buffer.is_empty();
+        if buf_empty {
             break;
         }
+
+        // Process packets inline (don't rely solely on network_rx_task)
+        super::receive_and_process_packets();
+
+        // Drain all segments already in the mailbox
+        loop {
+            let seg = conn.lock().segment_mailbox.pop_front();
+            let Some(seg) = seg else { break };
+            if seg.flags & FLAG_RST != 0 {
+                conn.lock().closed = true;
+                return;
+            }
+            if seg.flags & FLAG_ACK != 0 {
+                let mut c = conn.lock();
+                let acked_to = seg.ack;
+                let unacked = c.send_unacked;
+                if acked_to.wrapping_sub(unacked) <= c.send_seq.wrapping_sub(unacked) {
+                    c.send_unacked = acked_to;
+                }
+                c.remote_window = (seg.window_size as u32) << c.send_window_scale;
+            }
+        }
+
+        let remote_window = conn.lock().remote_window;
+        if remote_window == 0 {
+            send_zero_window_probe(conn);
+        }
+
+        // Wait for more ACKs or timeout
         match wait_for_mailbox_or_timeout(conn, 5).await {
             Some(seg) => {
                 if seg.flags & FLAG_RST != 0 {
@@ -809,13 +877,28 @@ async fn established_loop(conn: &SharedTcpConnection) {
                 }
             }
             None => {
-                if conn.lock().user_close_requested {
+                let (do_close, needs_window_update, needs_zwp) = {
+                    let mut c = conn.lock();
+                    let close = c.user_close_requested;
+                    let wup = c.window_update_needed;
+                    c.window_update_needed = false;
+                    let zwp = !c.send_buffer.is_empty() && c.remote_window == 0;
+                    (close, wup, zwp)
+                };
+                if do_close {
                     drain_and_close(conn).await;
                     return;
                 }
-                // Process incoming packets inline so ACKs are handled even
-                // when the single kernel worker thread is busy flushing the
-                // send buffer. Then yield to let other kernel tasks run.
+                if needs_window_update {
+                    let (seq, ack) = {
+                        let c = conn.lock();
+                        (c.send_seq, c.recv_ack)
+                    };
+                    send_data_packet(conn, FLAG_ACK, seq, ack, &[]);
+                }
+                if needs_zwp {
+                    send_zero_window_probe(conn);
+                }
                 super::receive_and_process_packets();
                 YieldOnce { yielded: false }.await;
             }
@@ -1032,7 +1115,12 @@ impl Future for WaitForRecvData {
         let count = self.count;
         let mut c = self.conn.lock();
         if c.has_recv_data() {
-            return Poll::Ready(c.recv_data(count));
+            let (data, waker) = c.recv_data(count);
+            drop(c);
+            if let Some(w) = waker {
+                w.wake();
+            }
+            return Poll::Ready(data);
         }
         if c.is_closed() {
             return Poll::Ready(Vec::new());
