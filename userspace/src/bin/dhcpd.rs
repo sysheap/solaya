@@ -174,13 +174,18 @@ fn main() {
         std::process::exit(1);
     }
 
-    // Receive OFFER
+    // Receive OFFER (skip non-matching packets from real network)
     let mut buf = [0u8; 1024];
-    let (n, _) = socket
-        .recv_from(&mut buf)
-        .expect("dhcpd: recv offer failed");
-    let offer = parse_response(&buf[..n], xid).expect("dhcpd: invalid offer");
-    assert!(offer.msg_type == DHCPOFFER, "dhcpd: expected OFFER");
+    let offer = loop {
+        let (n, _) = socket
+            .recv_from(&mut buf)
+            .expect("dhcpd: recv offer failed");
+        if let Some(resp) = parse_response(&buf[..n], xid) {
+            if resp.msg_type == DHCPOFFER {
+                break resp;
+            }
+        }
+    };
 
     // Send REQUEST
     let request = build_request(&mac, xid, offer.yiaddr, offer.server_id);
@@ -188,10 +193,15 @@ fn main() {
         .send_to(&request, format!("255.255.255.255:{DHCP_SERVER_PORT}"))
         .expect("dhcpd: send request failed");
 
-    // Receive ACK
-    let (n, _) = socket.recv_from(&mut buf).expect("dhcpd: recv ack failed");
-    let ack = parse_response(&buf[..n], xid).expect("dhcpd: invalid ack");
-    assert!(ack.msg_type == DHCPACK, "dhcpd: expected ACK");
+    // Receive ACK (skip non-matching packets from real network)
+    let ack = loop {
+        let (n, _) = socket.recv_from(&mut buf).expect("dhcpd: recv ack failed");
+        if let Some(resp) = parse_response(&buf[..n], xid) {
+            if resp.msg_type == DHCPACK {
+                break resp;
+            }
+        }
+    };
 
     // Configure IP
     set_ip_address(socket.as_raw_fd(), ack.yiaddr);
