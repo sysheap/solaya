@@ -324,6 +324,24 @@ fn send_rst(
     super::send_packet(packet);
 }
 
+struct YieldOnce {
+    yielded: bool,
+}
+
+impl Future for YieldOnce {
+    type Output = ();
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
+        let this = self.get_mut();
+        if this.yielded {
+            return Poll::Ready(());
+        }
+        this.yielded = true;
+        cx.waker().wake_by_ref();
+        Poll::Pending
+    }
+}
+
 struct WaitForSegment {
     conn: SharedTcpConnection,
 }
@@ -777,6 +795,12 @@ async fn established_loop(conn: &SharedTcpConnection) {
                     send_data_packet(conn, FLAG_ACK, seq, ack, &[]);
                 }
                 if do_fin {
+                    // Half-close: remote closed its send side. Our recv
+                    // side is done (closed=true, recv_waker woken above).
+                    // Continue the loop so flush_send_buffer can drain any
+                    // remaining outgoing data. The loop exits when the
+                    // local side also calls close (user_close_requested).
+                    drain_and_close(conn).await;
                     return;
                 }
                 if do_user_close {
@@ -789,6 +813,11 @@ async fn established_loop(conn: &SharedTcpConnection) {
                     drain_and_close(conn).await;
                     return;
                 }
+                // Process incoming packets inline so ACKs are handled even
+                // when the single kernel worker thread is busy flushing the
+                // send buffer. Then yield to let other kernel tasks run.
+                super::receive_and_process_packets();
+                YieldOnce { yielded: false }.await;
             }
         }
     }
