@@ -31,7 +31,13 @@ impl ByteInterpretable for IpV4Header {}
 #[derive(Debug)]
 pub enum IpV4ParseError {
     PacketTooSmall,
+    NotIpV4,
+    UnsupportedOptions,
+    InvalidLength,
     FragmentedPacket,
+    NotForUs,
+    UnsupportedProtocol,
+    BadChecksum,
 }
 
 pub const PROTOCOL_TCP: u8 = headers::socket::IPPROTO_TCP as u8;
@@ -65,35 +71,40 @@ impl IpV4Header {
         let (ipv4_header, rest) = data.split_as::<IpV4Header>();
 
         let version = ipv4_header.version_and_ihl.get() >> 4;
-        assert!(version == 4, "Not an IPv4 packet (version={version})");
+        if version != 4 {
+            return Err(IpV4ParseError::NotIpV4);
+        }
 
         let ihl = ipv4_header.version_and_ihl.get() & 0x0F;
-        assert!(ihl == 5, "IP options not supported (IHL={ihl})");
+        if ihl != 5 {
+            return Err(IpV4ParseError::UnsupportedOptions);
+        }
 
-        assert!(ipv4_header.total_packet_length.get() as usize <= data.len());
+        if ipv4_header.total_packet_length.get() as usize > data.len() {
+            return Err(IpV4ParseError::InvalidLength);
+        }
 
         if ipv4_header.flags_and_offset.get() & 0x3FFF != 0 {
             return Err(IpV4ParseError::FragmentedPacket);
         }
 
         let our_ip = super::ip_addr();
-        assert!(
-            ipv4_header.destination_ip == our_ip
-                || ipv4_header.destination_ip == Ipv4Addr::BROADCAST
-                || our_ip == Ipv4Addr::UNSPECIFIED,
-            "Destination ip address is not ours."
-        );
+        if ipv4_header.destination_ip != our_ip
+            && ipv4_header.destination_ip != Ipv4Addr::BROADCAST
+            && our_ip != Ipv4Addr::UNSPECIFIED
+        {
+            return Err(IpV4ParseError::NotForUs);
+        }
 
         let proto = ipv4_header.upper_protocol.get();
-        assert!(
-            proto == PROTOCOL_UDP || proto == PROTOCOL_TCP,
-            "Unsupported IP protocol: {proto}"
-        );
+        if proto != PROTOCOL_UDP && proto != PROTOCOL_TCP {
+            return Err(IpV4ParseError::UnsupportedProtocol);
+        }
 
-        assert!(
-            ipv4_header.checksum_correct(),
-            "Checksum must be zero to be correct"
-        );
+        if !ipv4_header.checksum_correct() {
+            return Err(IpV4ParseError::BadChecksum);
+        }
+
         Ok((ipv4_header, rest))
     }
 

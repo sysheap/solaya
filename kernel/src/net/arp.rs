@@ -74,28 +74,33 @@ impl ArpPacket {
 }
 
 pub fn process_and_respond(data: &[u8]) {
-    assert!(
-        data.len() >= core::mem::size_of::<ArpPacket>(),
-        "Received ARP packet is too small"
-    );
+    if data.len() < core::mem::size_of::<ArpPacket>() {
+        return;
+    }
 
     let arp_header = data.interpret_as::<ArpPacket>();
-    assert!(arp_header.hardware_address_type.get() == HARDWARE_ADDRESS_TYPE_ETHERNET); // Ethernet
-    assert!(arp_header.protocol_address_type.get() == PROTOCOL_ADDRESS_TYPE_IPV4); // IPv4
-    assert!(
-        arp_header.hardware_address_length.get() as usize == core::mem::size_of::<MacAddress>()
-    ); // MAC address length
-    assert!(arp_header.protocol_address_length.get() as usize == core::mem::size_of::<Ipv4Addr>()); // IPv4 address length
-    assert!(arp_header.operation.get() == ARP_REQUEST);
+    if arp_header.hardware_address_type.get() != HARDWARE_ADDRESS_TYPE_ETHERNET
+        || arp_header.protocol_address_type.get() != PROTOCOL_ADDRESS_TYPE_IPV4
+        || arp_header.hardware_address_length.get() as usize != core::mem::size_of::<MacAddress>()
+        || arp_header.protocol_address_length.get() as usize != core::mem::size_of::<Ipv4Addr>()
+    {
+        return;
+    }
+
+    // Cache source MAC from both requests and replies
+    ARP_CACHE
+        .lock()
+        .insert(arp_header.source_ip_address, arp_header.source_mac_address);
+
+    if arp_header.operation.get() != ARP_REQUEST {
+        return;
+    }
+
     debug!("Received: {:#}", arp_header);
 
     if arp_header.destination_ip_address != super::ip_addr() {
         return;
     }
-
-    ARP_CACHE
-        .lock()
-        .insert(arp_header.source_ip_address, arp_header.source_mac_address);
 
     let arp_reply =
         ArpPacket::new_reply(arp_header.source_mac_address, arp_header.source_ip_address);
