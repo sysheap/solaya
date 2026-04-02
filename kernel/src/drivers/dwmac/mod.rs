@@ -133,6 +133,13 @@ const PHY_BMCR_AN_RESTART: u16 = 1 << 9;
 const PHY_BMSR_AN_COMPLETE: u16 = 1 << 5;
 const PHY_BMSR_LINK_STATUS: u16 = 1 << 2;
 
+// Motorcomm YT8531 extended register access (via MDIO indirect)
+const PHY_EXT_REG_ADDR: u32 = 0x1E;
+const PHY_EXT_REG_DATA: u32 = 0x1F;
+const YT8531_CHIP_CONFIG: u16 = 0xA001;
+const YT8531_RGMII_CONFIG1: u16 = 0xA003;
+const YT8531_PAD_DRIVE_STRENGTH: u16 = 0xA010;
+
 // DMA descriptor flags
 const DESC3_OWN: u32 = 1 << 31;
 const DESC3_IOC: u32 = 1 << 30; // Interrupt on Completion (triggers RI in DMA status)
@@ -303,6 +310,48 @@ impl DwmacDevice {
         self.mdio_wait_idle();
     }
 
+    fn phy_read_ext(&self, phy_addr: u32, ext_reg: u16) -> u16 {
+        self.mdio_write(phy_addr, PHY_EXT_REG_ADDR, ext_reg);
+        self.mdio_read(phy_addr, PHY_EXT_REG_DATA)
+    }
+
+    fn phy_write_ext(&self, phy_addr: u32, ext_reg: u16, val: u16) {
+        self.mdio_write(phy_addr, PHY_EXT_REG_ADDR, ext_reg);
+        self.mdio_write(phy_addr, PHY_EXT_REG_DATA, val);
+    }
+
+    /// Configure Motorcomm YT8531 PHY RGMII timing delays and drive strengths.
+    /// Values from VisionFive 2 device tree for GMAC1 (ethernet-phy@1).
+    fn configure_yt8531_phy(&self, phy_addr: u32) {
+        // 0xA001 CHIP_CONFIG: clear rxc_dly_en (bit 8)
+        let val = self.phy_read_ext(phy_addr, YT8531_CHIP_CONFIG);
+        self.phy_write_ext(phy_addr, YT8531_CHIP_CONFIG, val & !(1 << 8));
+
+        // 0xA010 PAD_DRIVE_STRENGTH:
+        //   bits 5-4:   rgmii_sw_dr   = 0x3
+        //   bit 12:     rgmii_sw_dr_2 = 0x0
+        //   bits 15-13: rgmii_sw_dr_rxc = 0x6
+        let mut val = self.phy_read_ext(phy_addr, YT8531_PAD_DRIVE_STRENGTH);
+        val = (val & !(0x3 << 4)) | (0x3 << 4); // rgmii_sw_dr
+        val &= !(1 << 12); // rgmii_sw_dr_2
+        val = (val & !(0x7 << 13)) | (0x6 << 13); // rgmii_sw_dr_rxc
+        self.phy_write_ext(phy_addr, YT8531_PAD_DRIVE_STRENGTH, val);
+
+        // 0xA003 RGMII_CONFIG1:
+        //   bits 13-10: rx_delay_sel    = 0x2
+        //   bits 7-4:   tx_delay_sel_fe = 0x5
+        //   bits 3-0:   tx_delay_sel    = 0x0
+        //   bit 14:     tx_inverted     = 0x0 (no inversion at 1000M)
+        let mut val = self.phy_read_ext(phy_addr, YT8531_RGMII_CONFIG1);
+        val = (val & !(0xF << 10)) | (0x2 << 10); // rx_delay_sel
+        val = (val & !(0xF << 4)) | (0x5 << 4); // tx_delay_sel_fe
+        val &= !(0xF); // tx_delay_sel = 0
+        val &= !(1 << 14); // tx_inverted = 0
+        self.phy_write_ext(phy_addr, YT8531_RGMII_CONFIG1, val);
+
+        info!("DWMAC: YT8531 PHY RGMII delays configured");
+    }
+
     fn init_phy(&self, phy_addr: u32) -> bool {
         // Reset PHY
         self.mdio_write(phy_addr, PHY_BMCR, PHY_BMCR_RESET);
@@ -312,6 +361,8 @@ impl DwmacDevice {
             }
             core::hint::spin_loop();
         }
+
+        self.configure_yt8531_phy(phy_addr);
 
         // Enable and restart auto-negotiation
         self.mdio_write(phy_addr, PHY_BMCR, PHY_BMCR_AN_ENABLE | PHY_BMCR_AN_RESTART);
