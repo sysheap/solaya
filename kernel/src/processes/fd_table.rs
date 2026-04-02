@@ -297,6 +297,12 @@ impl FdTable {
         self.table.remove(&fd).ok_or(Errno::EBADF)
     }
 
+    pub fn has_tcp_stream(&self, conn: &SharedTcpConnection) -> bool {
+        self.table.values().any(|e| {
+            matches!(&e.descriptor, FileDescriptor::TcpStream(c) if alloc::sync::Arc::ptr_eq(c, conn))
+        })
+    }
+
     pub fn get_descriptor(&self, fd: RawFd) -> Result<FileDescriptor, Errno> {
         self.table
             .get(&fd)

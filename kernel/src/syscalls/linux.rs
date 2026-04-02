@@ -207,11 +207,17 @@ impl LinuxSyscalls for LinuxSyscallHandler {
     }
 
     async fn close(&mut self, fd: c_int) -> Result<isize, Errno> {
-        let entry = self.current_process.with_lock(|p| p.fd_table().close(fd))?;
-        if let FileDescriptor::TcpStream(conn) = &entry.descriptor
-            && let Some(w) = conn.lock().request_close()
-        {
-            w.wake();
+        let (entry, should_close_tcp) = self.current_process.with_lock(|p| {
+            let entry = p.fd_table().close(fd)?;
+            let should_close = matches!(&entry.descriptor, FileDescriptor::TcpStream(conn) if !p.fd_table().has_tcp_stream(conn));
+            Ok::<_, Errno>((entry, should_close))
+        })?;
+        if should_close_tcp {
+            if let FileDescriptor::TcpStream(conn) = &entry.descriptor
+                && let Some(w) = conn.lock().request_close()
+            {
+                w.wake();
+            }
         }
         Ok(0)
     }

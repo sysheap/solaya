@@ -2,6 +2,13 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use crate::infra::qemu::{QemuInstance, QemuOptions};
 
+fn fill_sequential_u64(buf: &mut [u8], counter: &mut u64) {
+    for chunk in buf.chunks_exact_mut(8) {
+        chunk.copy_from_slice(&counter.to_le_bytes());
+        *counter += 1;
+    }
+}
+
 #[tokio::test]
 async fn tcp_throughput_send() -> anyhow::Result<()> {
     let mut solaya =
@@ -145,3 +152,123 @@ async fn tcp_echo() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+async fn tcp_stress() -> anyhow::Result<()> {
+    const BURST_SIZE: usize = 10 * 1024 * 1024;
+    const TOTAL: usize = 20 * 1024 * 1024;
+
+    let mut solaya =
+        QemuInstance::start_with(QemuOptions::default().add_network_card(true)).await?;
+
+    solaya
+        .run_prog_waiting_for("tcp_stress", "tcp_stress listening on 1234\n")
+        .await
+        .expect("tcp_stress must succeed to start");
+
+    let port = solaya.network_port().expect("Network must be enabled");
+    let stream = tokio::net::TcpStream::connect(format!("127.0.0.1:{port}")).await?;
+
+    solaya.stdout().assert_read_until("Connection from").await?;
+
+    let (mut reader, mut writer) = stream.into_split();
+
+    let write_task = async {
+        let mut buf = vec![0u8; BURST_SIZE];
+        let mut counter: u64 = 0;
+        let mut sent = 0usize;
+        let start = std::time::Instant::now();
+
+        while sent < TOTAL {
+            let n = BURST_SIZE.min(TOTAL - sent);
+            fill_sequential_u64(&mut buf[..n], &mut counter);
+            writer.write_all(&buf[..n]).await?;
+            sent += n;
+
+            let elapsed = start.elapsed();
+            let mib = sent as f64 / (1024.0 * 1024.0);
+            let speed = mib / elapsed.as_secs_f64();
+            eprintln!("Host->Guest: {mib:.0} MiB sent ({speed:.1} MiB/s)");
+        }
+        writer.shutdown().await?;
+
+        let elapsed = start.elapsed();
+        let speed = TOTAL as f64 / elapsed.as_secs_f64() / (1024.0 * 1024.0);
+        eprintln!(
+            "Host->Guest done: {} MiB in {elapsed:?} = {speed:.1} MiB/s",
+            TOTAL / (1024 * 1024)
+        );
+        anyhow::Ok(())
+    };
+
+    let read_task = async {
+        let mut buf = vec![0u8; BURST_SIZE];
+        let mut counter: u64 = 0;
+        let mut received = 0usize;
+        let mut leftover = Vec::with_capacity(8);
+        let start = std::time::Instant::now();
+        let mut last_print = 0usize;
+
+        loop {
+            let n = reader.read(&mut buf).await?;
+            if n == 0 {
+                break;
+            }
+            received += n;
+
+            let mut offset = 0;
+            if !leftover.is_empty() {
+                let need = 8 - leftover.len();
+                if n >= need {
+                    leftover.extend_from_slice(&buf[..need]);
+                    let val = u64::from_le_bytes(leftover[..8].try_into().unwrap());
+                    assert_eq!(val, counter, "Host recv: mismatch at counter {counter}");
+                    counter += 1;
+                    offset = need;
+                    leftover.clear();
+                } else {
+                    leftover.extend_from_slice(&buf[..n]);
+                    continue;
+                }
+            }
+
+            let remaining = &buf[offset..n];
+            let aligned_len = remaining.len() - (remaining.len() % 8);
+            for chunk in remaining[..aligned_len].chunks_exact(8) {
+                let val = u64::from_le_bytes(chunk.try_into().unwrap());
+                assert_eq!(val, counter, "Host recv: mismatch at counter {counter}");
+                counter += 1;
+            }
+            if aligned_len < remaining.len() {
+                leftover.extend_from_slice(&remaining[aligned_len..]);
+            }
+
+            if received - last_print >= BURST_SIZE {
+                let elapsed = start.elapsed();
+                let mib = received as f64 / (1024.0 * 1024.0);
+                let speed = mib / elapsed.as_secs_f64();
+                eprintln!("Guest->Host: {mib:.0} MiB received ({speed:.1} MiB/s)");
+                last_print = received;
+            }
+        }
+
+        let elapsed = start.elapsed();
+        let speed = received as f64 / elapsed.as_secs_f64() / (1024.0 * 1024.0);
+        eprintln!(
+            "Guest->Host done: {} MiB in {elapsed:?} = {speed:.1} MiB/s",
+            received / (1024 * 1024)
+        );
+
+        assert_eq!(received, TOTAL, "Expected 1 GiB received from guest");
+        anyhow::Ok(())
+    };
+
+    let (write_result, read_result) = tokio::join!(write_task, read_task);
+    write_result?;
+    read_result?;
+
+    solaya.stdout().assert_read_until("STRESS_DONE").await?;
+
+    Ok(())
+}
+
