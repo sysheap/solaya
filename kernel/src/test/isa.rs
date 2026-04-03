@@ -29,10 +29,25 @@ mod tests {
         let isa = IsaExtensions::parse(
             "rv64imafdch_zicbom_zicboz_zicntr_zicsr_zifencei_zihintntl_zihintpause_zihpm_zawrs_zfa_zca_zcd_zba_zbb_zbc_zbs_sstc_svadu",
         ).expect("parse failed");
+        assert!(isa.has_supervisor());
         assert!(isa.has_extension('h'));
         assert!(isa.has_extension('f'));
         assert!(isa.has_extension('d'));
         assert!(isa.has_extension('c'));
+    }
+
+    #[test_case]
+    fn supervisor_only_in_multi_letter_extensions() {
+        let isa =
+            IsaExtensions::parse("rv64imafdc_zicsr_zifencei_sstc_svadu").expect("parse failed");
+        assert!(isa.has_supervisor());
+        assert!(!isa.has_extension('b'));
+    }
+
+    #[test_case]
+    fn z_extensions_do_not_imply_supervisor() {
+        let isa = IsaExtensions::parse("rv64imac_zba_zbb_zbc_zbs").expect("parse failed");
+        assert!(!isa.has_supervisor());
     }
 
     #[test_case]

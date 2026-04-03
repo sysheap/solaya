@@ -44,7 +44,15 @@ impl IsaExtensions {
                     }
                     bits |= 1 << (ext_byte - b'a');
                 }
-                b'_' => break,
+                b'_' => {
+                    i += 1;
+                    if i < bytes.len() && bytes[i].is_ascii_lowercase() {
+                        bits |= 1 << (bytes[i] - b'a');
+                    }
+                    while i < bytes.len() && bytes[i] != b'_' {
+                        i += 1;
+                    }
+                }
                 _ => return None,
             }
         }
