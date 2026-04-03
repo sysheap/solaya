@@ -1,15 +1,14 @@
-# Codebase Index: solaya
+# Codebase Index: doom-in-web
 
-> Generated: 2026-03-31 12:46:55 UTC | Files: 289 | Lines: 47882
-> Languages: C (2), Markdown (21), Python (4), Rust (248), Shell (1), TOML (13)
+> Generated: 2026-04-03 19:23:09 UTC | Files: 293 | Lines: 39313
+> Languages: C (2), Markdown (20), Python (4), Rust (251), Shell (2), TOML (14)
 
 ## Directory Structure
 
 ```
-solaya/
+doom-in-web/
   CLAUDE.md
   Cargo.toml
-  INDEX.md
   README.md
   arch/
     Cargo.toml
@@ -237,6 +236,7 @@ solaya/
       read_asserter.rs
       searchable_buffer.rs
   qemu_wrapper.sh
+  rust-analyzer.toml
   rustfmt.toml
   sys/
     Cargo.toml
@@ -301,6 +301,7 @@ solaya/
         syscall_tracer.rs
         sysinfo.rs
         vfs.rs
+  tap-setup.sh
   typos.toml
   userspace/
     Cargo.toml
@@ -346,7 +347,10 @@ solaya/
         stress-thread.rs
         symlink-test.rs
         sysinfo_test.rs
+        tcp_bench.rs
+        tcp_bench_send.rs
         tcp_echo.rs
+        tcp_stress.rs
         thread-test.rs
         udp.rs
         vfs-test.rs
@@ -369,9 +373,6 @@ solaya/
 - `[workspace.package]`
 - `[profile.release]`
 - `[profile.dev]`
-
-**INDEX.md**
-- `# Codebase Index: solaya`
 
 **README.md**
 - `# Solaya`
@@ -1048,6 +1049,7 @@ solaya/
 - `pub mod tcp`
 - `pub mod tcp_connection`
 - `pub mod udp`
+- `pub const DRIVER_HEADER_RESERVE: usize = 12`
 - `pub fn init_isr_status(isr: MMIO<u32>)`
 - `pub fn on_network_interrupt()`
 - `pub async fn network_rx_task()`
@@ -1057,6 +1059,7 @@ solaya/
 - `pub fn open_sockets() -> &'static Spinlock<LazyCell<OpenSockets>>`
 - `pub fn assign_network_device(device: NetworkDevice)`
 - `pub fn send_packet(packet: Vec<u8>)`
+- `pub fn send_packets(packets: Vec<Vec<u8>>)`
 - `pub fn current_mac_address() -> MacAddress`
 
 **kernel/src/net/parsed_packets.rs**
@@ -1076,6 +1079,8 @@ solaya/
 - `pub const FLAG_SYN: u16 = headers::socket::TH_SYN as u16`
 - `pub const FLAG_RST: u16 = headers::socket::TH_RST as u16`
 - `pub const FLAG_ACK: u16 = headers::socket::TH_ACK as u16`
+- `pub struct TcpOptions`
+- `pub fn build_syn_options(mss: u16, window_scale: u8) -> [u8; 8]`
 - `pub struct TcpHeader`
 - `pub enum TcpParseError`
 
@@ -1093,6 +1098,8 @@ solaya/
 - `pub fn wait_for_accept(listener: &SharedTcpListener) -> WaitForAccept`
 - `pub struct WaitForRecvData`
 - `pub fn wait_for_recv_data(conn: &SharedTcpConnection, count: usize) -> WaitForRecvData`
+- `pub struct WaitForSendSpace`
+- `pub fn wait_for_send_space(conn: &SharedTcpConnection) -> WaitForSendSpace`
 
 **kernel/src/net/udp.rs**
 - `pub struct UdpHeader`
@@ -1353,6 +1360,7 @@ solaya/
 
 **qemu-infra/src/qemu.rs**
 - `pub fn project_root() -> anyhow::Result<PathBuf>`
+- `pub enum NetworkBackend`
 - `pub struct QemuOptions`
 - `pub struct QemuInstance`
 
@@ -1365,6 +1373,10 @@ solaya/
 
 **qemu-infra/src/searchable_buffer.rs**
 - `pub struct SearchableBuffer`
+
+**rust-analyzer.toml**
+- `[check]`
+- `[cfg]`
 
 **sys/Cargo.toml**
 - `[package]`
@@ -1525,6 +1537,16 @@ solaya/
 **system-tests/src/infra/mod.rs**
 - `pub mod qemu`
 
+**tap-setup.sh**
+- `usage()`
+- `tap_name()`
+- `host_ip()`
+- `vm_ip()`
+- `pid_file()`
+- `do_setup()`
+- `do_teardown()`
+- `do_cleanup()`
+
 **typos.toml**
 - `[default.extend-identifiers]`
 - `[default.extend-words]`
@@ -1643,14 +1665,6 @@ solaya/
 ## Cargo.toml
 
 **Language:** TOML | **Size:** 433 B | **Lines:** 27
-
-**Declarations:**
-
----
-
-## INDEX.md
-
-**Language:** Markdown | **Size:** 229.7 KB | **Lines:** 9781
 
 **Declarations:**
 
@@ -3057,7 +3071,7 @@ solaya/
 
 ## kernel/src/drivers/virtio/net/mod.rs
 
-**Language:** Rust | **Size:** 13.7 KB | **Lines:** 424
+**Language:** Rust | **Size:** 14.5 KB | **Lines:** 450
 
 **Imports:**
 - `crate::{
@@ -3088,6 +3102,7 @@ solaya/
 }`
 - `alloc::vec::Vec`
 - `super::virtqueue::QueueError`
+- `crate::net::DRIVER_HEADER_RESERVE`
 
 **Declarations:**
 
@@ -3114,7 +3129,11 @@ solaya/
 
   `pub fn receive_packets(&mut self) -> Vec<Vec<u8>>`
 
+  `fn fill_net_header(mut data: Vec<u8>) -> Vec<u8>`
+
   `pub fn send_packet(&mut self, data: Vec<u8>) -> Result<u16, QueueError>`
+
+  `pub fn send_packet_batch(&mut self, packets: Vec<Vec<u8>>)`
 
   `pub fn get_mac_address(&self) -> MacAddress`
 
@@ -4638,7 +4657,7 @@ solaya/
 
 ## kernel/src/net/arp.rs
 
-**Language:** Rust | **Size:** 4.1 KB | **Lines:** 127
+**Language:** Rust | **Size:** 4.3 KB | **Lines:** 133
 
 **Imports:**
 - `core::{fmt::Display, net::Ipv4Addr}`
@@ -4653,7 +4672,8 @@ solaya/
     },
     net::ethernet::{EtherTypes, EthernetHeader},
 }`
-- `super::{current_mac_address, mac::MacAddress}`
+- `alloc::vec::Vec`
+- `super::{DRIVER_HEADER_RESERVE, current_mac_address, mac::MacAddress}`
 
 **Declarations:**
 
@@ -4797,7 +4817,7 @@ solaya/
 
 ## kernel/src/net/mod.rs
 
-**Language:** Rust | **Size:** 5.5 KB | **Lines:** 205
+**Language:** Rust | **Size:** 6.1 KB | **Lines:** 222
 
 **Imports:**
 - `core::{
@@ -4846,6 +4866,8 @@ solaya/
 **`impl Future for NetworkInterruptWait`**
   `fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output>`
 
+
+`static CACHED_MAC: Spinlock<Option<MacAddress>> = Spinlock::new(None)`
 
 `fn receive_and_process_packets() -> usize`
 
@@ -4947,7 +4969,7 @@ solaya/
 
 ## kernel/src/net/tcp.rs
 
-**Language:** Rust | **Size:** 9.8 KB | **Lines:** 280
+**Language:** Rust | **Size:** 12.3 KB | **Lines:** 368
 
 **Imports:**
 - `alloc::vec::Vec`
@@ -4958,9 +4980,21 @@ solaya/
     klibc::{big_endian::BigEndian, util::ByteInterpretable},
     net::ethernet::EthernetHeader,
 }`
-- `super::{ipv4::IpV4Header, mac::MacAddress}`
+- `super::{DRIVER_HEADER_RESERVE, ipv4::IpV4Header, mac::MacAddress}`
 
 **Declarations:**
+
+`const OPT_END: u8 = 0`
+
+`const OPT_NOP: u8 = 1`
+
+`const OPT_MSS: u8 = 2`
+
+`const OPT_WINDOW_SCALE: u8 = 3`
+
+**`impl TcpOptions`**
+  `fn parse(data: &[u8]) -> Self`
+
 
 **`impl ByteInterpretable for TcpHeader`**
 
@@ -4975,13 +5009,15 @@ solaya/
 
   `pub fn flags(&self) -> u16`
 
-  `pub fn create_tcp_packet( destination_ip: Ipv4Addr, destination_mac: MacAddress, source_port: u16, destination_port: u16, seq: u32, ack: u32, flags: u16, window: u16, data: &[u8], ) -> Vec<u8>`
+  `pub fn window_size(&self) -> u16`
 
-  `pub fn process<'a>( data: &'a [u8], ip_header: &IpV4Header, ) -> Result<(TcpHeader, &'a [u8]), TcpParseError>`
+  `pub fn create_tcp_packet( destination_ip: Ipv4Addr, destination_mac: MacAddress, source_port: u16, destination_port: u16, seq: u32, ack: u32, flags: u16, window: u16, data: &[u8], options: &[u8], ) -> Vec<u8>`
+
+  `pub fn process<'a>( data: &'a [u8], ip_header: &IpV4Header, ) -> Result<(TcpHeader, TcpOptions, &'a [u8]), TcpParseError>`
 
   `fn pseudo_header(ip_header: &IpV4Header, tcp_length: usize) -> [u8; 12]`
 
-  `fn compute_checksum(data: &[u8], tcp_header: &TcpHeader, ip_header: &IpV4Header) -> u16`
+  `fn compute_checksum( options: &[u8], data: &[u8], tcp_header: &TcpHeader, ip_header: &IpV4Header, ) -> u16`
 
   `fn compute_checksum_raw(tcp_bytes: &[u8], ip_header: &IpV4Header, tcp_length: usize) -> u16`
 
@@ -4992,7 +5028,7 @@ solaya/
 
 ## kernel/src/net/tcp_connection.rs
 
-**Language:** Rust | **Size:** 19.3 KB | **Lines:** 681
+**Language:** Rust | **Size:** 33.1 KB | **Lines:** 1161
 
 **Imports:**
 - `core::{
@@ -5012,7 +5048,7 @@ solaya/
     net::{
         arp,
         mac::MacAddress,
-        tcp::{FLAG_ACK, FLAG_FIN, FLAG_RST, FLAG_SYN, TcpHeader},
+        tcp::{FLAG_ACK, FLAG_FIN, FLAG_RST, FLAG_SYN, TcpHeader, TcpOptions, build_syn_options},
     },
     processes::kernel_tasks,
 }`
@@ -5021,9 +5057,18 @@ solaya/
 
 **Declarations:**
 
-`const WINDOW_SIZE: u16 = 8192`
+`struct TcpStats`
+> Fields: `bytes_sent: u64`, `bytes_received: u64`, `packets_sent: u64`, `packets_received: u64`, `flushes: u64`, `segments_flushed: u64`, `start_time: timespec`
+
+**`impl TcpStats`**
+  `fn new() -> Self`
+
+
+`const MSS: usize = 1460`
 
 `const MAX_RETRANSMITS: usize = 5`
+
+`const WINDOW_SCALE_SHIFT: u8 = 7`
 
 `static NEXT_EPHEMERAL_PORT: AtomicU16 = AtomicU16::new(49152)`
 
@@ -5035,10 +5080,16 @@ solaya/
 > Fields: `local_port: u16`, `remote_ip: Ipv4Addr`, `remote_port: u16`
 
 `struct ReceivedSegment`
-> Fields: `seq: u32`, `ack: u32`, `flags: u16`, `data: Vec<u8>`
+> Fields: `seq: u32`, `ack: u32`, `flags: u16`, `window_size: u16`, `options: TcpOptions`, `data: Vec<u8>`
+
+`const MAX_SEND_BUFFER: usize = 512 * 1024`
+
+`const MAX_RECV_BUFFER: usize = 512 * 1024`
 
 **`impl TcpConnection`**
   `fn new(id: ConnectionId, remote_mac: MacAddress, initial_seq: u32) -> Self`
+
+  `fn advertised_window(&self) -> u16`
 
   `fn deliver_segment(&mut self, segment: ReceivedSegment) -> Option<Waker>`
 
@@ -5050,13 +5101,19 @@ solaya/
 
   `pub fn is_closed(&self) -> bool`
 
-  `pub fn recv_data(&mut self, count: usize) -> Vec<u8>`
+  `pub fn recv_data(&mut self, count: usize) -> (Vec<u8>, Option<Waker>)`
 
   `pub fn has_recv_data(&self) -> bool`
 
   `pub fn register_recv_waker(&mut self, waker: Waker)`
 
   `pub fn queue_send_data(&mut self, data: &[u8]) -> Option<Waker>`
+
+  `pub fn send_buffer_has_space(&self) -> bool`
+
+  `pub fn send_buffer_space(&self) -> usize`
+
+  `pub fn register_send_space_waker(&mut self, waker: Waker)`
 
   `pub fn request_close(&mut self) -> Option<Waker>`
 
@@ -5079,6 +5136,13 @@ solaya/
 
 `fn send_rst( dest_ip: Ipv4Addr, dest_mac: MacAddress, src_port: u16, dst_port: u16, seq: u32, ack: u32, )`
 
+`struct YieldOnce`
+> Fields: `yielded: bool`
+
+**`impl Future for YieldOnce`**
+  `fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()>`
+
+
 `struct WaitForSegment`
 > Fields: `conn: SharedTcpConnection`
 
@@ -5087,6 +5151,22 @@ solaya/
 
 
 `fn wait_for_segment(conn: &SharedTcpConnection) -> WaitForSegment`
+
+`struct WaitForMailboxOnly`
+> Fields: `conn: SharedTcpConnection`
+
+**`impl Future for WaitForMailboxOnly`**
+  `fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output>`
+
+
+`async fn wait_for_mailbox_or_timeout( conn: &SharedTcpConnection, seconds: i64, ) -> Option<ReceivedSegment>`
+
+`struct MailboxOrTimeout`
+> Fields: `mailbox: WaitForMailboxOnly`, `timeout: crate::processes::timer::Sleep`, `done: bool`
+
+**`impl Future for MailboxOrTimeout`**
+  `fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output>`
+
 
 `async fn wait_for_segment_or_timeout( conn: &SharedTcpConnection, seconds: i64, ) -> Option<ReceivedSegment>`
 
@@ -5099,11 +5179,31 @@ solaya/
 
 `async fn server_connection_task( conn: SharedTcpConnection, initial_syn: ReceivedSegment, listener: SharedTcpListener, )`
 
+`struct SegmentToSend`
+> Fields: `seq: u32`, `ack: u32`, `data: Vec<u8>`
+
+`fn flush_send_buffer(conn: &SharedTcpConnection)`
+
+`fn send_zero_window_probe(conn: &SharedTcpConnection)`
+
+`async fn drain_and_close(conn: &SharedTcpConnection)`
+
+`fn send_fin(conn: &SharedTcpConnection)`
+
+`struct SegmentResult`
+> Fields: `need_ack: bool`, `waker: Option<Waker>`, `is_fin: bool`, `is_rst: bool`, `is_user_close: bool`
+
+`fn process_one_segment(conn: &SharedTcpConnection, seg: &ReceivedSegment) -> SegmentResult`
+
 `async fn established_loop(conn: &SharedTcpConnection)`
 
 `fn send_data_packet(conn: &SharedTcpConnection, flags: u16, seq: u32, ack: u32, data: &[u8])`
 
+`fn send_syn_packet(conn: &SharedTcpConnection, flags: u16, seq: u32, ack: u32, options: &[u8])`
+
 `async fn wait_for_fin_ack(conn: &SharedTcpConnection)`
+
+`fn log_connection_stats(conn: &SharedTcpConnection)`
 
 `fn cleanup_connection(id: ConnectionId)`
 
@@ -5115,11 +5215,15 @@ solaya/
   `fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output>`
 
 
+**`impl Future for WaitForSendSpace`**
+  `fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output>`
+
+
 ---
 
 ## kernel/src/net/udp.rs
 
-**Language:** Rust | **Size:** 5.4 KB | **Lines:** 177
+**Language:** Rust | **Size:** 5.8 KB | **Lines:** 180
 
 **Imports:**
 - `alloc::vec::Vec`
@@ -5133,7 +5237,7 @@ solaya/
     },
     net::ethernet::EthernetHeader,
 }`
-- `super::{ipv4::IpV4Header, mac::MacAddress}`
+- `super::{DRIVER_HEADER_RESERVE, ipv4::IpV4Header, mac::MacAddress}`
 
 **Declarations:**
 
@@ -5411,7 +5515,7 @@ solaya/
 
 ## kernel/src/processes/fd_table.rs
 
-**Language:** Rust | **Size:** 10.2 KB | **Lines:** 337
+**Language:** Rust | **Size:** 11.4 KB | **Lines:** 374
 
 **Imports:**
 - `alloc::collections::BTreeMap`
@@ -5478,6 +5582,8 @@ solaya/
 
   `pub fn close(&mut self, fd: RawFd) -> Result<FdEntry, Errno>`
 
+  `pub fn has_tcp_stream(&self, conn: &SharedTcpConnection) -> bool`
+
   `pub fn get_descriptor(&self, fd: RawFd) -> Result<FileDescriptor, Errno>`
 
   `pub fn get_descriptor_and_flags(&self, fd: RawFd) -> Result<(FileDescriptor, FdFlags), Errno>`
@@ -5491,6 +5597,8 @@ solaya/
   `pub fn close_all(&mut self)`
 
   `pub fn close_cloexec_fds(&mut self)`
+
+  `fn close_tcp_if_needed(descriptor: &FileDescriptor)`
 
 
 ---
@@ -6403,7 +6511,7 @@ solaya/
 
 ## kernel/src/syscalls/io_ops.rs
 
-**Language:** Rust | **Size:** 9.3 KB | **Lines:** 288
+**Language:** Rust | **Size:** 9.3 KB | **Lines:** 287
 
 **Imports:**
 - `alloc::vec::Vec`
@@ -6481,7 +6589,7 @@ solaya/
 
 ## kernel/src/syscalls/linux.rs
 
-**Language:** Rust | **Size:** 32.7 KB | **Lines:** 1018
+**Language:** Rust | **Size:** 33.2 KB | **Lines:** 1033
 
 **Imports:**
 - `crate::{
@@ -6489,7 +6597,12 @@ solaya/
     debug, fs,
     klibc::util::{ByteInterpretable, UsizeExt},
     memory::{PAGE_SIZE, VirtAddr},
-    processes::{fd_table::FdFlags, process::ProcessRef, process_table, thread::ThreadRef},
+    processes::{
+        fd_table::{FdFlags, FileDescriptor},
+        process::ProcessRef,
+        process_table,
+        thread::ThreadRef,
+    },
     syscalls::macros::linux_syscalls,
 }`
 - `common::{
@@ -7262,11 +7375,11 @@ solaya/
 
 ## mcp-server/src/server.rs
 
-**Language:** Rust | **Size:** 15.8 KB | **Lines:** 450
+**Language:** Rust | **Size:** 16.1 KB | **Lines:** 455
 
 **Imports:**
 - `std::{sync::Arc, time::Duration}`
-- `qemu_infra::qemu::{QemuInstance, QemuOptions, project_root}`
+- `qemu_infra::qemu::{NetworkBackend, QemuInstance, QemuOptions, project_root}`
 - `rmcp::{
     ErrorData as McpError, RoleServer, ServerHandler,
     handler::server::{router::tool::ToolRouter, tool::ToolCallContext, wrapper::Parameters},
@@ -7431,11 +7544,11 @@ solaya/
 
 ## qemu-infra/src/qemu.rs
 
-**Language:** Rust | **Size:** 8.5 KB | **Lines:** 292
+**Language:** Rust | **Size:** 11.2 KB | **Lines:** 360
 
 **Imports:**
 - `std::{
-    net::TcpListener,
+    net::{Ipv4Addr, SocketAddr, TcpListener},
     path::{Path, PathBuf},
     process::{ExitStatus, Stdio},
     time::Duration,
@@ -7458,6 +7571,8 @@ solaya/
 **`impl QemuOptions`**
   `pub fn add_network_card(mut self, value: bool) -> Self`
 
+  `pub fn network_backend(mut self, backend: NetworkBackend) -> Self`
+
   `pub fn use_smp(mut self, value: bool) -> Self`
 
   `pub fn enable_gdb(mut self, value: bool) -> Self`
@@ -7472,8 +7587,11 @@ solaya/
 
   `fn has_block_device(&self) -> bool`
 
-  `fn apply(self, command: &mut Command) -> Option<u16>`
+  `fn apply(self, command: &mut Command, root: &Path) -> anyhow::Result<Option<NetworkInfo>>`
 
+
+`enum NetworkInfo`
+> Variants: `Slirp`, `Tap`
 
 **`impl QemuInstance`**
   `pub async fn start() -> anyhow::Result<Self>`
@@ -7483,6 +7601,8 @@ solaya/
   `pub fn stdout(&mut self) -> &mut ReadAsserter<ChildStdout>`
 
   `pub fn stdin(&mut self) -> &mut ChildStdin`
+
+  `pub fn network_addr(&self) -> Option<SocketAddr>`
 
   `pub fn network_port(&self) -> Option<u16>`
 
@@ -7501,6 +7621,10 @@ solaya/
   `pub async fn run_prog_waiting_for( &mut self, prog_name: &str, wait_for: &str, ) -> anyhow::Result<String>`
 
   `pub async fn write_and_wait_for(&mut self, text: &str, wait: &str) -> anyhow::Result<()>`
+
+
+**`impl Drop for QemuInstance`**
+  `fn drop(&mut self)`
 
 
 ---
@@ -7594,7 +7718,15 @@ solaya/
 
 ## qemu_wrapper.sh
 
-**Language:** Shell | **Size:** 4.2 KB | **Lines:** 140
+**Language:** Shell | **Size:** 4.5 KB | **Lines:** 148
+
+---
+
+## rust-analyzer.toml
+
+**Language:** TOML | **Size:** 69 B | **Lines:** 6
+
+**Declarations:**
 
 ---
 
@@ -7612,7 +7744,7 @@ solaya/
 
 ## sys/Cargo.toml
 
-**Language:** TOML | **Size:** 337 B | **Lines:** 17
+**Language:** TOML | **Size:** 350 B | **Lines:** 18
 
 **Imports:**
 - `arch`
@@ -8808,7 +8940,7 @@ solaya/
 
 ## system-tests/src/tests/net.rs
 
-**Language:** Rust | **Size:** 2.2 KB | **Lines:** 74
+**Language:** Rust | **Size:** 8.7 KB | **Lines:** 274
 
 **Imports:**
 - `tokio::io::{AsyncReadExt, AsyncWriteExt}`
@@ -8816,11 +8948,19 @@ solaya/
 
 **Declarations:**
 
+`fn fill_sequential_u64(buf: &mut [u8], counter: &mut u64)`
+
+`async fn tcp_throughput_send() -> anyhow::Result<()>`
+
+`async fn tcp_throughput() -> anyhow::Result<()>`
+
 `async fn dhcp() -> anyhow::Result<()>`
 
 `async fn udp() -> anyhow::Result<()>`
 
 `async fn tcp_echo() -> anyhow::Result<()>`
+
+`async fn tcp_stress() -> anyhow::Result<()>`
 
 ---
 
@@ -9011,6 +9151,14 @@ solaya/
 `async fn ls_long_format() -> anyhow::Result<()>`
 
 `async fn symlinks_and_links() -> anyhow::Result<()>`
+
+---
+
+## tap-setup.sh
+
+**Language:** Shell | **Size:** 2.0 KB | **Lines:** 79
+
+**Declarations:**
 
 ---
 
@@ -9680,6 +9828,36 @@ solaya/
 
 ---
 
+## userspace/src/bin/tcp_bench.rs
+
+**Language:** Rust | **Size:** 988 B | **Lines:** 37
+
+**Imports:**
+- `std::{io::Read, net::TcpListener, time::Instant}`
+
+**Declarations:**
+
+`const PORT: u16 = 1234`
+
+`fn main()`
+
+---
+
+## userspace/src/bin/tcp_bench_send.rs
+
+**Language:** Rust | **Size:** 1.0 KB | **Lines:** 38
+
+**Imports:**
+- `std::{io::Write, net::TcpListener, time::Instant}`
+
+**Declarations:**
+
+`const PORT: u16 = 1234`
+
+`fn main()`
+
+---
+
 ## userspace/src/bin/tcp_echo.rs
 
 **Language:** Rust | **Size:** 612 B | **Lines:** 26
@@ -9693,6 +9871,32 @@ solaya/
 **Declarations:**
 
 `const PORT: u16 = 1234`
+
+`fn main()`
+
+---
+
+## userspace/src/bin/tcp_stress.rs
+
+**Language:** Rust | **Size:** 3.3 KB | **Lines:** 99
+
+**Imports:**
+- `std::{
+    io::{Read, Write},
+    net::TcpListener,
+    thread,
+    time::Instant,
+}`
+
+**Declarations:**
+
+`const PORT: u16 = 1234`
+
+`const BURST_SIZE: usize = 10 * 1024 * 1024`
+
+`const TOTAL: usize = 20 * 1024 * 1024`
+
+`fn fill_sequential_u64(buf: &mut [u8], counter: &mut u64)`
 
 `fn main()`
 

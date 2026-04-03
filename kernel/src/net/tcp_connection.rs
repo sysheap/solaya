@@ -651,7 +651,9 @@ fn send_zero_window_probe(conn: &SharedTcpConnection) {
     if c.send_buffer.is_empty() {
         return;
     }
-    let probe_byte = c.send_buffer.pop_front().unwrap();
+    let Some(probe_byte) = c.send_buffer.pop_front() else {
+        unreachable!("send_buffer checked non-empty above");
+    };
     let seq = c.send_seq;
     let ack = c.recv_ack;
     c.send_seq = seq.wrapping_add(1);
