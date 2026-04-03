@@ -572,7 +572,6 @@ fn flush_send_buffer(conn: &SharedTcpConnection) {
         let mut c = conn.lock();
         let mut segments = Vec::new();
         let nxt_offset = c.send_nxt.wrapping_sub(c.send_una) as usize;
-        // Make contiguous so we can slice. The &mut borrow ends immediately.
         c.send_buffer.make_contiguous();
         let buf_len = c.send_buffer.len();
         let window = c.remote_window as usize;
@@ -787,7 +786,14 @@ async fn drain_and_close(conn: &SharedTcpConnection) {
                 if has_unacked {
                     retransmit(conn);
                 } else {
-                    break;
+                    // No unacked data, but there may be unsent data
+                    // waiting for window to open. Only give up if
+                    // the buffer is truly empty.
+                    let buf_empty = conn.lock().send_buffer.is_empty();
+                    if buf_empty {
+                        break;
+                    }
+                    send_zero_window_probe(conn);
                 }
             }
         }
