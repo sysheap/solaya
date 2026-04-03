@@ -589,6 +589,7 @@ impl LinuxSyscalls for LinuxSyscallHandler {
         addrlen: c_uint,
     ) -> Result<isize, Errno> {
         self.do_sendto(fd, buf, len, flags, dest_addr, addrlen)
+            .await
     }
 
     async fn recvfrom(

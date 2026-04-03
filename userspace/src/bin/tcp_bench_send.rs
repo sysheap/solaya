@@ -10,7 +10,7 @@ fn main() {
     println!("Connection from {addr}");
 
     let start = Instant::now();
-    let chunk = [0xABu8; 65536];
+    let chunk = vec![0xABu8; 65536];
     let total_to_send: usize = 4 * 1024 * 1024;
     let mut sent = 0;
 
