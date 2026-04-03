@@ -212,12 +212,11 @@ impl LinuxSyscalls for LinuxSyscallHandler {
             let should_close = matches!(&entry.descriptor, FileDescriptor::TcpStream(conn) if !p.fd_table().has_tcp_stream(conn));
             Ok::<_, Errno>((entry, should_close))
         })?;
-        if should_close_tcp {
-            if let FileDescriptor::TcpStream(conn) = &entry.descriptor
-                && let Some(w) = conn.lock().request_close()
-            {
-                w.wake();
-            }
+        if should_close_tcp
+            && let FileDescriptor::TcpStream(conn) = &entry.descriptor
+            && let Some(w) = conn.lock().request_close()
+        {
+            w.wake();
         }
         Ok(0)
     }

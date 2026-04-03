@@ -324,9 +324,7 @@ fn handle_websocket(mut stream: TcpStream, client_key: &str) {
 
         // BGRA→RGBA conversion in-place
         for i in (0..FB_SIZE).step_by(4) {
-            let b = fb_buf[i];
-            fb_buf[i] = fb_buf[i + 2]; // R
-            fb_buf[i + 2] = b; // B
+            fb_buf.swap(i, i + 2);
             fb_buf[i + 3] = 255; // A
         }
 

@@ -180,10 +180,10 @@ fn main() {
         let (n, _) = socket
             .recv_from(&mut buf)
             .expect("dhcpd: recv offer failed");
-        if let Some(resp) = parse_response(&buf[..n], xid) {
-            if resp.msg_type == DHCPOFFER {
-                break resp;
-            }
+        if let Some(resp) = parse_response(&buf[..n], xid)
+            && resp.msg_type == DHCPOFFER
+        {
+            break resp;
         }
     };
 
@@ -196,10 +196,10 @@ fn main() {
     // Receive ACK (skip non-matching packets from real network)
     let ack = loop {
         let (n, _) = socket.recv_from(&mut buf).expect("dhcpd: recv ack failed");
-        if let Some(resp) = parse_response(&buf[..n], xid) {
-            if resp.msg_type == DHCPACK {
-                break resp;
-            }
+        if let Some(resp) = parse_response(&buf[..n], xid)
+            && resp.msg_type == DHCPACK
+        {
+            break resp;
         }
     };
 
