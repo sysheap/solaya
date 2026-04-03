@@ -383,21 +383,29 @@ impl NetworkDevice {
         index
     }
 
-    pub fn send_packet_batch(&mut self, packets: Vec<Vec<u8>>) {
+    pub fn send_packet_batch(&mut self, packets: Vec<Vec<u8>>) -> usize {
         // Reclaim completed TX buffers once
         for transmitted_packet in self.transmit_queue.receive_buffer() {
             drop(transmitted_packet);
         }
 
+        let mut enqueued = 0;
         for data in packets {
             let data = Self::fill_net_header(data);
-            let _ = self
+            match self
                 .transmit_queue
-                .put_buffer(data, BufferDirection::DriverWritable);
+                .put_buffer(data, BufferDirection::DriverWritable)
+            {
+                Ok(_) => enqueued += 1,
+                Err(_) => break,
+            }
         }
 
-        // Single notify for the entire batch
-        self.transmit_queue.notify();
+        if enqueued > 0 {
+            self.transmit_queue.notify();
+        }
+
+        enqueued
     }
 
     pub fn get_mac_address(&self) -> MacAddress {
