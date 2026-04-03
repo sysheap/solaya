@@ -649,11 +649,6 @@ fn flush_send_buffer(conn: &SharedTcpConnection) {
     c.stats.segments_flushed += segment_count;
     c.stats.packets_sent += segment_count;
     c.stats.bytes_sent += total_bytes;
-    let waker = c.send_space_waker.take();
-    drop(c);
-    if let Some(w) = waker {
-        w.wake();
-    }
 }
 
 fn send_zero_window_probe(conn: &SharedTcpConnection) {
@@ -814,6 +809,7 @@ fn send_fin(conn: &SharedTcpConnection) {
 struct SegmentResult {
     need_ack: bool,
     waker: Option<Waker>,
+    send_space_waker: Option<Waker>,
     is_fin: bool,
     is_rst: bool,
     is_user_close: bool,
@@ -827,6 +823,7 @@ fn process_one_segment(conn: &SharedTcpConnection, seg: &ReceivedSegment) -> Seg
         return SegmentResult {
             need_ack: false,
             waker: c.recv_waker.take(),
+            send_space_waker: None,
             is_fin: false,
             is_rst: true,
             is_user_close: false,
@@ -836,6 +833,13 @@ fn process_one_segment(conn: &SharedTcpConnection, seg: &ReceivedSegment) -> Seg
     if seg.flags & FLAG_ACK != 0 {
         c.apply_ack(seg);
     }
+
+    // Wake writer if ACK freed buffer space
+    let send_space_waker = if c.send_buffer_space() > 0 {
+        c.send_space_waker.take()
+    } else {
+        None
+    };
 
     let mut need_ack = false;
     let mut waker = None;
@@ -849,7 +853,6 @@ fn process_one_segment(conn: &SharedTcpConnection, seg: &ReceivedSegment) -> Seg
             waker = c.recv_waker.take();
             need_ack = true;
         } else {
-            // Out-of-order: send duplicate ACK to help sender detect loss
             need_ack = true;
         }
     }
@@ -861,6 +864,7 @@ fn process_one_segment(conn: &SharedTcpConnection, seg: &ReceivedSegment) -> Seg
         return SegmentResult {
             need_ack: true,
             waker,
+            send_space_waker,
             is_fin: true,
             is_rst: false,
             is_user_close: false,
@@ -870,6 +874,7 @@ fn process_one_segment(conn: &SharedTcpConnection, seg: &ReceivedSegment) -> Seg
     SegmentResult {
         need_ack,
         waker,
+        send_space_waker,
         is_fin: false,
         is_rst: false,
         is_user_close: c.user_close_requested,
@@ -896,6 +901,9 @@ async fn established_loop(conn: &SharedTcpConnection) {
                 if let Some(w) = r.waker {
                     wakers.push(w);
                 }
+                if let Some(w) = r.send_space_waker {
+                    wakers.push(w);
+                }
 
                 if !do_rst && !do_fin {
                     loop {
@@ -907,6 +915,9 @@ async fn established_loop(conn: &SharedTcpConnection) {
                         do_rst |= r.is_rst;
                         do_user_close |= r.is_user_close;
                         if let Some(w) = r.waker {
+                            wakers.push(w);
+                        }
+                        if let Some(w) = r.send_space_waker {
                             wakers.push(w);
                         }
                         if do_rst || do_fin {
