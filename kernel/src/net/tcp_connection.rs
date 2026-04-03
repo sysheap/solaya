@@ -186,12 +186,21 @@ impl TcpConnection {
     }
 
     pub fn queue_send_data(&mut self, data: &[u8]) -> Option<Waker> {
+        assert!(
+            self.send_buffer.len() + data.len() <= MAX_SEND_BUFFER,
+            "Send buffer overflow: caller must check send_buffer_space()"
+        );
         self.send_buffer.extend(data);
         self.segment_waker.take()
     }
 
-    pub fn send_buffer_has_space(&self) -> bool {
-        self.send_buffer.len() < MAX_SEND_BUFFER
+    fn apply_ack(&mut self, seg: &ReceivedSegment) {
+        let acked_to = seg.ack;
+        let unacked = self.send_unacked;
+        if acked_to.wrapping_sub(unacked) <= self.send_seq.wrapping_sub(unacked) {
+            self.send_unacked = acked_to;
+        }
+        self.remote_window = (seg.window_size as u32) << self.send_window_scale;
     }
 
     pub fn send_buffer_space(&self) -> usize {
@@ -696,13 +705,7 @@ async fn drain_and_close(conn: &SharedTcpConnection) {
                 return;
             }
             if seg.flags & FLAG_ACK != 0 {
-                let mut c = conn.lock();
-                let acked_to = seg.ack;
-                let unacked = c.send_unacked;
-                if acked_to.wrapping_sub(unacked) <= c.send_seq.wrapping_sub(unacked) {
-                    c.send_unacked = acked_to;
-                }
-                c.remote_window = (seg.window_size as u32) << c.send_window_scale;
+                conn.lock().apply_ack(&seg);
             }
         }
 
@@ -719,13 +722,7 @@ async fn drain_and_close(conn: &SharedTcpConnection) {
                     return;
                 }
                 if seg.flags & FLAG_ACK != 0 {
-                    let mut c = conn.lock();
-                    let acked_to = seg.ack;
-                    let unacked = c.send_unacked;
-                    if acked_to.wrapping_sub(unacked) <= c.send_seq.wrapping_sub(unacked) {
-                        c.send_unacked = acked_to;
-                    }
-                    c.remote_window = (seg.window_size as u32) << c.send_window_scale;
+                    conn.lock().apply_ack(&seg);
                 }
             }
             None => break,
@@ -768,12 +765,7 @@ fn process_one_segment(conn: &SharedTcpConnection, seg: &ReceivedSegment) -> Seg
     }
 
     if seg.flags & FLAG_ACK != 0 {
-        let acked_to = seg.ack;
-        let unacked = c.send_unacked;
-        if acked_to.wrapping_sub(unacked) <= c.send_seq.wrapping_sub(unacked) {
-            c.send_unacked = acked_to;
-        }
-        c.remote_window = (seg.window_size as u32) << c.send_window_scale;
+        c.apply_ack(seg);
     }
 
     let mut need_ack = false;
@@ -834,7 +826,6 @@ async fn established_loop(conn: &SharedTcpConnection) {
                 // Drain remaining queued segments for batch processing
                 if !do_rst && !do_fin {
                     loop {
-                        // Pop under its own scope so lock is released before process_one_segment
                         let next = conn.lock().segment_mailbox.pop_front();
                         let Some(seg) = next else { break };
                         let r = process_one_segment(conn, &seg);
@@ -1148,7 +1139,7 @@ impl Future for WaitForSendSpace {
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let mut c = self.conn.lock();
-        if c.send_buffer_has_space() || c.is_closed() {
+        if c.send_buffer_space() > 0 || c.is_closed() {
             return Poll::Ready(());
         }
         c.register_send_space_waker(cx.waker().clone());
