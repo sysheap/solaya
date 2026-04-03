@@ -315,17 +315,30 @@ impl ProcessTable {
             self.wake_wait_wakers();
 
             if tid == main_tid {
-                // Reparent orphans to init only when the main thread dies
                 let init_tid = Tid::new(1);
-                if let Some(orphans) = self.children.remove(&main_tid) {
-                    for &child_tid in &orphans {
-                        if let Some(child_thread) = self.threads.get(&child_tid) {
-                            child_thread.with_lock(|mut t| {
-                                t.set_parent_tid(init_tid);
-                            });
-                        }
+                if main_tid == init_tid {
+                    // Init is dying — kill all remaining processes (system shutdown).
+                    let remaining: Vec<Tid> = self
+                        .threads
+                        .keys()
+                        .copied()
+                        .filter(|&t| t != POWERSAVE_TID && t != tid)
+                        .collect();
+                    for t in remaining {
+                        self.kill(t, exit_status);
                     }
-                    self.children.entry(init_tid).or_default().extend(orphans);
+                } else {
+                    // Reparent orphans to init only when the main thread dies
+                    if let Some(orphans) = self.children.remove(&main_tid) {
+                        for &child_tid in &orphans {
+                            if let Some(child_thread) = self.threads.get(&child_tid) {
+                                child_thread.with_lock(|mut t| {
+                                    t.set_parent_tid(init_tid);
+                                });
+                            }
+                        }
+                        self.children.entry(init_tid).or_default().extend(orphans);
+                    }
                 }
             }
         }
