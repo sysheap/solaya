@@ -294,7 +294,6 @@ pub fn process_tcp_packet(ip_header: &IpV4Header, data: &[u8], source_mac: MacAd
         data: payload.to_vec(),
     };
 
-    // Try existing connection first
     if let Some(conn) = TCP_CONNECTIONS.lock().get(&conn_id) {
         let waker = conn.lock().deliver_segment(segment);
         if let Some(w) = waker {
@@ -303,7 +302,6 @@ pub fn process_tcp_packet(ip_header: &IpV4Header, data: &[u8], source_mac: MacAd
         return;
     }
 
-    // SYN to a listener? Spawn server connection task
     if segment.flags & FLAG_SYN != 0
         && let Some(listener) = TCP_LISTENERS.lock().get(&conn_id.local_port).cloned()
     {
@@ -314,7 +312,6 @@ pub fn process_tcp_packet(ip_header: &IpV4Header, data: &[u8], source_mac: MacAd
         return;
     }
 
-    // No connection, no listener: send RST
     send_rst(
         ip_header.source_ip,
         source_mac,
@@ -482,15 +479,6 @@ impl Future for MailboxOrTimeout {
     }
 }
 
-// wait_for_segment_or_timeout: used by handshake and FIN-ACK code.
-// Delegates to WaitForMailboxOnly which checks segment_mailbox only.
-async fn wait_for_segment_or_timeout(
-    conn: &SharedTcpConnection,
-    seconds: i64,
-) -> Option<ReceivedSegment> {
-    wait_for_mailbox_or_timeout(conn, seconds).await
-}
-
 async fn server_connection_task(
     conn: SharedTcpConnection,
     initial_syn: ReceivedSegment,
@@ -510,10 +498,9 @@ async fn server_connection_task(
     };
     send_syn_packet(&conn, FLAG_SYN | FLAG_ACK, iss, recv_ack, &syn_options);
 
-    // Wait for ACK to complete handshake
     let mut retransmits = 0;
     loop {
-        match wait_for_segment_or_timeout(&conn, 1).await {
+        match wait_for_mailbox_or_timeout(&conn, 1).await {
             Some(seg) => {
                 if seg.flags & FLAG_ACK != 0 && seg.ack == iss.wrapping_add(1) {
                     let mut c = conn.lock();
@@ -541,7 +528,6 @@ async fn server_connection_task(
         }
     }
 
-    // Established
     let waker = {
         let mut c = conn.lock();
         c.established = true;
@@ -567,12 +553,27 @@ struct SegmentToSend {
     data: Vec<u8>,
 }
 
+fn copy_deque_range(deque: &VecDeque<u8>, start: usize, len: usize) -> Vec<u8> {
+    let (front, back) = deque.as_slices();
+    let mut data = Vec::with_capacity(len);
+    if start < front.len() {
+        let front_take = (front.len() - start).min(len);
+        data.extend_from_slice(&front[start..start + front_take]);
+        if data.len() < len {
+            data.extend_from_slice(&back[..len - data.len()]);
+        }
+    } else {
+        let back_start = start - front.len();
+        data.extend_from_slice(&back[back_start..back_start + len]);
+    }
+    data
+}
+
 fn flush_send_buffer(conn: &SharedTcpConnection) {
     let (segments, remote_ip, remote_mac, local_port, remote_port, window_adv) = {
         let mut c = conn.lock();
         let mut segments = Vec::new();
         let nxt_offset = c.send_nxt.wrapping_sub(c.send_una) as usize;
-        c.send_buffer.make_contiguous();
         let buf_len = c.send_buffer.len();
         let window = c.remote_window as usize;
         let send_una = c.send_una;
@@ -591,8 +592,7 @@ fn flush_send_buffer(conn: &SharedTcpConnection) {
             if allowed == 0 {
                 break;
             }
-            let (front, _) = c.send_buffer.as_slices();
-            let data = front[cursor..cursor + allowed].to_vec();
+            let data = copy_deque_range(&c.send_buffer, cursor, allowed);
             let seq = send_una.wrapping_add(cursor as u32);
             segments.push(SegmentToSend {
                 seq,
@@ -604,6 +604,10 @@ fn flush_send_buffer(conn: &SharedTcpConnection) {
 
         let new_bytes = cursor - nxt_offset;
         c.send_nxt = c.send_nxt.wrapping_add(new_bytes as u32);
+        c.stats.flushes += 1;
+        c.stats.segments_flushed += segments.len() as u64;
+        c.stats.bytes_sent += segments.iter().map(|s| s.data.len() as u64).sum::<u64>();
+        c.stats.packets_sent += segments.len() as u64;
 
         let window_adv = c.advertised_window();
         (
@@ -619,9 +623,6 @@ fn flush_send_buffer(conn: &SharedTcpConnection) {
     if segments.is_empty() {
         return;
     }
-
-    let segment_count = segments.len() as u64;
-    let total_bytes: u64 = segments.iter().map(|s| s.data.len() as u64).sum();
 
     let packets: Vec<Vec<u8>> = segments
         .into_iter()
@@ -642,12 +643,6 @@ fn flush_send_buffer(conn: &SharedTcpConnection) {
         .collect();
 
     super::send_packets(packets);
-
-    let mut c = conn.lock();
-    c.stats.flushes += 1;
-    c.stats.segments_flushed += segment_count;
-    c.stats.packets_sent += segment_count;
-    c.stats.bytes_sent += total_bytes;
 }
 
 fn send_zero_window_probe(conn: &SharedTcpConnection) {
@@ -681,20 +676,18 @@ fn send_zero_window_probe(conn: &SharedTcpConnection) {
 
 fn retransmit(conn: &SharedTcpConnection) {
     let (segments, remote_ip, remote_mac, local_port, remote_port, window_adv) = {
-        let mut c = conn.lock();
+        let c = conn.lock();
         let unacked_bytes = c.send_nxt.wrapping_sub(c.send_una) as usize;
         if unacked_bytes == 0 {
             return;
         }
-        c.send_buffer.make_contiguous();
-        let (front, _) = c.send_buffer.as_slices();
         let send_una = c.send_una;
         let recv_ack = c.recv_ack;
         let mut segments = Vec::new();
         let mut offset = 0;
         while offset < unacked_bytes && segments.len() < MAX_SEGMENTS_PER_FLUSH {
             let len = MSS.min(unacked_bytes - offset);
-            let data = front[offset..offset + len].to_vec();
+            let data = copy_deque_range(&c.send_buffer, offset, len);
             let seq = send_una.wrapping_add(offset as u32);
             segments.push(SegmentToSend {
                 seq,
@@ -840,7 +833,6 @@ fn process_one_segment(conn: &SharedTcpConnection, seg: &ReceivedSegment) -> Seg
         c.apply_ack(seg);
     }
 
-    // Wake writer if ACK freed buffer space
     let send_space_waker = if c.send_buffer_space() > 0 {
         c.send_space_waker.take()
     } else {
@@ -1030,7 +1022,7 @@ fn send_syn_packet(conn: &SharedTcpConnection, flags: u16, seq: u32, ack: u32, o
 
 async fn wait_for_fin_ack(conn: &SharedTcpConnection) {
     for _ in 0..MAX_RETRANSMITS {
-        match wait_for_segment_or_timeout(conn, 1).await {
+        match wait_for_mailbox_or_timeout(conn, 1).await {
             Some(seg) => {
                 if seg.flags & FLAG_ACK != 0 {
                     if seg.flags & FLAG_FIN != 0 {
@@ -1091,8 +1083,6 @@ fn cleanup_connection(id: ConnectionId) {
     debug!("TCP connection cleaned up: {:?}", id);
 }
 
-// Public interface for syscalls
-
 pub fn create_listener(port: u16) -> SharedTcpListener {
     Arc::new(Spinlock::new(TcpListener::new(port)))
 }
@@ -1115,13 +1105,11 @@ pub async fn initiate_connect(
     let conn = Arc::new(Spinlock::new(TcpConnection::new(conn_id, dest_mac, iss)));
     TCP_CONNECTIONS.lock().insert(conn_id, conn.clone());
 
-    // Send SYN with MSS and window scale options
     send_syn_packet(&conn, FLAG_SYN, iss, 0, &syn_options);
 
-    // Wait for SYN-ACK
     let mut retransmits = 0;
     loop {
-        match wait_for_segment_or_timeout(&conn, 1).await {
+        match wait_for_mailbox_or_timeout(&conn, 1).await {
             Some(seg) => {
                 if seg.flags & FLAG_SYN != 0 && seg.flags & FLAG_ACK != 0 {
                     let (seq, ack) = {
@@ -1240,4 +1228,22 @@ impl Future for WaitForSendSpace {
 
 pub fn wait_for_send_space(conn: &SharedTcpConnection) -> WaitForSendSpace {
     WaitForSendSpace { conn: conn.clone() }
+}
+
+pub async fn tcp_write(conn: &SharedTcpConnection, data: &[u8]) -> usize {
+    loop {
+        wait_for_send_space(conn).await;
+        let mut c = conn.lock();
+        let space = c.send_buffer_space();
+        if space == 0 {
+            continue;
+        }
+        let to_write = data.len().min(space);
+        let waker = c.queue_send_data(&data[..to_write]);
+        drop(c);
+        if let Some(w) = waker {
+            w.wake();
+        }
+        return to_write;
+    }
 }

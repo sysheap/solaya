@@ -35,6 +35,12 @@ pub mod udp;
 /// its header.
 pub const DRIVER_HEADER_RESERVE: usize = 12;
 
+pub fn new_packet_buffer(frame_len: usize) -> Vec<u8> {
+    let mut buf = Vec::with_capacity(DRIVER_HEADER_RESERVE + frame_len);
+    buf.extend_from_slice(&[0u8; DRIVER_HEADER_RESERVE]);
+    buf
+}
+
 struct NetworkStack {
     device: Spinlock<Option<NetworkDevice>>,
     ip_addr: Spinlock<Ipv4Addr>,

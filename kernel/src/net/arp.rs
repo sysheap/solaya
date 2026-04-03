@@ -13,9 +13,7 @@ use crate::{
     net::ethernet::{EtherTypes, EthernetHeader},
 };
 
-use alloc::vec::Vec;
-
-use super::{DRIVER_HEADER_RESERVE, current_mac_address, mac::MacAddress};
+use super::{current_mac_address, mac::MacAddress, new_packet_buffer};
 
 static ARP_CACHE: Spinlock<BTreeMap<Ipv4Addr, MacAddress>> = Spinlock::new(BTreeMap::new());
 
@@ -107,8 +105,7 @@ pub fn process_and_respond(data: &[u8]) {
     );
 
     let frame_len = ethernet_reply.as_slice().len() + arp_reply.as_slice().len();
-    let mut data = Vec::with_capacity(DRIVER_HEADER_RESERVE + frame_len);
-    data.extend_from_slice(&[0u8; DRIVER_HEADER_RESERVE]);
+    let mut data = new_packet_buffer(frame_len);
     data.extend_from_slice(ethernet_reply.as_slice());
     data.extend_from_slice(arp_reply.as_slice());
     debug!(

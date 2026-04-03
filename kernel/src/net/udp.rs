@@ -11,7 +11,7 @@ use crate::{
     net::ethernet::EthernetHeader,
 };
 
-use super::{DRIVER_HEADER_RESERVE, ipv4::IpV4Header, mac::MacAddress};
+use super::{ipv4::IpV4Header, mac::MacAddress, new_packet_buffer};
 
 #[derive(Debug)]
 #[repr(C)]
@@ -80,8 +80,7 @@ impl UdpHeader {
             + ip_header.as_slice().len()
             + udp_header.as_slice().len()
             + data.len();
-        let mut packet = Vec::with_capacity(DRIVER_HEADER_RESERVE + frame_len);
-        packet.extend_from_slice(&[0u8; DRIVER_HEADER_RESERVE]);
+        let mut packet = new_packet_buffer(frame_len);
         packet.extend_from_slice(ethernet_header.as_slice());
         packet.extend_from_slice(ip_header.as_slice());
         packet.extend_from_slice(udp_header.as_slice());

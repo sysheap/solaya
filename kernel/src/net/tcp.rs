@@ -8,7 +8,7 @@ use crate::{
     net::ethernet::EthernetHeader,
 };
 
-use super::{DRIVER_HEADER_RESERVE, ipv4::IpV4Header, mac::MacAddress};
+use super::{ipv4::IpV4Header, mac::MacAddress, new_packet_buffer};
 
 pub const FLAG_FIN: u16 = headers::socket::TH_FIN as u16;
 pub const FLAG_SYN: u16 = headers::socket::TH_SYN as u16;
@@ -173,8 +173,7 @@ impl TcpHeader {
             + tcp_header.as_slice().len()
             + options.len()
             + data.len();
-        let mut packet = Vec::with_capacity(DRIVER_HEADER_RESERVE + frame_len);
-        packet.extend_from_slice(&[0u8; DRIVER_HEADER_RESERVE]);
+        let mut packet = new_packet_buffer(frame_len);
         packet.extend_from_slice(ethernet_header.as_slice());
         packet.extend_from_slice(ip_header.as_slice());
         packet.extend_from_slice(tcp_header.as_slice());
