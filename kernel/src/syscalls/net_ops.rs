@@ -107,19 +107,21 @@ impl LinuxSyscallHandler {
         match descriptor {
             FileDescriptor::TcpStream(conn) => {
                 let data = buf.validate_slice(len)?;
-                tcp_connection::wait_for_send_space(&conn).await;
-                let mut c = conn.lock();
-                let space = c.send_buffer_space();
-                if space == 0 {
-                    return Ok(0);
+                loop {
+                    tcp_connection::wait_for_send_space(&conn).await;
+                    let mut c = conn.lock();
+                    let space = c.send_buffer_space();
+                    if space == 0 {
+                        continue;
+                    }
+                    let to_write = data.len().min(space);
+                    let waker = c.queue_send_data(&data[..to_write]);
+                    drop(c);
+                    if let Some(w) = waker {
+                        w.wake();
+                    }
+                    return Ok(to_write as isize);
                 }
-                let to_write = data.len().min(space);
-                let waker = c.queue_send_data(&data[..to_write]);
-                drop(c);
-                if let Some(w) = waker {
-                    w.wake();
-                }
-                Ok(to_write as isize)
             }
             FileDescriptor::UdpSocket(socket) => {
                 assert!(
