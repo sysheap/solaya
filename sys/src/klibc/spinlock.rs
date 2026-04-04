@@ -64,7 +64,7 @@ impl<T> Spinlock<T> {
         }
     }
 
-    #[cfg(all(feature = "riscv64", not(miri)))]
+    #[cfg(all(target_arch = "riscv64", not(miri)))]
     fn detect_same_cpu_deadlock(&self) {
         if self.locked.load(Ordering::Relaxed) {
             let cpu_id = crate::cpu::cpu_id().as_usize();
@@ -76,10 +76,10 @@ impl<T> Spinlock<T> {
         }
     }
 
-    #[cfg(any(not(feature = "riscv64"), miri))]
+    #[cfg(any(not(target_arch = "riscv64"), miri))]
     fn detect_same_cpu_deadlock(&self) {}
 
-    #[cfg(all(feature = "riscv64", not(miri)))]
+    #[cfg(all(target_arch = "riscv64", not(miri)))]
     fn warn_possible_deadlock(&self, spin_count: u64) {
         if spin_count.is_multiple_of(10_000_000) {
             let cpu_id = crate::cpu::cpu_id();
@@ -93,16 +93,16 @@ impl<T> Spinlock<T> {
         }
     }
 
-    #[cfg(any(not(feature = "riscv64"), miri))]
+    #[cfg(any(not(target_arch = "riscv64"), miri))]
     fn warn_possible_deadlock(&self, _spin_count: u64) {}
 
-    #[cfg(all(feature = "riscv64", not(miri)))]
+    #[cfg(all(target_arch = "riscv64", not(miri)))]
     fn set_owner(&self) {
         self.owner_cpu
             .store(crate::cpu::cpu_id().as_usize(), Ordering::Relaxed);
     }
 
-    #[cfg(any(not(feature = "riscv64"), miri))]
+    #[cfg(any(not(target_arch = "riscv64"), miri))]
     fn set_owner(&self) {}
 
     fn clear_owner(&self) {
