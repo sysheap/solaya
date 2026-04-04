@@ -5,8 +5,12 @@ version.workspace = true
 authors.workspace = true
 description.workspace = true
 
+[features]
+default = ["riscv64"]
+riscv64 = ["common/riscv64"]
+
 [dependencies]
-common = { path = "../common" }
+common = { path = "../common", default-features = false }
 
 [lib]
 test = false

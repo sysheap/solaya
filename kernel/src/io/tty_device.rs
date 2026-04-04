@@ -1,14 +1,14 @@
 use alloc::{collections::VecDeque, sync::Arc, vec::Vec};
 use common::pid::Tid;
 use core::{cmp::min, task::Waker};
-#[cfg(target_arch = "riscv64")]
+#[cfg(feature = "riscv64")]
 use core::{
     pin::Pin,
     task::{Context, Poll},
 };
-#[cfg(target_arch = "riscv64")]
+#[cfg(feature = "riscv64")]
 use headers::errno::Errno;
-#[cfg(target_arch = "riscv64")]
+#[cfg(feature = "riscv64")]
 use headers::syscall_types::SIGTTIN;
 use headers::syscall_types::{
     CLOCAL, CREAD, CS8, ECHO, ECHOE, ICANON, ICRNL, ISIG, NCCS, ONLCR, OPOST, VEOF, VERASE, VINTR,
@@ -16,7 +16,7 @@ use headers::syscall_types::{
 };
 
 use crate::klibc::{Spinlock, array_vec::ArrayVec, runtime_initialized::RuntimeInitializedData};
-#[cfg(target_arch = "riscv64")]
+#[cfg(feature = "riscv64")]
 use crate::processes::{process::ProcessRef, process_table};
 
 pub static CONSOLE_TTY: RuntimeInitializedData<TtyDevice> = RuntimeInitializedData::new();
@@ -278,7 +278,7 @@ impl TtyDeviceInner {
     }
 }
 
-#[cfg(target_arch = "riscv64")]
+#[cfg(feature = "riscv64")]
 pub struct ReadTty {
     device: TtyDevice,
     max_count: usize,
@@ -286,7 +286,7 @@ pub struct ReadTty {
     tid: Tid,
 }
 
-#[cfg(target_arch = "riscv64")]
+#[cfg(feature = "riscv64")]
 impl ReadTty {
     pub fn new(device: TtyDevice, max_count: usize, process: ProcessRef, tid: Tid) -> Self {
         Self {
@@ -298,7 +298,7 @@ impl ReadTty {
     }
 }
 
-#[cfg(target_arch = "riscv64")]
+#[cfg(feature = "riscv64")]
 impl Future for ReadTty {
     type Output = Result<Vec<u8>, Errno>;
 

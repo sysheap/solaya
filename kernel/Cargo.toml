@@ -10,11 +10,15 @@ default-target = "riscv64gc-unknown-none-elf"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+default = ["riscv64"]
+riscv64 = ["arch/riscv64", "sys/riscv64", "common/riscv64"]
+
 [dependencies]
-arch = { path = "../arch" }
-common = { path = "../common" }
+arch = { path = "../arch", default-features = false }
+common = { path = "../common", default-features = false }
 headers = { path = "../headers" }
-sys = { path = "../sys" }
+sys = { path = "../sys", default-features = false }
 
 [lib]
 name = "solaya"

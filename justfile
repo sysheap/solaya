@@ -64,7 +64,7 @@ ci:
     @echo "All CI checks passed!"
 
 kani:
-    cargo kani -p solaya --output-format terse
+    cargo kani -p solaya --output-format terse --no-default-features
 
 unit-test: build-userspace
     cargo test --release -p solaya
