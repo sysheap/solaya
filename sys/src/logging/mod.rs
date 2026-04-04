@@ -1,16 +1,16 @@
 use core::fmt;
 
-#[cfg(target_arch = "riscv64")]
+#[cfg(feature = "riscv64")]
 pub mod configuration;
 
-#[cfg(target_arch = "riscv64")]
+#[cfg(feature = "riscv64")]
 #[macro_export]
 macro_rules! info {
     ($($arg:tt)*) => {
         $crate::println!("[CPU {}][info][{}] {}", $crate::cpu::cpu_id(), module_path!(), format_args!($($arg)*));
     };
 }
-#[cfg(not(target_arch = "riscv64"))]
+#[cfg(not(feature = "riscv64"))]
 #[macro_export]
 macro_rules! info {
     ($($arg:tt)*) => {
@@ -18,14 +18,14 @@ macro_rules! info {
     };
 }
 
-#[cfg(target_arch = "riscv64")]
+#[cfg(feature = "riscv64")]
 #[macro_export]
 macro_rules! warn {
     ($($arg:tt)*) => {
         $crate::println!("[CPU {}][warn][{}] {}", $crate::cpu::cpu_id(), module_path!(), format_args!($($arg)*));
     };
 }
-#[cfg(not(target_arch = "riscv64"))]
+#[cfg(not(feature = "riscv64"))]
 #[macro_export]
 macro_rules! warn {
     ($($arg:tt)*) => {
@@ -33,7 +33,7 @@ macro_rules! warn {
     };
 }
 
-#[cfg(target_arch = "riscv64")]
+#[cfg(feature = "riscv64")]
 #[macro_export]
 macro_rules! debug {
     ($($arg:tt)*) => {
@@ -42,7 +42,7 @@ macro_rules! debug {
         }
     };
 }
-#[cfg(not(target_arch = "riscv64"))]
+#[cfg(not(feature = "riscv64"))]
 #[macro_export]
 macro_rules! debug {
     ($($arg:tt)*) => {
@@ -50,12 +50,12 @@ macro_rules! debug {
     };
 }
 
-#[cfg(target_arch = "riscv64")]
+#[cfg(feature = "riscv64")]
 #[macro_export]
 macro_rules! print {
     ($($arg:tt)*) => ($crate::logging::_print(format_args!($($arg)*)));
 }
-#[cfg(not(target_arch = "riscv64"))]
+#[cfg(not(feature = "riscv64"))]
 #[macro_export]
 macro_rules! print {
     ($($arg:tt)*) => {
@@ -63,13 +63,13 @@ macro_rules! print {
     };
 }
 
-#[cfg(target_arch = "riscv64")]
+#[cfg(feature = "riscv64")]
 #[macro_export]
 macro_rules! println {
     () => ($crate::print!("\n"));
     ($($arg:tt)*) => ($crate::print!("{}\n", format_args!($($arg)*)));
 }
-#[cfg(not(target_arch = "riscv64"))]
+#[cfg(not(feature = "riscv64"))]
 #[macro_export]
 macro_rules! println {
     () => {
@@ -80,7 +80,7 @@ macro_rules! println {
     };
 }
 
-#[cfg(all(target_arch = "riscv64", not(miri)))]
+#[cfg(all(feature = "riscv64", not(miri)))]
 #[doc(hidden)]
 pub fn _print(args: fmt::Arguments) {
     use crate::io::uart;

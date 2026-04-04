@@ -1,14 +1,14 @@
 #![no_std]
 #![feature(macro_metavar_expr_concat)]
 
-#[cfg(all(target_arch = "riscv64", not(miri)))]
+#[cfg(all(feature = "riscv64", not(miri)))]
 mod riscv64;
-#[cfg(all(target_arch = "riscv64", not(miri)))]
+#[cfg(all(feature = "riscv64", not(miri)))]
 pub use riscv64::*;
 
-#[cfg(any(not(target_arch = "riscv64"), miri))]
+#[cfg(any(not(feature = "riscv64"), miri))]
 mod stub;
-#[cfg(any(not(target_arch = "riscv64"), miri))]
+#[cfg(any(not(feature = "riscv64"), miri))]
 pub use stub::*;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

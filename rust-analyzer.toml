@@ -4,3 +4,6 @@ allTargets = false
 
 [cfg]
 setTest = false
+
+[cargo]
+features = ["riscv64"]
