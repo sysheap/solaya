@@ -9,7 +9,7 @@ pub static STARTING_CPU_ID: RuntimeInitializedData<CpuId> = RuntimeInitializedDa
 /// Reads the current CPU ID.
 /// Before the per-CPU struct is set up, returns STARTING_CPU_ID.
 /// After setup, reads the cpu_id field from the per-CPU struct pointed to by sscratch.
-#[cfg(all(feature = "riscv64", not(miri)))]
+#[cfg(all(target_arch = "riscv64", not(miri)))]
 pub fn cpu_id() -> CpuId {
     let ptr = arch::cpu::read_sscratch() as *const u8;
     if ptr.is_null() {
@@ -20,7 +20,7 @@ pub fn cpu_id() -> CpuId {
     unsafe { *ptr.add(CPU_ID_OFFSET).cast::<CpuId>() }
 }
 
-#[cfg(any(not(feature = "riscv64"), miri))]
+#[cfg(any(not(target_arch = "riscv64"), miri))]
 pub fn cpu_id() -> CpuId {
     CpuId::from_hart_id(0)
 }

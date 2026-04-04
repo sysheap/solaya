@@ -12,7 +12,7 @@ default-target = "riscv64gc-unknown-none-elf"
 
 [features]
 default = ["riscv64"]
-riscv64 = ["arch/riscv64", "sys/riscv64"]
+riscv64 = ["arch/riscv64"]
 
 [dependencies]
 arch = { path = "../arch", default-features = false }
