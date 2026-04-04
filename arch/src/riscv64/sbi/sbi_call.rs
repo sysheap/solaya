@@ -1,3 +1,4 @@
+#[cfg(not(miri))]
 use core::arch::asm;
 
 #[repr(i64)]
@@ -25,6 +26,7 @@ pub struct SbiRet {
 }
 
 impl SbiRet {
+    #[cfg(not(miri))]
     fn new(error: i64, value: i64) -> Self {
         let error = match error {
             0 => SbiError::SBI_SUCCESS,
@@ -63,6 +65,7 @@ impl Default for SbiRet {
     }
 }
 
+#[cfg(not(miri))]
 pub fn sbi_call(eid: u64, fid: u64, arg0: u64, arg1: u64, arg2: u64) -> SbiRet {
     let mut error: i64;
     let mut value: i64;
@@ -82,4 +85,9 @@ pub fn sbi_call(eid: u64, fid: u64, arg0: u64, arg1: u64, arg2: u64) -> SbiRet {
         );
     }
     SbiRet::new(error, value)
+}
+
+#[cfg(miri)]
+pub fn sbi_call(_eid: u64, _fid: u64, _arg0: u64, _arg1: u64, _arg2: u64) -> SbiRet {
+    SbiRet::default()
 }
