@@ -1,20 +1,8 @@
-pub use arch::CpuId;
-use common::syscalls::trap_frame::TrapFrame;
-use core::mem::offset_of;
+pub use common::cpu::{
+    CPU_ID_OFFSET, CpuBase, CpuId, KERNEL_PAGE_TABLES_SATP_OFFSET, TRAP_FRAME_OFFSET,
+};
 
 use crate::klibc::runtime_initialized::RuntimeInitializedData;
-
-#[repr(C)]
-pub struct CpuBase {
-    pub kernel_page_tables_satp_value: usize,
-    pub trap_frame: TrapFrame,
-    pub cpu_id: CpuId,
-}
-
-pub const TRAP_FRAME_OFFSET: usize = offset_of!(CpuBase, trap_frame);
-pub const KERNEL_PAGE_TABLES_SATP_OFFSET: usize =
-    offset_of!(CpuBase, kernel_page_tables_satp_value);
-pub const CPU_ID_OFFSET: usize = offset_of!(CpuBase, cpu_id);
 
 pub static STARTING_CPU_ID: RuntimeInitializedData<CpuId> = RuntimeInitializedData::new();
 

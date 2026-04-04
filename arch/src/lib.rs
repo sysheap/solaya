@@ -11,21 +11,4 @@ mod stub;
 #[cfg(not(feature = "riscv64"))]
 pub use stub::*;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct CpuId(usize);
-
-impl CpuId {
-    pub fn from_hart_id(hart_id: usize) -> Self {
-        Self(hart_id)
-    }
-
-    pub fn as_usize(self) -> usize {
-        self.0
-    }
-}
-
-impl core::fmt::Display for CpuId {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
+pub use common::cpu::CpuId;
