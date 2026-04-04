@@ -1,0 +1,21 @@
+{
+  "rust-analyzer": {
+    "command": "rust-analyzer",
+    "extensionToLanguage": {
+      ".rs": "rust"
+    },
+    "initializationOptions": {
+      "cargo": {
+        "cfgs": ["!miri"],
+        "features": ["riscv64"]
+      },
+      "check": {
+        "command": "clippy",
+        "allTargets": false
+      },
+      "cfg": {
+        "setTest": false
+      }
+    }
+  }
+}
