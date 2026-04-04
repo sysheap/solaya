@@ -1,5 +1,5 @@
 {
-  "rust-analyzer": {
+  "rust": {
     "command": "rust-analyzer",
     "extensionToLanguage": {
       ".rs": "rust"
