@@ -14,7 +14,7 @@ bench = false
 
 [features]
 default = ["riscv64"]
-riscv64 = ["arch/riscv64", "common/riscv64"]
+riscv64 = ["arch/riscv64"]
 
 [dependencies]
 arch = { path = "../arch", default-features = false }
