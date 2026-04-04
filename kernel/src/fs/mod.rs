@@ -1,5 +1,4 @@
 pub mod devfs;
-#[cfg(target_arch = "riscv64")]
 pub mod ext2;
 pub mod open_file;
 mod procfs;

@@ -78,7 +78,6 @@ impl Uart {
     }
 }
 
-#[cfg(target_arch = "riscv64")]
 pub fn on_uart_interrupt() {
     let mut raw_bytes = crate::klibc::array_vec::ArrayVec::<u8, 64>::new();
     {

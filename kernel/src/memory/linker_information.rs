@@ -46,7 +46,7 @@ macro_rules! sections {
                 VirtAddr::new(align_up(debugging::symbols::symbols_end(), PAGE_SIZE))
             }
 
-            #[cfg(all(target_arch = "riscv64", not(miri)))]
+            #[cfg(not(miri))]
             pub fn all_mappings() -> [MappingDescription; count_idents!($($name)*)] {
                 [
                     $(MappingDescription {
@@ -57,7 +57,7 @@ macro_rules! sections {
                     },)*
                 ]
             }
-            #[cfg(any(not(target_arch = "riscv64"), miri))]
+            #[cfg(miri)]
             pub fn all_mappings() -> [MappingDescription; 0] {
                 []
             }
