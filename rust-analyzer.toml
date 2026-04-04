@@ -6,4 +6,5 @@ allTargets = false
 setTest = false
 
 [cargo]
+cfgs = ["!miri"]
 features = ["riscv64"]

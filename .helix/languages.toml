@@ -5,6 +5,10 @@ language-servers = ["rust-analyzer", "typos"]
 [language-server.rust-analyzer.config.cfg]
 setTest = false
 
+[language-server.rust-analyzer.config.cargo]
+cfgs = ["!miri"]
+features = ["riscv64"]
+
 [language-server.typos]
 # typos-lsp must be on your PATH, or otherwise change this to an absolute path to typos-lsp
 command = "typos-lsp"
