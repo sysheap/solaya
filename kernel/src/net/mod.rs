@@ -15,9 +15,12 @@ use crate::{
     net::{ipv4::IpV4Header, udp::UdpHeader},
 };
 
-#[cfg(target_arch = "riscv64")]
-use self::ipv4::PROTOCOL_TCP;
-use self::{ethernet::EthernetHeader, ipv4::PROTOCOL_UDP, mac::MacAddress, sockets::OpenSockets};
+use self::{
+    ethernet::EthernetHeader,
+    ipv4::{PROTOCOL_TCP, PROTOCOL_UDP},
+    mac::MacAddress,
+    sockets::OpenSockets,
+};
 
 pub mod arp;
 mod checksum;
@@ -26,7 +29,6 @@ mod ipv4;
 pub mod mac;
 pub mod sockets;
 pub mod tcp;
-#[cfg(target_arch = "riscv64")]
 pub mod tcp_connection;
 pub mod udp;
 
@@ -194,7 +196,6 @@ fn process_ipv4_packet(data: &[u8], source_mac: MacAddress) {
                 data,
             );
         }
-        #[cfg(target_arch = "riscv64")]
         PROTOCOL_TCP => {
             tcp_connection::process_tcp_packet(ipv4_header, rest, source_mac);
         }

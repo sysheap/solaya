@@ -1,7 +1,5 @@
-use core::arch::global_asm;
-
 #[cfg(not(miri))]
-global_asm!(
+core::arch::global_asm!(
     ".pushsection .text",
     ".balign {PAGE_SIZE}",
     "__signal_trampoline:",
