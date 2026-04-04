@@ -11,7 +11,7 @@ use crate::test::qemu_exit::exit_failure;
 static PANIC_COUNTER: AtomicU8 = AtomicU8::new(0);
 static CPU_ENTERED_PANIC: AtomicIsize = AtomicIsize::new(-1);
 
-#[cfg(all(feature = "riscv64", not(miri), test))]
+#[cfg(all(target_arch = "riscv64", not(miri), test))]
 #[panic_handler]
 fn test_panic_handler(info: &PanicInfo) -> ! {
     panic_handler(info)
