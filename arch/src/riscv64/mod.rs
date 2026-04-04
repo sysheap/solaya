@@ -1,3 +1,4 @@
+mod asm;
 pub mod backtrace;
 pub mod cpu;
 pub mod linker_symbols;
