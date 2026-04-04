@@ -106,6 +106,7 @@ impl CalleeSavedRegs {
         self.x2 = value;
     }
 
+    #[cfg(not(miri))]
     pub fn with_context<F: FnMut(&mut CalleeSavedRegs)>(f: F) {
         #[repr(C)]
         struct ClosureWrapper<F: FnMut(&mut CalleeSavedRegs)>(F);
@@ -158,5 +159,10 @@ impl CalleeSavedRegs {
                     "
             )
         }
+    }
+
+    #[cfg(miri)]
+    pub fn with_context<F: FnMut(&mut CalleeSavedRegs)>(_f: F) {
+        panic!("with_context is not available under miri");
     }
 }

@@ -1,3 +1,4 @@
+#[cfg(not(miri))]
 use core::arch::asm;
 
 const SIE_STIE: usize = 5;
@@ -6,6 +7,7 @@ const SIP_SSIP: usize = 1;
 
 macro_rules! read_csr {
     ($name:ident) => {
+        #[cfg(not(miri))]
         #[allow(dead_code)]
         pub fn ${concat(read_, $name)}() -> usize {
             let value: usize;
@@ -16,11 +18,18 @@ macro_rules! read_csr {
             }
             value
         }
+
+        #[cfg(miri)]
+        #[allow(dead_code)]
+        pub fn ${concat(read_, $name)}() -> usize {
+            0
+        }
     };
 }
 
 macro_rules! write_csr {
     ($name:ident) => {
+        #[cfg(not(miri))]
         #[allow(dead_code)]
         pub fn ${concat(write_, $name)}(value: usize) {
             // SAFETY: Writing a CSR is a privileged operation with no memory
@@ -30,6 +39,11 @@ macro_rules! write_csr {
             }
         }
 
+        #[cfg(miri)]
+        #[allow(dead_code)]
+        pub fn ${concat(write_, $name)}(_value: usize) {}
+
+        #[cfg(not(miri))]
         #[allow(dead_code)]
         pub fn ${concat(csrs_, $name)}(mask: usize) {
             // SAFETY: csrs (set bits) is a privileged CSR operation with no
@@ -39,6 +53,11 @@ macro_rules! write_csr {
             }
         }
 
+        #[cfg(miri)]
+        #[allow(dead_code)]
+        pub fn ${concat(csrs_, $name)}(_mask: usize) {}
+
+        #[cfg(not(miri))]
         #[allow(dead_code)]
         pub fn ${concat(csrc_, $name)}(mask: usize) {
             // SAFETY: csrc (clear bits) is a privileged CSR operation with no
@@ -47,6 +66,10 @@ macro_rules! write_csr {
                 asm!(concat!("csrc ", stringify!($name), ", {}"), in(reg) mask);
             }
         }
+
+        #[cfg(miri)]
+        #[allow(dead_code)]
+        pub fn ${concat(csrc_, $name)}(_mask: usize) {}
     };
 }
 
@@ -67,6 +90,7 @@ write_csr!(sip);
 
 /// # Safety
 /// Caller must ensure `satp_val` points to a valid page table.
+#[cfg(not(miri))]
 pub unsafe fn write_satp_and_fence(satp_val: usize) {
     write_satp(satp_val);
     // SAFETY: sfence.vma flushes the TLB; required after changing satp.
@@ -75,6 +99,10 @@ pub unsafe fn write_satp_and_fence(satp_val: usize) {
     }
 }
 
+#[cfg(miri)]
+pub unsafe fn write_satp_and_fence(_satp_val: usize) {}
+
+#[cfg(not(miri))]
 pub fn memory_fence() {
     // SAFETY: `fence` is a memory ordering instruction with no operands.
     unsafe {
@@ -82,14 +110,22 @@ pub fn memory_fence() {
     }
 }
 
+#[cfg(miri)]
+pub fn memory_fence() {}
+
 /// # Safety
 /// Must only be called during panic or shutdown paths where no further
 /// interrupt handling is expected.
+#[cfg(not(miri))]
 pub unsafe fn disable_global_interrupts() {
     csrc_sstatus(0b10);
     write_sie(0);
 }
 
+#[cfg(miri)]
+pub unsafe fn disable_global_interrupts() {}
+
+#[cfg(not(miri))]
 pub fn wait_for_interrupt() {
     // SAFETY: `wfi` halts the hart until an interrupt arrives; it has
     // no memory side-effects.
@@ -97,6 +133,9 @@ pub fn wait_for_interrupt() {
         asm!("wfi");
     }
 }
+
+#[cfg(miri)]
+pub fn wait_for_interrupt() {}
 
 #[allow(dead_code)]
 pub fn is_timer_enabled() -> bool {
@@ -131,12 +170,19 @@ pub fn trigger_supervisor_software_interrupt() {
 }
 
 /// Infinite WFI loop. Used as the idle function when no threads are runnable.
+#[cfg(not(miri))]
 #[unsafe(naked)]
 pub extern "C" fn wfi_loop() -> ! {
     core::arch::naked_asm!("0:", "  wfi", "  j 0b",)
 }
 
+#[cfg(miri)]
+pub extern "C" fn wfi_loop() -> ! {
+    panic!("wfi_loop is not available under miri");
+}
+
 /// Called from panic.S — reads the return address register and panics with it.
+#[cfg(not(miri))]
 pub fn asm_panic_rust() {
     let ra: usize;
     // SAFETY: Reads the return address register to report the faulting location.
@@ -146,12 +192,19 @@ pub fn asm_panic_rust() {
     panic!("Panic from asm code (ra={ra:#x})");
 }
 
+#[cfg(miri)]
+pub fn asm_panic_rust() {
+    panic!("Panic from asm code");
+}
+
 pub struct InterruptGuard {
+    #[cfg(not(miri))]
     was_enabled: bool,
 }
 
 impl InterruptGuard {
     #[allow(clippy::new_without_default)]
+    #[cfg(not(miri))]
     pub fn new() -> Self {
         let sstatus = read_sstatus();
         let was_enabled = (sstatus & 0b10) != 0;
@@ -160,8 +213,14 @@ impl InterruptGuard {
         }
         Self { was_enabled }
     }
+
+    #[cfg(miri)]
+    pub fn new() -> Self {
+        Self {}
+    }
 }
 
+#[cfg(not(miri))]
 impl Drop for InterruptGuard {
     fn drop(&mut self) {
         if self.was_enabled {
