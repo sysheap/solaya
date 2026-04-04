@@ -7,7 +7,7 @@ description.workspace = true
 
 [features]
 default = ["riscv64"]
-riscv64 = ["common/riscv64"]
+riscv64 = []
 
 [dependencies]
 common = { path = "../common", default-features = false }

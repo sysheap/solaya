@@ -12,26 +12,26 @@ pub struct Ifreq {
     pub ifr_data: [u8; 16],
 }
 
-#[cfg(feature = "riscv64")]
+#[cfg(target_arch = "riscv64")]
 unsafe extern "C" {
     fn ioctl(fd: i32, request: u32, ...) -> i32;
 }
 
-#[cfg(feature = "riscv64")]
+#[cfg(target_arch = "riscv64")]
 pub fn trigger_kernel_panic() {
     unsafe {
         ioctl(1, SOLAYA_PANIC);
     }
 }
 
-#[cfg(feature = "riscv64")]
+#[cfg(target_arch = "riscv64")]
 pub fn print_programs() {
     unsafe {
         ioctl(1, SOLAYA_LIST_PROGRAMS);
     }
 }
 
-#[cfg(feature = "riscv64")]
+#[cfg(target_arch = "riscv64")]
 pub fn get_mac_address(socket_fd: i32) -> Option<[u8; 6]> {
     let mut ifreq = Ifreq {
         ifr_name: [0; 16],
@@ -47,7 +47,7 @@ pub fn get_mac_address(socket_fd: i32) -> Option<[u8; 6]> {
     Some(mac)
 }
 
-#[cfg(feature = "riscv64")]
+#[cfg(target_arch = "riscv64")]
 pub fn set_ip_address(socket_fd: i32, ip: [u8; 4]) {
     let mut ifreq = Ifreq {
         ifr_name: [0; 16],
