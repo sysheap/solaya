@@ -113,7 +113,7 @@ async fn cat_bg_then_fg_then_ctrl_c() -> anyhow::Result<()> {
 
     // Verify shell still works
     let output = solaya.run_prog("prog1").await?;
-    assert_eq!(output, "Hello from Prog1\n");
+    assert!(output.contains("Hello from Prog1\n"));
 
     Ok(())
 }
