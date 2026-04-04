@@ -25,9 +25,9 @@ where
 #[allow(dead_code)]
 pub fn test_runner(tests: &[&dyn Testable]) {
     println!("Running {} tests", tests.len());
-    #[cfg(feature = "riscv64")]
+    #[cfg(target_arch = "riscv64")]
     crate::memory::initialize_runtime_mappings(&[]);
-    #[cfg(feature = "riscv64")]
+    #[cfg(target_arch = "riscv64")]
     crate::io::tty_device::CONSOLE_TTY.initialize(alloc::sync::Arc::new(
         crate::klibc::Spinlock::new(crate::io::tty_device::TtyDeviceInner::new()),
     ));
