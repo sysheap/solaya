@@ -5,6 +5,7 @@
 #![feature(negative_impls)]
 #![feature(str_from_raw_parts)]
 
+pub mod cpu;
 pub mod errors;
 pub mod ioctl;
 pub mod macros;
