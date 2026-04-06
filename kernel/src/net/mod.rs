@@ -6,14 +6,24 @@ use core::{
     task::{Context, Poll, Waker},
 };
 
-use alloc::vec::Vec;
+use alloc::{boxed::Box, vec::Vec};
 
 use crate::{
     debug,
-    drivers::virtio::net::NetworkDevice,
     klibc::{MMIO, Spinlock, runtime_initialized::RuntimeInitializedData},
     net::{ipv4::IpV4Header, udp::UdpHeader},
 };
+
+pub trait NetworkDevice: Send {
+    fn receive_packets(&mut self) -> Vec<Vec<u8>>;
+    fn send_packet(&mut self, data: Vec<u8>);
+    fn send_packet_batch(&mut self, packets: Vec<Vec<u8>>) {
+        for p in packets {
+            self.send_packet(p);
+        }
+    }
+    fn get_mac_address(&self) -> mac::MacAddress;
+}
 
 use self::{
     ethernet::EthernetHeader,
@@ -32,8 +42,13 @@ pub mod tcp;
 pub mod tcp_connection;
 pub mod udp;
 
+/// Bytes reserved at the start of packet buffers for the driver-level header
+/// (e.g., virtio_net_hdr). Avoids a second allocation when the driver prepends
+/// its header.
+pub const DRIVER_HEADER_RESERVE: usize = 12;
+
 struct NetworkStack {
-    device: Spinlock<Option<NetworkDevice>>,
+    device: Spinlock<Option<Box<dyn NetworkDevice>>>,
     ip_addr: Spinlock<Ipv4Addr>,
     open_sockets: Spinlock<LazyCell<OpenSockets>>,
 }
@@ -53,8 +68,11 @@ pub fn init_isr_status(isr: MMIO<u32>) {
 }
 
 pub fn on_network_interrupt() {
-    // Reading ISR status acknowledges the interrupt on the device side
-    let _isr = ISR_STATUS.read();
+    // Read interrupt status. For VirtIO this is read-to-clear.
+    // For DWMAC4 it's write-1-to-clear, so write back to acknowledge.
+    let isr = ISR_STATUS.read();
+    let mut ack = MMIO::<u32>::new(ISR_STATUS.addr());
+    ack.write(isr);
     NETWORK_INTERRUPT_COUNTER.fetch_add(1, Ordering::SeqCst);
     let wakers: Vec<Waker> = NETWORK_INTERRUPT_WAKERS.lock().drain(..).collect();
     for waker in wakers {
@@ -124,7 +142,10 @@ pub fn open_sockets() -> &'static Spinlock<LazyCell<OpenSockets>> {
     &NETWORK_STACK.open_sockets
 }
 
-pub fn assign_network_device(device: NetworkDevice) {
+static CACHED_MAC: Spinlock<Option<MacAddress>> = Spinlock::new(None);
+
+pub fn assign_network_device(device: Box<dyn NetworkDevice>) {
+    *CACHED_MAC.lock() = Some(device.get_mac_address());
     *NETWORK_STACK.device.lock() = Some(device);
 }
 
@@ -149,17 +170,25 @@ pub fn send_packet(packet: Vec<u8>) {
         .lock()
         .as_mut()
         .expect("There must be a configured network device.")
-        .send_packet(packet)
-        .expect("Packet must be sendable");
+        .send_packet(packet);
 }
 
-pub fn current_mac_address() -> MacAddress {
+pub fn send_packets(packets: Vec<Vec<u8>>) {
+    if packets.is_empty() {
+        return;
+    }
     NETWORK_STACK
         .device
         .lock()
-        .as_ref()
+        .as_mut()
         .expect("There must be a configured network device.")
-        .get_mac_address()
+        .send_packet_batch(packets);
+}
+
+pub fn current_mac_address() -> MacAddress {
+    CACHED_MAC
+        .lock()
+        .expect("MAC address must be cached after device init")
 }
 
 fn process_packet(packet: Vec<u8>) {
@@ -182,7 +211,13 @@ fn process_packet(packet: Vec<u8>) {
 }
 
 fn process_ipv4_packet(data: &[u8], source_mac: MacAddress) {
-    let (ipv4_header, rest) = IpV4Header::process(data).expect("IPv4 packet must be processed.");
+    let (ipv4_header, rest) = match IpV4Header::process(data) {
+        Ok(result) => result,
+        Err(err) => {
+            debug!("Dropping IPv4 packet: {:?}", err);
+            return;
+        }
+    };
     arp::cache_insert(ipv4_header.source_ip, source_mac);
 
     match ipv4_header.upper_protocol.get() {
