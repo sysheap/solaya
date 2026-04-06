@@ -104,7 +104,12 @@ pub fn process_and_respond(data: &[u8]) {
         EtherTypes::Arp,
     );
 
-    let data = [ethernet_reply.as_slice(), arp_reply.as_slice()].concat();
+    let data = [
+        &[0u8; super::DRIVER_HEADER_RESERVE][..],
+        ethernet_reply.as_slice(),
+        arp_reply.as_slice(),
+    ]
+    .concat();
     debug!(
         "ARP respond\n\tethernet: {}\n\tarp: {}",
         ethernet_reply, arp_reply

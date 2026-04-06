@@ -77,6 +77,7 @@ impl UdpHeader {
         );
 
         let data = [
+            &[0u8; super::DRIVER_HEADER_RESERVE][..],
             ethernet_header.as_slice(),
             ip_header.as_slice(),
             udp_header.as_slice(),

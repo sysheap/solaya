@@ -18,7 +18,11 @@ pub use sys::memory::{
 pub use runtime_mappings::initialize_runtime_mappings;
 
 pub fn kernel_device_mappings() -> alloc::vec::Vec<page_tables::MappingDescription> {
-    use crate::{interrupts::plic, io::TEST_DEVICE_ADDRESS, processes::timer};
+    use crate::{
+        interrupts::plic,
+        io::{TEST_DEVICE_ADDRESS, uart::UART_BASE_ADDRESS},
+        processes::timer,
+    };
     use alloc::vec::Vec;
 
     let mut mappings = Vec::new();
@@ -27,6 +31,12 @@ pub fn kernel_device_mappings() -> alloc::vec::Vec<page_tables::MappingDescripti
         size: *plic::PLIC_SIZE,
         privileges: page_tables::XWRMode::ReadWrite,
         name: "PLIC",
+    });
+    mappings.push(page_tables::MappingDescription {
+        virtual_address_start: VirtAddr::new(UART_BASE_ADDRESS),
+        size: PAGE_SIZE,
+        privileges: page_tables::XWRMode::ReadWrite,
+        name: "UART",
     });
     if let Some((clint_base, clint_size)) = timer::clint_region() {
         mappings.push(page_tables::MappingDescription {

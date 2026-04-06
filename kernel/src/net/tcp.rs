@@ -98,6 +98,7 @@ impl TcpHeader {
         );
 
         let packet = [
+            &[0u8; super::DRIVER_HEADER_RESERVE][..],
             ethernet_header.as_slice(),
             ip_header.as_slice(),
             tcp_header.as_slice(),
