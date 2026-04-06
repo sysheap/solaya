@@ -12,8 +12,7 @@ use core::{
 };
 use headers::{errno::Errno, syscall_types::timespec};
 
-pub use arch::timer::{CLINT_BASE, CLINT_SIZE};
-
+static CLINT_REGION: Spinlock<Option<(usize, usize)>> = Spinlock::new(None);
 static TIMEBASE_FREQ: RuntimeInitializedData<u64> = RuntimeInitializedData::new();
 
 type WakeupClockTime = u64;
@@ -22,6 +21,10 @@ type WakeupClockTime = u64;
 // This prevents waker collision when multiple threads sleep for the same duration.
 static WAKEUP_QUEUE: Spinlock<BTreeMap<WakeupClockTime, alloc::vec::Vec<Waker>>> =
     Spinlock::new(BTreeMap::new());
+
+pub fn clint_region() -> Option<(usize, usize)> {
+    *CLINT_REGION.lock()
+}
 
 pub fn init() {
     let clocks_per_sec = device_tree::THE
@@ -34,6 +37,12 @@ pub fn init() {
         .expect("The value must be u32")
         .get() as u64;
     TIMEBASE_FREQ.initialize(clocks_per_sec);
+
+    if let Some(clint_node) = device_tree::THE.root_node().find_node("clint")
+        && let Some(reg) = clint_node.parse_reg_property()
+    {
+        *CLINT_REGION.lock() = Some((reg.address, reg.size));
+    }
 }
 
 pub struct Sleep {

@@ -23,23 +23,28 @@ pub fn kernel_device_mappings() -> alloc::vec::Vec<page_tables::MappingDescripti
 
     let mut mappings = Vec::new();
     mappings.push(page_tables::MappingDescription {
-        virtual_address_start: VirtAddr::new(plic::PLIC_BASE),
-        size: plic::PLIC_SIZE,
+        virtual_address_start: VirtAddr::new(*plic::PLIC_BASE),
+        size: *plic::PLIC_SIZE,
         privileges: page_tables::XWRMode::ReadWrite,
         name: "PLIC",
     });
-    mappings.push(page_tables::MappingDescription {
-        virtual_address_start: VirtAddr::new(timer::CLINT_BASE),
-        size: timer::CLINT_SIZE,
-        privileges: page_tables::XWRMode::ReadWrite,
-        name: "CLINT",
-    });
-    mappings.push(page_tables::MappingDescription {
-        virtual_address_start: VirtAddr::new(TEST_DEVICE_ADDRESS),
-        size: PAGE_SIZE,
-        privileges: page_tables::XWRMode::ReadWrite,
-        name: "Qemu Test Device",
-    });
+    if let Some((clint_base, clint_size)) = timer::clint_region() {
+        mappings.push(page_tables::MappingDescription {
+            virtual_address_start: VirtAddr::new(clint_base),
+            size: clint_size,
+            privileges: page_tables::XWRMode::ReadWrite,
+            name: "CLINT",
+        });
+    }
+    // Only map the test device if present in the device tree
+    if device_tree::THE.root_node().find_node("test").is_some() {
+        mappings.push(page_tables::MappingDescription {
+            virtual_address_start: VirtAddr::new(TEST_DEVICE_ADDRESS),
+            size: PAGE_SIZE,
+            privileges: page_tables::XWRMode::ReadWrite,
+            name: "Qemu Test Device",
+        });
+    }
     for mapping in runtime_mappings::get_runtime_mappings() {
         mappings.push(mapping.clone());
     }

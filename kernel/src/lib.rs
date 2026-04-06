@@ -121,6 +121,7 @@ pub extern "C" fn kernel_init(hart_id: usize, device_tree_pointer: *const ()) ->
     memory::init_page_allocator(&[device_tree_range]);
 
     backtrace::init();
+    plic::discover_from_device_tree(boot_cpu_id);
     processes::timer::init();
 
     #[cfg(test)]
@@ -176,8 +177,17 @@ pub extern "C" fn kernel_init(hart_id: usize, device_tree_pointer: *const ()) ->
 
     Cpu::current().activate_kernel_page_table();
 
-    plic::init_plic(boot_cpu_id);
-    plic::register_interrupt(10, io::uart::on_uart_interrupt);
+    plic::init_plic();
+
+    // Read UART interrupt number from device tree instead of hardcoded IRQ 10
+    let uart_irq = device_tree::THE
+        .root_node()
+        .find_node("serial")
+        .and_then(|node| node.get_property("interrupts"))
+        .and_then(|mut p| p.consume_sized_type::<crate::klibc::big_endian::BigEndian<u32>>())
+        .map(|be| be.get())
+        .unwrap_or(10);
+    plic::register_interrupt(uart_irq, io::uart::on_uart_interrupt);
 
     let pci_devices = enumerate_devices(&pci_information);
     drivers::init_all_pci_devices(pci_devices);

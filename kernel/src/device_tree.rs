@@ -144,7 +144,7 @@ pub enum FdtToken<'a> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Node<'a> {
-    name: &'a str,
+    pub name: &'a str,
     pub address_cells: Option<u32>,
     pub size_cells: Option<u32>,
     pub parent_address_cells: Option<u32>,
@@ -240,6 +240,12 @@ impl<'a> Node<'a> {
         None
     }
 
+    pub fn children(&self) -> ChildrenIterator<'a> {
+        ChildrenIterator {
+            parent: self.clone(),
+        }
+    }
+
     pub fn parse_reg_property(&self) -> Option<Reg> {
         let mut reg_property = self.get_property("reg")?;
         let address = match self.parent_address_cells? {
@@ -262,11 +268,94 @@ impl<'a> Node<'a> {
 
         Some(Reg { address, size })
     }
+
+    pub fn parse_all_reg_properties(&self) -> alloc::vec::Vec<Reg> {
+        let mut regs = alloc::vec::Vec::new();
+        let Some(mut reg_property) = self.get_property("reg") else {
+            return regs;
+        };
+        loop {
+            let address = match self.parent_address_cells {
+                Some(1) => {
+                    let Some(v) = reg_property.consume_sized_type::<BigEndian<u32>>() else {
+                        break;
+                    };
+                    v.get() as usize
+                }
+                Some(2) => {
+                    let Some(v) = reg_property.consume_sized_type::<BigEndian<u64>>() else {
+                        break;
+                    };
+                    v.get().as_usize()
+                }
+                _ => break,
+            };
+            let size = match self.parent_size_cells {
+                Some(1) => {
+                    let Some(v) = reg_property.consume_sized_type::<BigEndian<u32>>() else {
+                        break;
+                    };
+                    v.get() as usize
+                }
+                Some(2) => {
+                    let Some(v) = reg_property.consume_sized_type::<BigEndian<u64>>() else {
+                        break;
+                    };
+                    v.get().as_usize()
+                }
+                _ => break,
+            };
+            regs.push(Reg { address, size });
+        }
+        regs
+    }
 }
 
 pub struct Reg {
     pub address: usize,
     pub size: usize,
+}
+
+pub struct ChildrenIterator<'a> {
+    parent: Node<'a>,
+}
+
+impl<'a> Iterator for ChildrenIterator<'a> {
+    type Item = Node<'a>;
+
+    fn next(&mut self) -> Option<Node<'a>> {
+        loop {
+            let token = self.parent.next()?;
+            match token {
+                FdtToken::BeginNode(name) => {
+                    let child_sb = self.parent.structure_block.clone();
+                    let mut child = Node::new(name, self.parent.device_tree, child_sb);
+                    child.parent_address_cells = self.parent.address_cells;
+                    child.parent_size_cells = self.parent.size_cells;
+
+                    // Skip over child content in parent's stream
+                    let mut depth = 0u32;
+                    loop {
+                        match self.parent.next()? {
+                            FdtToken::BeginNode(_) => depth += 1,
+                            FdtToken::EndNode => {
+                                if depth == 0 {
+                                    break;
+                                }
+                                depth -= 1;
+                            }
+                            FdtToken::End => return None,
+                            _ => {}
+                        }
+                    }
+
+                    return Some(child);
+                }
+                FdtToken::Prop(_, _) | FdtToken::Nop => continue,
+                FdtToken::EndNode | FdtToken::End => return None,
+            }
+        }
+    }
 }
 
 impl<'a> IntoIterator for &Node<'a> {
@@ -331,10 +420,13 @@ pub fn get_devicetree_range() -> Range<*const u8> {
 pub fn init(device_tree_pointer: *const ()) {
     info!("Initialize device tree at {device_tree_pointer:p}");
     let device_tree = DeviceTree::new(device_tree_pointer);
-    assert!(
-        device_tree.get_reserved_areas().is_empty(),
-        "There should be no reserved memory regions"
-    );
+    let reserved = device_tree.get_reserved_areas();
+    if !reserved.is_empty() {
+        info!(
+            "Device tree has {} reserved memory region(s)",
+            reserved.len()
+        );
+    }
     THE.initialize(device_tree);
 }
 
