@@ -1,6 +1,8 @@
 #![no_std]
 #![feature(macro_metavar_expr_concat)]
 
+pub mod isa;
+
 #[cfg(feature = "riscv64")]
 mod riscv64;
 #[cfg(feature = "riscv64")]

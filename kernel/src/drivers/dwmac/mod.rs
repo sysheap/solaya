@@ -69,7 +69,6 @@ const MTL_RXQ0_RQS_SHIFT: u32 = 20;
 const MTL_RXQ0_RQS_MASK: u32 = 0x3FF;
 
 // DMA registers (base + 0x1000)
-const DMA_MODE: usize = 0x1000;
 const DMA_SYSBUS_MODE: usize = 0x1004;
 const DMA_CH0_CONTROL: usize = 0x1100;
 const DMA_CH0_TX_CONTROL: usize = 0x1104;
@@ -84,10 +83,6 @@ const DMA_CH0_TXDESC_RING_LENGTH: usize = 0x112C;
 const DMA_CH0_RXDESC_RING_LENGTH: usize = 0x1130;
 const DMA_CH0_INTERRUPT_ENABLE: usize = 0x1134;
 const DMA_CH0_STATUS: usize = 0x1160;
-
-// DMA mode bits
-#[allow(dead_code)]
-const DMA_MODE_SWR: u32 = 1 << 0;
 
 // DMA sysbus mode bits
 const DMA_SYSBUS_MODE_EAME: u32 = 1 << 11;
@@ -264,17 +259,6 @@ impl DwmacDevice {
 
         info!("DWMAC: initialization complete");
         true
-    }
-
-    #[allow(dead_code)]
-    fn wait_for_dma_reset(base: usize) -> bool {
-        for _ in 0..100_000 {
-            if read_reg(base, DMA_MODE) & DMA_MODE_SWR == 0 {
-                return true;
-            }
-            core::hint::spin_loop();
-        }
-        false
     }
 
     fn mdio_wait_idle(&self) {
@@ -679,7 +663,8 @@ impl crate::net::NetworkDevice for DwmacDevice {
         let length = data.len().min(PACKET_BUF_SIZE);
 
         // Wait for descriptor to be available (OWN cleared by hardware)
-        for i in 0..=1_000_000 {
+        let mut found = false;
+        for _ in 0..1_000_000 {
             let desc_addr = &self.tx_ring.descriptors[self.tx_idx] as *const _ as usize;
             arch::cache::flush_range(desc_addr, core::mem::size_of::<DmaDescriptor>());
             let des3 = MMIO::<u32>::new(
@@ -687,11 +672,12 @@ impl crate::net::NetworkDevice for DwmacDevice {
             )
             .read();
             if des3 & DESC3_OWN == 0 {
+                found = true;
                 break;
             }
-            assert!(i < 1_000_000, "No free descriptor");
             core::hint::spin_loop();
         }
+        assert!(found, "DWMAC: TX descriptor timeout, no free descriptor");
 
         // Copy data to TX buffer
         self.tx_buffers[self.tx_idx].0[..length].copy_from_slice(&data[..length]);

@@ -295,25 +295,7 @@ impl<'a> Node<'a> {
 
     pub fn parse_reg_property(&self) -> Option<Reg> {
         let mut reg_property = self.get_property("reg")?;
-        let address = match self.parent_address_cells? {
-            1 => reg_property.consume_sized_type::<BigEndian<u32>>()?.get() as usize,
-            2 => reg_property
-                .consume_sized_type::<BigEndian<u64>>()?
-                .get()
-                .as_usize(),
-            _ => panic!("address cannot be larger than 64 bit"),
-        };
-
-        let size = match self.parent_size_cells? {
-            1 => reg_property.consume_sized_type::<BigEndian<u32>>()?.get() as usize,
-            2 => reg_property
-                .consume_sized_type::<BigEndian<u64>>()?
-                .get()
-                .as_usize(),
-            _ => panic!("size cannot be larger than 64 bit"),
-        };
-
-        Some(Reg { address, size })
+        self.parse_one_reg(&mut reg_property)
     }
 
     pub fn parse_all_reg_properties(&self) -> alloc::vec::Vec<Reg> {
@@ -321,40 +303,24 @@ impl<'a> Node<'a> {
         let Some(mut reg_property) = self.get_property("reg") else {
             return regs;
         };
-        loop {
-            let address = match self.parent_address_cells {
-                Some(1) => {
-                    let Some(v) = reg_property.consume_sized_type::<BigEndian<u32>>() else {
-                        break;
-                    };
-                    v.get() as usize
-                }
-                Some(2) => {
-                    let Some(v) = reg_property.consume_sized_type::<BigEndian<u64>>() else {
-                        break;
-                    };
-                    v.get().as_usize()
-                }
-                _ => break,
-            };
-            let size = match self.parent_size_cells {
-                Some(1) => {
-                    let Some(v) = reg_property.consume_sized_type::<BigEndian<u32>>() else {
-                        break;
-                    };
-                    v.get() as usize
-                }
-                Some(2) => {
-                    let Some(v) = reg_property.consume_sized_type::<BigEndian<u64>>() else {
-                        break;
-                    };
-                    v.get().as_usize()
-                }
-                _ => break,
-            };
-            regs.push(Reg { address, size });
+        while let Some(reg) = self.parse_one_reg(&mut reg_property) {
+            regs.push(reg);
         }
         regs
+    }
+
+    fn parse_one_reg(&self, buf: &mut ConsumableBuffer<'a>) -> Option<Reg> {
+        let address = match self.parent_address_cells? {
+            1 => buf.consume_sized_type::<BigEndian<u32>>()?.get() as usize,
+            2 => buf.consume_sized_type::<BigEndian<u64>>()?.get().as_usize(),
+            _ => panic!("address cannot be larger than 64 bit"),
+        };
+        let size = match self.parent_size_cells? {
+            1 => buf.consume_sized_type::<BigEndian<u32>>()?.get() as usize,
+            2 => buf.consume_sized_type::<BigEndian<u64>>()?.get().as_usize(),
+            _ => panic!("size cannot be larger than 64 bit"),
+        };
+        Some(Reg { address, size })
     }
 }
 
