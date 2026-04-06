@@ -17,11 +17,6 @@ use crate::{
 pub trait NetworkDevice: Send {
     fn receive_packets(&mut self) -> Vec<Vec<u8>>;
     fn send_packet(&mut self, data: Vec<u8>);
-    fn send_packet_batch(&mut self, packets: Vec<Vec<u8>>) {
-        for p in packets {
-            self.send_packet(p);
-        }
-    }
     fn get_mac_address(&self) -> mac::MacAddress;
 }
 
@@ -171,18 +166,6 @@ pub fn send_packet(packet: Vec<u8>) {
         .as_mut()
         .expect("There must be a configured network device.")
         .send_packet(packet);
-}
-
-pub fn send_packets(packets: Vec<Vec<u8>>) {
-    if packets.is_empty() {
-        return;
-    }
-    NETWORK_STACK
-        .device
-        .lock()
-        .as_mut()
-        .expect("There must be a configured network device.")
-        .send_packet_batch(packets);
 }
 
 pub fn current_mac_address() -> MacAddress {

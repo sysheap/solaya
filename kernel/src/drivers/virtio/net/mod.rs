@@ -381,23 +381,6 @@ impl crate::net::NetworkDevice for NetworkDevice {
         self.transmit_queue.notify();
     }
 
-    fn send_packet_batch(&mut self, packets: Vec<Vec<u8>>) {
-        // Reclaim completed TX buffers once
-        for transmitted_packet in self.transmit_queue.receive_buffer() {
-            drop(transmitted_packet);
-        }
-
-        for data in packets {
-            let data = Self::fill_net_header(data);
-            let _ = self
-                .transmit_queue
-                .put_buffer(data, BufferDirection::DriverWritable);
-        }
-
-        // Single notify for the entire batch
-        self.transmit_queue.notify();
-    }
-
     fn get_mac_address(&self) -> MacAddress {
         self.mac_address
     }
