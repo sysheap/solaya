@@ -186,6 +186,53 @@ impl<'a> Node<'a> {
         clone.find_node_recursive(needle)
     }
 
+    pub fn find_node_by_phandle(&self, target_phandle: u32) -> Option<Self> {
+        let mut clone = self.clone();
+        clone.find_node_by_phandle_recursive(target_phandle)
+    }
+
+    fn find_node_by_phandle_recursive(&mut self, target_phandle: u32) -> Option<Self> {
+        if let Some(mut phandle_buf) = self.get_property("phandle")
+            && let Some(ph) = phandle_buf.consume_sized_type::<BigEndian<u32>>()
+            && ph.get() == target_phandle
+        {
+            return Some(self.clone());
+        }
+
+        let mut parent_address_cell = self.address_cells;
+        let mut parent_size_cell = self.size_cells;
+
+        while let Some(token) = self.next() {
+            match token {
+                FdtToken::BeginNode(node_name) => {
+                    let mut node =
+                        Node::new(node_name, self.device_tree, self.structure_block.clone());
+                    node.parent_address_cells = parent_address_cell;
+                    node.parent_size_cells = parent_size_cell;
+                    if let Some(target_node) = node.find_node_by_phandle_recursive(target_phandle) {
+                        return Some(target_node);
+                    }
+                    self.structure_block = node.structure_block;
+                }
+                FdtToken::Prop(prop, mut data) => {
+                    if prop == "#address-cells" {
+                        parent_address_cell =
+                            Some(data.consume_sized_type::<BigEndian<u32>>()?.get());
+                    }
+                    if prop == "#size-cells" {
+                        parent_size_cell = Some(data.consume_sized_type::<BigEndian<u32>>()?.get());
+                    }
+                }
+                FdtToken::Nop => {}
+                FdtToken::EndNode | FdtToken::End => {
+                    return None;
+                }
+            }
+        }
+
+        None
+    }
+
     fn find_node_recursive(&mut self, needle: &'a str) -> Option<Self> {
         if self.name.split('@').next() == Some(needle) {
             return Some(self.clone());
