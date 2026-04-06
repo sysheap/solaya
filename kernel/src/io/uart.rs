@@ -1,4 +1,7 @@
-use core::fmt::Write;
+use core::{
+    fmt::Write,
+    sync::atomic::{AtomicU8, Ordering},
+};
 
 use crate::klibc::{MMIO, Spinlock};
 use sys::klibc::send_sync::UnsafeSendSync;
@@ -153,6 +156,13 @@ pub fn on_uart_interrupt() {
         uart.clear_pending_interrupts();
     }
 
+    for &byte in &raw_bytes {
+        if check_reboot_magic(byte) {
+            crate::println!("\n[UART] Reboot magic received, rebooting...");
+            crate::drivers::jh7110::reset::trigger_reset();
+        }
+    }
+
     let mut signal_to_send: Option<u32> = None;
     let tty = crate::io::tty_device::console_tty();
     for &byte in &raw_bytes {
@@ -181,10 +191,42 @@ pub fn on_uart_interrupt() {
     }
 }
 
+const REBOOT_MAGIC: [u8; 4] = [0xDE, 0xAD, 0xBE, 0xEF];
+static REBOOT_SEQ_INDEX: AtomicU8 = AtomicU8::new(0);
+
+fn check_reboot_magic(byte: u8) -> bool {
+    let idx = REBOOT_SEQ_INDEX.load(Ordering::Relaxed);
+    if byte == REBOOT_MAGIC[idx as usize] {
+        let next = idx + 1;
+        if next as usize == REBOOT_MAGIC.len() {
+            return true;
+        }
+        REBOOT_SEQ_INDEX.store(next, Ordering::Relaxed);
+    } else {
+        REBOOT_SEQ_INDEX.store(0, Ordering::Relaxed);
+    }
+    false
+}
+
+/// Poll UART for the reboot magic sequence (0xDEADBEEF).
+/// Called from panic handler with interrupts disabled.
 pub fn poll_for_reboot() -> ! {
-    // In QEMU, just halt. On real hardware, this will poll UART for a
-    // magic reboot sequence (added with the JH7110 driver).
-    sys::cpu::disable_interrupts_and_halt();
+    CONSOLE_UART.panic_force_unlock();
+    sys::println!("Polling for reboot...");
+    loop {
+        let byte = CONSOLE_UART.lock().read();
+        if let Some(byte) = byte
+            && check_reboot_magic(byte)
+        {
+            let mut uart = CONSOLE_UART.lock();
+            for &b in b"\n[UART] Reboot magic received, rebooting...\n" {
+                uart.write_byte(b);
+            }
+            drop(uart);
+            crate::drivers::jh7110::reset::trigger_reset();
+        }
+        core::hint::spin_loop();
+    }
 }
 
 impl Write for Uart {
