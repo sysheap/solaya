@@ -32,8 +32,8 @@ macro_rules! print {
 
 #[macro_export]
 macro_rules! println {
-    () => ($crate::print!("\n"));
-    ($($arg:tt)*) => ($crate::print!("{}\n", format_args!($($arg)*)));
+    () => ($crate::print!("\r\n"));
+    ($($arg:tt)*) => ($crate::print!("{}\r\n", format_args!($($arg)*)));
 }
 
 #[cfg(not(miri))]
@@ -41,7 +41,7 @@ macro_rules! println {
 pub fn _print(args: fmt::Arguments) {
     use crate::io::uart;
     use core::fmt::Write;
-    uart::QEMU_UART
+    uart::CONSOLE_UART
         .lock()
         .write_fmt(args)
         .expect("Failed to write to UART");
