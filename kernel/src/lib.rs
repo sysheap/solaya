@@ -127,41 +127,42 @@ pub extern "C" fn kernel_init(hart_id: usize, device_tree_pointer: *const ()) ->
     #[cfg(test)]
     test_main();
 
-    let pci_information = pci::parse().expect("pci information must be parsable");
-
-    {
-        let pci_space_64_bit = pci_information
-            .get_first_range_for_type(pci::PCIBitField::MEMORY_SPACE_64_BIT_CODE)
-            .expect("There must be a 64 bit allocation space.");
-        let mut pci_allocator = pci::PCI_ALLOCATOR_64_BIT.lock();
-        pci_allocator.init(pci_space_64_bit);
-    }
-
-    if let Some(pci_space_32_bit) =
-        pci_information.get_first_range_for_type(pci::PCIBitField::MEMORY_SPACE_32_BIT_CODE)
-    {
-        let mut pci_allocator = pci::PCI_ALLOCATOR_32_BIT.lock();
-        pci_allocator.init(pci_space_32_bit);
-    }
+    let pci_information = pci::parse();
 
     let mut runtime_mapping = Vec::new();
 
-    runtime_mapping.push(MappingDescription {
-        virtual_address_start: memory::VirtAddr::new(
-            pci_information.pci_host_bridge_address.as_usize(),
-        ),
-        size: pci_information.pci_host_bridge_length,
-        privileges: page_tables::XWRMode::ReadWrite,
-        name: "PCI Space",
-    });
+    if let Some(ref pci_info) = pci_information {
+        if let Some(pci_space_64_bit) =
+            pci_info.get_first_range_for_type(pci::PCIBitField::MEMORY_SPACE_64_BIT_CODE)
+        {
+            let mut pci_allocator = pci::PCI_ALLOCATOR_64_BIT.lock();
+            pci_allocator.init(pci_space_64_bit);
+        }
 
-    for range in &pci_information.ranges {
+        if let Some(pci_space_32_bit) =
+            pci_info.get_first_range_for_type(pci::PCIBitField::MEMORY_SPACE_32_BIT_CODE)
+        {
+            let mut pci_allocator = pci::PCI_ALLOCATOR_32_BIT.lock();
+            pci_allocator.init(pci_space_32_bit);
+        }
+
         runtime_mapping.push(MappingDescription {
-            virtual_address_start: memory::VirtAddr::new(range.cpu_address.as_usize()),
-            size: range.size,
+            virtual_address_start: memory::VirtAddr::new(
+                pci_info.pci_host_bridge_address.as_usize(),
+            ),
+            size: pci_info.pci_host_bridge_length,
             privileges: page_tables::XWRMode::ReadWrite,
-            name: "PCI Range",
+            name: "PCI Space",
         });
+
+        for range in &pci_info.ranges {
+            runtime_mapping.push(MappingDescription {
+                virtual_address_start: memory::VirtAddr::new(range.cpu_address.as_usize()),
+                size: range.size,
+                privileges: page_tables::XWRMode::ReadWrite,
+                name: "PCI Range",
+            });
+        }
     }
 
     memory::initialize_runtime_mappings(&runtime_mapping);
@@ -189,8 +190,12 @@ pub extern "C" fn kernel_init(hart_id: usize, device_tree_pointer: *const ()) ->
         .unwrap_or(10);
     plic::register_interrupt(uart_irq, io::uart::on_uart_interrupt);
 
-    let pci_devices = enumerate_devices(&pci_information);
-    drivers::init_all_pci_devices(pci_devices);
+    if let Some(ref pci_info) = pci_information {
+        let pci_devices = enumerate_devices(pci_info);
+        drivers::init_all_pci_devices(pci_devices);
+    }
+
+    drivers::init_dwmac_devices();
 
     processes::kernel_tasks::create_worker_thread();
 
