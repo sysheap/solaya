@@ -1,5 +1,5 @@
 #![cfg_attr(miri, allow(unused_imports))]
-use crate::{println, test::qemu_exit::wait_for_the_end};
+use crate::println;
 use core::{
     panic::PanicInfo,
     sync::atomic::{AtomicIsize, AtomicU8},
@@ -44,14 +44,9 @@ pub fn panic_handler(info: &PanicInfo) -> ! {
     if let Some(location) = info.location() {
         println!("Location: {}", location);
     }
-    let kernel_page_tables = Cpu::maybe_kernel_page_tables();
-    if let Some(kernel_page_tables) = kernel_page_tables {
-        println!("Kernel Page Tables {kernel_page_tables}");
-    }
+
     abort_if_double_panic();
     crate::debugging::backtrace::print();
-
-    crate::debugging::dump_current_state();
 
     println!("\nPanic Occurred on cpu {}!", Cpu::cpu_id());
     println!("Message: {}", info.message());
@@ -64,7 +59,7 @@ pub fn panic_handler(info: &PanicInfo) -> ! {
     exit_failure(1);
 
     #[cfg(not(test))]
-    wait_for_the_end();
+    crate::io::uart::poll_for_reboot();
 }
 
 fn abort_if_double_panic() {
@@ -78,6 +73,6 @@ fn abort_if_double_panic() {
         exit_failure(1);
 
         #[cfg(not(test))]
-        wait_for_the_end();
+        crate::io::uart::poll_for_reboot();
     }
 }

@@ -1,6 +1,6 @@
 use crate::{
     cpu::Cpu,
-    debug, info,
+    info,
     interrupts::plic::{self, PLIC},
     memory::VirtAddr,
     processes::{task::Task, thread::ThreadState, timer, waker::ThreadWaker},
@@ -52,15 +52,14 @@ fn handle_timer_interrupt() {
 }
 
 fn handle_external_interrupt() {
-    debug!("External interrupt occurred!");
     let mut plic_guard = PLIC.lock();
     let irq = match plic_guard.claim() {
         Some(i) => i,
         None => return,
     };
-    plic_guard.complete(irq);
     drop(plic_guard);
     plic::dispatch_interrupt(irq);
+    PLIC.lock().complete(irq);
 }
 
 // Check if we still own the thread (syscall might have set it to Waiting or another CPU

@@ -181,6 +181,12 @@ pub fn on_uart_interrupt() {
     }
 }
 
+pub fn poll_for_reboot() -> ! {
+    // In QEMU, just halt. On real hardware, this will poll UART for a
+    // magic reboot sequence (added with the JH7110 driver).
+    sys::cpu::disable_interrupts_and_halt();
+}
+
 impl Write for Uart {
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
         if !self.is_init {
