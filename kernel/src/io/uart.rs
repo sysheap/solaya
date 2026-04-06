@@ -1,90 +1,156 @@
 use core::fmt::Write;
 
-use crate::{
-    klibc::{MMIO, Spinlock},
-    mmio_struct,
-};
+use crate::klibc::{MMIO, Spinlock};
 use sys::klibc::send_sync::UnsafeSendSync;
 
 pub const UART_BASE_ADDRESS: usize = 0x1000_0000;
 
+const THR: usize = 0;
+const IER: usize = 1;
+const IIR: usize = 2; // Read: Interrupt Identification Register
+const FCR: usize = 2; // Write: FIFO Control Register
+const LCR: usize = 3;
+const LSR: usize = 5;
+const USR: usize = 0x1F; // DW APB UART: UART Status Register
+
 const LCR_WORD_LEN_8BIT: u8 = 0b11;
-const LCR_DLAB: u8 = 1 << 7;
-const FCR_ENABLE: u8 = 1;
+const FCR_FIFO_EN: u8 = 0x01;
+const FCR_RXSR: u8 = 0x02;
+const FCR_TXSR: u8 = 0x04;
 const IER_RX_AVAILABLE: u8 = 1;
 const LSR_DATA_READY: u8 = 1;
-const BAUD_DIVISOR: u16 = 592;
+const LSR_THRE: u8 = 1 << 5;
 
-mmio_struct! {
-    #[repr(C)]
-    struct UartRegisters {
-        thr_rbr: u8,
-        ier: u8,
-        fcr_iir: u8,
-        lcr: u8,
-        mcr: u8,
-        lsr: u8,
-    }
-}
-
-pub static QEMU_UART: Spinlock<UnsafeSendSync<Uart>> =
+pub static CONSOLE_UART: Spinlock<UnsafeSendSync<Uart>> =
     Spinlock::new(UnsafeSendSync(Uart::new(UART_BASE_ADDRESS)));
 
 pub struct Uart {
-    regs: MMIO<UartRegisters>,
+    base: usize,
+    reg_shift: u8,
     is_init: bool,
 }
 
 impl Uart {
     const fn new(uart_base_address: usize) -> Self {
         Self {
-            regs: MMIO::new(uart_base_address),
+            base: uart_base_address,
+            reg_shift: 0,
             is_init: false,
         }
     }
 
+    fn reg_addr(&self, index: usize) -> usize {
+        self.base + (index << self.reg_shift as usize)
+    }
+
+    /// Read a UART register. Uses u32 access for 4-byte-spaced registers
+    /// (DW_apb_uart requires reg-io-width=4), u8 for byte-spaced (QEMU).
+    fn read_reg(&self, index: usize) -> u8 {
+        let addr = self.reg_addr(index);
+        if self.reg_shift >= 2 {
+            MMIO::<u32>::new(addr).read() as u8
+        } else {
+            MMIO::<u8>::new(addr).read()
+        }
+    }
+
+    fn write_reg(&self, index: usize, value: u8) {
+        let addr = self.reg_addr(index);
+        if self.reg_shift >= 2 {
+            MMIO::<u32>::new(addr).write(value as u32);
+        } else {
+            MMIO::<u8>::new(addr).write(value);
+        }
+    }
+
     pub fn init(&mut self) {
-        self.regs.lcr().write(LCR_WORD_LEN_8BIT);
-        self.regs.fcr_iir().write(FCR_ENABLE);
-        self.regs.ier().write(IER_RX_AVAILABLE);
+        // Must detect reg_shift BEFORE any THR writes, while UART is still
+        // idle from firmware — otherwise THRE clears and detection fails.
+        self.reg_shift = detect_reg_shift(self.base);
 
-        // Set baud rate via divisor latch.
-        // divisor = ceil(22_729_000 / (2400 * 16)) = 592
-        let divisor_least: u8 = (BAUD_DIVISOR & 0xff) as u8;
-        let divisor_most: u8 = (BAUD_DIVISOR >> 8) as u8;
+        // Disable all interrupts first to prevent spurious interrupts
+        // while we reconfigure.
+        self.write_reg(IER, 0);
 
-        // Open divisor latch (DLAB bit in LCR) to access DLL/DLM registers
-        self.regs.lcr().write(LCR_WORD_LEN_8BIT | LCR_DLAB);
+        // Configure 8-bit word length, enable FIFO.
+        // Baud rate is left as-is: on QEMU it doesn't matter, and on real
+        // hardware the firmware (U-Boot/OpenSBI) has already configured it.
+        self.write_reg(LCR, LCR_WORD_LEN_8BIT);
+        self.write_reg(FCR, FCR_FIFO_EN | FCR_RXSR | FCR_TXSR);
 
-        // With DLAB set, thr_rbr becomes DLL and ier becomes DLM
-        self.regs.thr_rbr().write(divisor_least);
-        self.regs.ier().write(divisor_most);
+        // Clear any pending interrupts left by firmware.
+        self.clear_pending_interrupts();
 
-        // Close divisor latch to restore normal register access
-        self.regs.lcr().write(LCR_WORD_LEN_8BIT);
+        // Now enable RX interrupts.
+        self.write_reg(IER, IER_RX_AVAILABLE);
 
         self.is_init = true;
     }
 
+    /// Clear all pending UART interrupt sources.
+    /// On the DW APB UART, this includes the "Busy Detect" interrupt
+    /// (triggered by writing LCR while busy), which can only be cleared
+    /// by reading the USR register.
+    pub fn clear_pending_interrupts(&self) {
+        // Read IIR to clear THR Empty interrupt
+        let _ = self.read_reg(IIR);
+        // Read LSR to clear Line Status interrupt
+        let _ = self.read_reg(LSR);
+        // Read RBR to clear Received Data Available / Character Timeout
+        let _ = self.read_reg(THR);
+        // Read USR to clear DW APB UART Busy Detect interrupt
+        if self.reg_shift >= 2 {
+            let _ = self.read_reg(USR);
+        }
+    }
+
+    fn wait_for_tx_ready(&self) {
+        while self.read_reg(LSR) & LSR_THRE == 0 {
+            core::hint::spin_loop();
+        }
+    }
+
     pub fn write_byte(&mut self, character: u8) {
-        self.regs.thr_rbr().write(character);
+        self.wait_for_tx_ready();
+        self.write_reg(THR, character);
     }
 
     pub fn read(&self) -> Option<u8> {
-        if self.regs.lsr().read() & LSR_DATA_READY == 0 {
+        if self.read_reg(LSR) & LSR_DATA_READY == 0 {
             return None;
         }
-        Some(self.regs.thr_rbr().read())
+        Some(self.read_reg(THR))
+    }
+}
+
+/// Detect register spacing by probing LSR at both possible offsets.
+/// Probe reg_shift=0 first: on QEMU the UART region is only 8 bytes,
+/// so reading at offset 0x14 (reg_shift=2) would fault before the
+/// trap handler is installed.
+fn detect_reg_shift(base: usize) -> u8 {
+    // QEMU: THRE is always set (infinite FIFO), detected immediately.
+    if MMIO::<u8>::new(base + LSR).read() & LSR_THRE != 0 {
+        return 0;
+    }
+
+    // DW_apb_uart: wait for UART to finish draining firmware output.
+    loop {
+        if MMIO::<u32>::new(base + (LSR << 2)).read() as u8 & LSR_THRE != 0 {
+            return 2;
+        }
+        core::hint::spin_loop();
     }
 }
 
 pub fn on_uart_interrupt() {
     let mut raw_bytes = crate::klibc::array_vec::ArrayVec::<u8, 64>::new();
     {
-        let uart = QEMU_UART.lock();
+        let uart = CONSOLE_UART.lock();
         while let Some(input) = uart.read() {
             let _ = raw_bytes.push(input);
         }
+        // Clear any non-RX interrupt sources (e.g. DW APB UART Busy Detect)
+        uart.clear_pending_interrupts();
     }
 
     let mut signal_to_send: Option<u32> = None;
@@ -92,7 +158,7 @@ pub fn on_uart_interrupt() {
     for &byte in &raw_bytes {
         let result = tty.lock().process_input_byte(byte);
         if !result.echo.is_empty() {
-            let mut uart = QEMU_UART.lock();
+            let mut uart = CONSOLE_UART.lock();
             for &echo_byte in &result.echo {
                 uart.write_byte(echo_byte);
             }
@@ -121,6 +187,9 @@ impl Write for Uart {
             return Ok(());
         }
         for c in s.bytes() {
+            if c == b'\n' {
+                self.write_byte(b'\r');
+            }
             self.write_byte(c);
         }
         Ok(())

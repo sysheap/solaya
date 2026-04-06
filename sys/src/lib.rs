@@ -1,4 +1,4 @@
-#![cfg_attr(not(miri), no_std)]
+#![cfg_attr(not(any(miri, test)), no_std)]
 #![cfg_attr(kani, feature(maybe_uninit_slice))]
 #![cfg_attr(kani, allow(dead_code))]
 #![cfg_attr(kani, allow(unused_imports))]

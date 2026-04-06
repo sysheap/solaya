@@ -32,7 +32,7 @@
 #![reexport_test_harness_main = "test_main"]
 
 use crate::{
-    interrupts::plic, io::uart::QEMU_UART, memory::page_tables, pci::enumerate_devices,
+    interrupts::plic, io::uart::CONSOLE_UART, memory::page_tables, pci::enumerate_devices,
     processes::timer,
 };
 use alloc::vec::Vec;
@@ -99,7 +99,7 @@ pub extern "C" fn kernel_init(hart_id: usize, device_tree_pointer: *const ()) ->
     let boot_cpu_id = cpu::CpuId::from_hart_id(hart_id);
     sys::cpu::STARTING_CPU_ID.initialize(boot_cpu_id);
 
-    QEMU_UART.lock().init();
+    CONSOLE_UART.lock().init();
 
     info!("Hello World from Solaya!\n");
     info!("Device Tree Pointer: {:p}", device_tree_pointer);

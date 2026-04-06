@@ -27,6 +27,7 @@ read_csr_stub!(scause);
 read_csr_stub!(sscratch);
 read_csr_stub!(sie);
 read_csr_stub!(sstatus);
+read_csr_stub!(stvec);
 
 write_csr_stub!(satp);
 write_csr_stub!(sepc);
@@ -40,6 +41,7 @@ pub unsafe fn write_satp_and_fence(_satp_val: usize) {}
 
 #[allow(dead_code)]
 pub fn memory_fence() {}
+pub fn io_fence() {}
 
 #[allow(dead_code)]
 pub unsafe fn disable_global_interrupts() {}

@@ -69,7 +69,21 @@ pub mod extensions {
         }
 
         #[allow(dead_code)]
+        pub fn is_hart_stopped(_hart_id: usize) -> bool {
+            true
+        }
+
+        #[allow(dead_code)]
         pub fn start_hart(_hart_id: usize, _start_addr: usize, _opaque: usize) -> SbiRet {
+            SbiRet::default()
+        }
+    }
+
+    pub mod srst_extension {
+        use crate::sbi::sbi_call::SbiRet;
+
+        #[allow(dead_code)]
+        pub fn sbi_system_reset(_reset_type: u32, _reset_reason: u32) -> SbiRet {
             SbiRet::default()
         }
     }

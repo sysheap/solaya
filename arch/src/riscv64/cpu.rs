@@ -80,6 +80,7 @@ read_csr!(scause);
 read_csr!(sscratch);
 read_csr!(sie);
 read_csr!(sstatus);
+read_csr!(stvec);
 
 write_csr!(satp);
 write_csr!(sepc);
@@ -112,6 +113,18 @@ pub fn memory_fence() {
 
 #[cfg(miri)]
 pub fn memory_fence() {}
+
+#[cfg(not(miri))]
+pub fn io_fence() {
+    // SAFETY: `fence iorw, iorw` ensures all prior I/O and memory accesses
+    // complete before subsequent ones. Required for reliable MMIO on RISC-V.
+    unsafe {
+        asm!("fence iorw, iorw");
+    }
+}
+
+#[cfg(miri)]
+pub fn io_fence() {}
 
 /// # Safety
 /// Must only be called during panic or shutdown paths where no further
