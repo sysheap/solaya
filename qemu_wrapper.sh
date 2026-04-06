@@ -9,7 +9,7 @@ rm -f .gdb-port
 QEMU_CMD="qemu-system-riscv64 \
     -machine virt \
     -cpu rv64 \
-    -m 8G \
+    -m 512M \
     -serial mon:stdio \
     -device virtio-rng-pci"
 
