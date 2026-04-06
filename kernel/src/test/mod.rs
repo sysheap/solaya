@@ -1,6 +1,7 @@
 use crate::{print, println};
 
 mod array_vec;
+mod isa;
 mod leb128;
 
 pub mod qemu_exit;

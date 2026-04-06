@@ -1,5 +1,28 @@
 build: build-cargo patch-symbols
 
+build-binary: build
+    riscv64-unknown-linux-musl-objcopy -O binary target/riscv64gc-unknown-none-elf/release/boot target/solaya.bin
+    @echo "Binary: target/solaya.bin ($(du -h target/solaya.bin | cut -f1))"
+
+tftp_dir := "target/tftp"
+
+picocom:
+    picocom --omap crlf /dev/ttyUSB0 -b 115200
+
+tftp-server:
+    sudo $(which atftpd) --daemon --logfile - --no-fork --user daemon --group daemon --verbose {{tftp_dir}}
+
+tftp-deploy: build-binary
+    mkdir -p {{tftp_dir}}
+    cp target/solaya.bin {{tftp_dir}}/solaya.bin
+    @echo "Deployed to {{tftp_dir}}/solaya.bin"
+
+reboot-hw:
+    stty -F /dev/ttyUSB0 115200 raw
+    printf '\xDE\xAD\xBE\xEF' > /dev/ttyUSB0
+
+deploy-and-reboot: tftp-deploy reboot-hw
+
 patch-symbols:
     riscv64-unknown-linux-musl-nm --demangle --numeric-sort --line-numbers target/riscv64gc-unknown-none-elf/release/boot | grep -e ' t ' -e ' T ' > symbols && printf '\0' >> symbols
     riscv64-unknown-linux-musl-objcopy --update-section symbols=./symbols target/riscv64gc-unknown-none-elf/release/boot
@@ -68,6 +91,7 @@ kani:
 
 unit-test: build-userspace
     cargo test --release -p solaya
+    cargo test --release -p sys --target x86_64-unknown-linux-gnu
 
 system-test: build
     cargo nextest run --release --manifest-path system-tests/Cargo.toml --target x86_64-unknown-linux-gnu
