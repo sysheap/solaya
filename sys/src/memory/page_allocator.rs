@@ -1,6 +1,5 @@
 use super::page::Page;
 use crate::{
-    debug,
     klibc::util::{align_down_ptr, minimum_amount_of_pages},
     memory::PAGE_SIZE,
 };
@@ -91,11 +90,6 @@ impl<'a> MetadataPageAllocator<'a> {
         for area in reserved_areas {
             self.mark_pointer_range_as_used_without_initialize(area);
         }
-
-        debug!("Page allocator initalized");
-        debug!("Metadata start:\t\t{:p}", self.metadata);
-        debug!("Heap start:\t\t{:p}", self.pages.start);
-        debug!("Number of pages:\t{}\n", self.total_heap_pages());
     }
 
     pub fn total_heap_pages(&self) -> usize {

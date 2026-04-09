@@ -212,7 +212,7 @@ fn check_reboot_magic(byte: u8) -> bool {
 /// Called from panic handler with interrupts disabled.
 pub fn poll_for_reboot() -> ! {
     CONSOLE_UART.panic_force_unlock();
-    sys::println!("Polling for reboot...");
+    crate::println!("Polling for reboot...");
     loop {
         let byte = CONSOLE_UART.lock().read();
         if let Some(byte) = byte

@@ -1,13 +1,13 @@
 // This variable contains the list of modules that should be logged. If "kernel" is specified, every module is logged.
 const LOG_FOLLOWING_MODULES: &[&str] = &[];
 const DONT_LOG_FOLLOWING_MODULES: &[&str] = &[
-    "kernel::interrupts::trap",
-    "kernel::debugging::unwinder",
-    "kernel::debugging::symbols",
-    "kernel::processes::scheduler",
-    "kernel::processes::process_table",
-    "kernel::processes::timer",
-    "kernel::io::tty_device",
+    "solaya::interrupts::trap",
+    "solaya::debugging::unwinder",
+    "solaya::debugging::symbols",
+    "solaya::processes::scheduler",
+    "solaya::processes::process_table",
+    "solaya::processes::timer",
+    "solaya::io::tty_device",
 ];
 
 const fn const_starts_with(haystack: &str, needle: &str) -> bool {
