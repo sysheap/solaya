@@ -47,14 +47,11 @@ impl<T> Spinlock<T> {
     pub fn lock(&self) -> SpinlockGuard<'_, T> {
         let interrupt_guard = arch::cpu::InterruptGuard::new();
         self.detect_same_cpu_deadlock();
-        let mut spin_count: u64 = 0;
         while self
             .locked
             .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
             .is_err()
         {
-            spin_count += 1;
-            self.warn_possible_deadlock(spin_count);
             core::hint::spin_loop();
         }
         self.set_owner();
@@ -81,26 +78,6 @@ impl<T> Spinlock<T> {
 
     #[cfg(miri)]
     fn detect_same_cpu_deadlock(&self) {}
-
-    #[cfg(not(miri))]
-    fn warn_possible_deadlock(&self, spin_count: u64) {
-        if crate::panic_support::is_panic_mode() {
-            return;
-        }
-        if spin_count.is_multiple_of(10_000_000) {
-            let cpu_id = crate::cpu::cpu_id();
-            let owner = self.owner_cpu.load(Ordering::Relaxed);
-            crate::warn!(
-                "Spinlock likely deadlocked: CPU {} waiting for lock held by CPU {} ({} spins)",
-                cpu_id,
-                owner,
-                spin_count
-            );
-        }
-    }
-
-    #[cfg(miri)]
-    fn warn_possible_deadlock(&self, _spin_count: u64) {}
 
     #[cfg(not(miri))]
     fn set_owner(&self) {
