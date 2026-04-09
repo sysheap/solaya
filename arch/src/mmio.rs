@@ -2,6 +2,28 @@ use core::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign};
 
 use common::numbers::Number;
 
+/// Fence ensuring prior stores to `*self.addr` are visible before
+/// subsequent operations. Only emitted on riscv64; other targets
+/// (used by host-side unit tests / stubs) rely on volatile semantics.
+#[inline(always)]
+fn mmio_store_fence() {
+    #[cfg(target_arch = "riscv64")]
+    // SAFETY: `fence o, o` is a pure memory-ordering instruction with no side effects.
+    unsafe {
+        core::arch::asm!("fence o, o", options(nostack, preserves_flags));
+    }
+}
+
+/// Fence ensuring a fresh load from `*self.addr` rather than a cached value.
+#[inline(always)]
+fn mmio_load_fence() {
+    #[cfg(target_arch = "riscv64")]
+    // SAFETY: `fence i, i` is a pure memory-ordering instruction with no side effects.
+    unsafe {
+        core::arch::asm!("fence i, i", options(nostack, preserves_flags));
+    }
+}
+
 pub fn write_bytes(addr: usize, data: &[u8]) {
     // SAFETY: Same safety model as read_bytes — the caller provides
     // a valid MMIO address. Uses volatile-style single-byte writes
@@ -99,7 +121,7 @@ impl<T: Copy> MMIO<T> {
         // SAFETY: The MMIO address was provided at construction and is
         // guaranteed to be valid for volatile reads of type T.
         unsafe {
-            core::arch::asm!("fence i, i", options(nostack, preserves_flags));
+            mmio_load_fence();
             self.addr.read_volatile()
         }
     }
@@ -109,7 +131,7 @@ impl<T: Copy> MMIO<T> {
         // guaranteed to be valid for volatile writes of type T.
         unsafe {
             self.addr.write_volatile(value);
-            core::arch::asm!("fence o, o", options(nostack, preserves_flags));
+            mmio_store_fence();
         }
     }
 }
@@ -160,38 +182,4 @@ impl<T: core::fmt::Debug + Copy> core::fmt::Debug for MMIO<T> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "{:?}", self.read())
     }
-}
-
-#[macro_export]
-macro_rules! mmio_struct {
-    {
-        $(#[$meta:meta])*
-        struct $name:ident {
-            $($field_name:ident : $field_type:ty),* $(,)?
-        }
-    } => {
-            $(#[$meta])*
-            #[derive(Clone, Copy, Debug)]
-            #[allow(non_camel_case_types, dead_code)]
-            pub struct $name {
-                $(
-                    $field_name: $field_type,
-                )*
-            }
-
-            #[allow(non_camel_case_types, dead_code)]
-            pub trait ${concat($name, Fields)} {
-                $(
-                    fn $field_name(&self) -> $crate::klibc::mmio::MMIO<$field_type>;
-                )*
-            }
-
-            impl ${concat($name, Fields)} for $crate::klibc::mmio::MMIO<$name> {
-                $(
-                    fn $field_name(&self) -> $crate::klibc::mmio::MMIO<$field_type> {
-                        self.new_type_with_offset(core::mem::offset_of!($name, $field_name))
-                    }
-                )*
-            }
-        };
 }
