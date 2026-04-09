@@ -6,8 +6,6 @@ use crate::{debug, info, klibc::MMIO, net::mac::MacAddress};
 
 // --- Register offsets within the 64KB MMIO region ---
 
-// TODO: Abstract the offset into a proper "device type"
-
 // MAC registers (base + 0x000)
 const MAC_CONFIGURATION: usize = 0x000;
 const MAC_PACKET_FILTER: usize = 0x008;
@@ -560,7 +558,6 @@ impl DwmacDevice {
             RX_RING_SIZE * core::mem::size_of::<DmaDescriptor>(),
         );
         let tx_base = &self.tx_ring.descriptors[0] as *const _ as usize;
-        // TODO: Similar to MMIO type we should have some NonCachable<T> wrapper.
         arch::cache::flush_range(
             tx_base,
             TX_RING_SIZE * core::mem::size_of::<DmaDescriptor>(),
