@@ -6,6 +6,8 @@ use crate::{debug, info, klibc::MMIO, net::mac::MacAddress};
 
 // --- Register offsets within the 64KB MMIO region ---
 
+// TODO: Abstract the offset into a proper "device type"
+
 // MAC registers (base + 0x000)
 const MAC_CONFIGURATION: usize = 0x000;
 const MAC_PACKET_FILTER: usize = 0x008;
@@ -268,6 +270,7 @@ impl DwmacDevice {
             }
             core::hint::spin_loop();
         }
+        panic!("mdio_wait_idle not done");
     }
 
     fn mdio_read(&self, phy_addr: u32, reg: u32) -> u16 {
@@ -337,14 +340,17 @@ impl DwmacDevice {
     }
 
     fn init_phy(&self, phy_addr: u32) -> bool {
-        // Reset PHY
+        // Reset PHY and wait for the PHY to self-clear BMCR.RESET.
         self.mdio_write(phy_addr, PHY_BMCR, PHY_BMCR_RESET);
+        let mut reset_done = false;
         for _ in 0..100_000 {
             if self.mdio_read(phy_addr, PHY_BMCR) & PHY_BMCR_RESET == 0 {
+                reset_done = true;
                 break;
             }
             core::hint::spin_loop();
         }
+        assert!(reset_done, "DWMAC: PHY {phy_addr} did not clear BMCR.RESET");
 
         self.configure_yt8531_phy(phy_addr);
 
@@ -554,6 +560,7 @@ impl DwmacDevice {
             RX_RING_SIZE * core::mem::size_of::<DmaDescriptor>(),
         );
         let tx_base = &self.tx_ring.descriptors[0] as *const _ as usize;
+        // TODO: Similar to MMIO type we should have some NonCachable<T> wrapper.
         arch::cache::flush_range(
             tx_base,
             TX_RING_SIZE * core::mem::size_of::<DmaDescriptor>(),

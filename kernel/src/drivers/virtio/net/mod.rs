@@ -388,7 +388,7 @@ impl crate::net::NetworkDevice for NetworkDevice {
 
 impl Drop for NetworkDevice {
     fn drop(&mut self) {
-        info!("Reset network device becuase of drop");
+        info!("Reset network device because of drop");
         self.common_cfg.device_status().write(0x0);
     }
 }
