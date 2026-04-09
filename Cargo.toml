@@ -6,6 +6,7 @@ members = [
     "crates/headers",
     "crates/kernel",
     "crates/sys",
+    "crates/klib",
     "userspace",
 ]
 default-members = ["boot"]

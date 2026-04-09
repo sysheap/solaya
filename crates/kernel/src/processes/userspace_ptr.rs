@@ -2,7 +2,7 @@ use common::pointer::Pointer;
 use headers::errno::Errno;
 
 use crate::{klibc::SpinlockGuard, processes::process::Process};
-use sys::klibc::send_sync::UnsafeSendSync;
+use klib::send_sync::UnsafeSendSync;
 
 #[derive(Debug)]
 pub struct UserspacePtr<PTR: Pointer> {

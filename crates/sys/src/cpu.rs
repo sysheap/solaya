@@ -2,7 +2,7 @@ pub use common::cpu::{
     CPU_ID_OFFSET, CpuBase, CpuId, KERNEL_PAGE_TABLES_SATP_OFFSET, TRAP_FRAME_OFFSET,
 };
 
-use crate::klibc::runtime_initialized::RuntimeInitializedData;
+use klib::runtime_initialized::RuntimeInitializedData;
 
 pub static STARTING_CPU_ID: RuntimeInitializedData<CpuId> = RuntimeInitializedData::new();
 

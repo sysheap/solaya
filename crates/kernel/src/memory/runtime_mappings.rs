@@ -1,5 +1,5 @@
-use crate::klibc::runtime_initialized::RuntimeInitializedData;
 use alloc::vec::Vec;
+use klib::runtime_initialized::RuntimeInitializedData;
 
 use super::page_tables::MappingDescription;
 

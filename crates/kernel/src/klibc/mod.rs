@@ -1,11 +1,9 @@
-pub use sys::klibc::array_vec;
+pub use klib::{array_vec, btreemap, non_empty_vec, runtime_initialized, sizes};
+
 pub mod big_endian;
-pub mod btreemap;
 pub mod consumable_buffer;
 pub mod elf;
 pub mod leb128;
-pub mod non_empty_vec;
-pub use sys::klibc::{runtime_initialized, sizes};
 pub mod util;
 pub mod writable_buffer;
 

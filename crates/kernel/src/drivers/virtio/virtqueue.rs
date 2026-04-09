@@ -1,10 +1,7 @@
 use alloc::{boxed::Box, collections::BTreeMap, vec::Vec};
 
-use crate::{
-    debug,
-    klibc::{MMIO, non_empty_vec::NonEmptyVec},
-};
-use sys::klibc::deconstructed_vec::DeconstructedVec;
+use crate::{debug, klibc::MMIO};
+use klib::{deconstructed_vec::DeconstructedVec, non_empty_vec::NonEmptyVec};
 
 /// A virtio queue.
 /// Using Box to prevent content from being moved.

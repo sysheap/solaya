@@ -1,8 +1,8 @@
 #[cfg(test)]
 mod tests {
-    use crate::klibc::array_vec::{ArrayVec, ArrayVecError};
     use alloc::rc::Rc;
     use core::cell::Cell;
+    use klib::array_vec::{ArrayVec, ArrayVecError};
 
     #[test_case]
     fn max_size() {
