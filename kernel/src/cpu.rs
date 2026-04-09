@@ -2,6 +2,7 @@ use alloc::{boxed::Box, sync::Arc};
 use common::syscalls::trap_frame::TrapFrame;
 
 pub use arch::CpuId;
+pub use sys::cpu::cpu_id;
 
 use crate::{
     klibc::{Spinlock, SpinlockGuard, sizes::KiB},
@@ -95,10 +96,6 @@ impl Cpu {
 
     pub fn with_current_process<R>(f: impl FnOnce(SpinlockGuard<'_, Process>) -> R) -> R {
         Self::with_scheduler(|s| f(s.get_current_process().lock()))
-    }
-
-    pub fn cpu_id() -> CpuId {
-        sys::cpu::cpu_id()
     }
 
     pub fn number_cpus(&self) -> usize {

@@ -1,5 +1,5 @@
 use crate::{
-    cpu::Cpu,
+    cpu::{Cpu, cpu_id},
     info,
     interrupts::plic::{self, PLIC},
     memory::VirtAddr,
@@ -67,7 +67,7 @@ fn handle_external_interrupt() {
 // we should continue executing on this CPU.
 fn check_thread_ownership_and_reschedule_if_needed(trap_frame: TrapFrame) -> bool {
     Cpu::with_scheduler(|mut s| {
-        let cpu_id = Cpu::cpu_id();
+        let cpu_id = cpu_id();
         let should_reschedule = s.get_current_thread().with_lock(|mut t| {
             match t.get_state() {
                 ThreadState::Running {

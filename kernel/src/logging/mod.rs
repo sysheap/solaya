@@ -5,14 +5,14 @@ pub mod configuration;
 #[macro_export]
 macro_rules! info {
     ($($arg:tt)*) => {
-        $crate::println!("[CPU {}][info][{}] {}", $crate::cpu::Cpu::cpu_id(), module_path!(), format_args!($($arg)*));
+        $crate::println!("[CPU {}][info][{}] {}", $crate::cpu::cpu_id(), module_path!(), format_args!($($arg)*));
     };
 }
 
 #[macro_export]
 macro_rules! warn {
     ($($arg:tt)*) => {
-        $crate::println!("[CPU {}][warn][{}] {}", $crate::cpu::Cpu::cpu_id(), module_path!(), format_args!($($arg)*));
+        $crate::println!("[CPU {}][warn][{}] {}", $crate::cpu::cpu_id(), module_path!(), format_args!($($arg)*));
     };
 }
 
@@ -20,7 +20,7 @@ macro_rules! warn {
 macro_rules! debug {
     ($($arg:tt)*) => {
         if const { $crate::logging::configuration::should_log_module(module_path!()) } {
-            $crate::println!("[CPU {}][debug][{}] {}", $crate::cpu::Cpu::cpu_id(), module_path!(), format_args!($($arg)*));
+            $crate::println!("[CPU {}][debug][{}] {}", $crate::cpu::cpu_id(), module_path!(), format_args!($($arg)*));
         }
     };
 }
