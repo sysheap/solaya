@@ -109,6 +109,7 @@ name = "hal"
 version = "0.1.0"
 dependencies = [
  "common",
+ "klib",
 ]
 
 [[package]]
