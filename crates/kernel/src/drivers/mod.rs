@@ -198,7 +198,7 @@ fn init_l2_cache_from_device_tree(soc: &device_tree::Node<'_>) {
     if let Some(node) = soc.find_node("cache-controller")
         && let Some(reg) = node.parse_reg_property()
     {
-        arch::cache::init(reg.address);
+        hal::cache::init(reg.address);
         info!("L2 cache controller initialized at {:#x}", reg.address);
     }
 }

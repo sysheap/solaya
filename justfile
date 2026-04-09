@@ -92,7 +92,7 @@ kani:
 unit-test: build-userspace
     cargo test --release -p solaya
     cargo test --release -p sys --lib --target x86_64-unknown-linux-gnu
-    cargo test --release -p arch --lib --target x86_64-unknown-linux-gnu --no-default-features
+    cargo test --release -p hal --lib --target x86_64-unknown-linux-gnu --no-default-features
 
 system-test: build
     cargo nextest run --release --manifest-path system-tests/Cargo.toml --target x86_64-unknown-linux-gnu

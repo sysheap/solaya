@@ -1,7 +1,7 @@
 macro_rules! getter_address {
     ($name:ident) => {
         pub fn $name() -> VirtAddr {
-            VirtAddr::new(arch::linker_symbols::$name())
+            VirtAddr::new(hal::linker_symbols::$name())
         }
     };
 }

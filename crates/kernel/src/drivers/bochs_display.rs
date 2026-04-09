@@ -120,7 +120,7 @@ pub fn register_devfs_node() {
             }
             let len = end - offset;
             mmio::write_bytes(base.as_usize() + offset, &data[..len]);
-            arch::cpu::memory_fence();
+            hal::cpu::memory_fence();
             Ok(len)
         }
         fn truncate(&self, _length: usize) -> Result<(), Errno> {

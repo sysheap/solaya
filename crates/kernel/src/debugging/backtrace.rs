@@ -11,7 +11,7 @@ use crate::{
     memory::{VirtAddr, linker_information::LinkerInformation},
 };
 use alloc::vec::Vec;
-use arch::backtrace::CalleeSavedRegs;
+use hal::backtrace::CalleeSavedRegs;
 use sys::klibc::validated_ptr::ValidatedPtr;
 
 #[allow(dead_code)]
@@ -206,8 +206,8 @@ mod tests {
     #![allow(unsafe_code)]
     use crate::debugging::backtrace::{Backtrace, BacktraceNextError};
     use alloc::collections::VecDeque;
-    use arch::backtrace::CalleeSavedRegs;
     use core::ffi::c_void;
+    use hal::backtrace::CalleeSavedRegs;
     use unwinding::abi::{_Unwind_Backtrace, _Unwind_GetIP, UnwindContext, UnwindReasonCode};
 
     #[test_case]

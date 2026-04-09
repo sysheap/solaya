@@ -29,7 +29,7 @@ impl<T> Spinlock<T> {
     }
 
     pub fn try_with_lock<'a, R>(&'a self, f: impl FnOnce(SpinlockGuard<'a, T>) -> R) -> Option<R> {
-        let interrupt_guard = arch::cpu::InterruptGuard::new();
+        let interrupt_guard = hal::cpu::InterruptGuard::new();
         let value = self
             .locked
             .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed);
@@ -45,7 +45,7 @@ impl<T> Spinlock<T> {
     }
 
     pub fn lock(&self) -> SpinlockGuard<'_, T> {
-        let interrupt_guard = arch::cpu::InterruptGuard::new();
+        let interrupt_guard = hal::cpu::InterruptGuard::new();
         self.detect_same_cpu_deadlock();
         while self
             .locked
@@ -121,7 +121,7 @@ unsafe impl<T: Send> Send for Spinlock<T> {}
 
 pub struct SpinlockGuard<'a, T> {
     spinlock: &'a Spinlock<T>,
-    _interrupt_guard: arch::cpu::InterruptGuard,
+    _interrupt_guard: hal::cpu::InterruptGuard,
 }
 
 impl<T> Drop for SpinlockGuard<'_, T> {

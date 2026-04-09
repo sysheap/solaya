@@ -88,7 +88,7 @@ mod test_entry_points {
     }
     #[unsafe(no_mangle)]
     fn asm_panic_rust() {
-        arch::cpu::asm_panic_rust()
+        hal::cpu::asm_panic_rust()
     }
 }
 
@@ -104,14 +104,14 @@ pub extern "C" fn kernel_init(hart_id: usize, device_tree_pointer: *const ()) ->
     info!("Hello World from Solaya!\n");
     info!("Device Tree Pointer: {:p}", device_tree_pointer);
 
-    let version = arch::sbi::extensions::base_extension::sbi_get_spec_version();
+    let version = hal::sbi::extensions::base_extension::sbi_get_spec_version();
     info!("SBI version {}.{}", version.major, version.minor);
     assert!(
         (version.major == 0 && version.minor >= 2) || version.major > 0,
         "Supported SBI Versions >= 0.2"
     );
 
-    let num_cpus = arch::sbi::extensions::hart_state_extension::get_number_of_harts();
+    let num_cpus = hal::sbi::extensions::hart_state_extension::get_number_of_harts();
     info!("Number of Cores: {num_cpus}");
 
     symbols::init();
@@ -174,7 +174,7 @@ pub extern "C" fn kernel_init(hart_id: usize, device_tree_pointer: *const ()) ->
     process_table::init();
     fs::init();
 
-    arch::cpu::write_sscratch(Cpu::init(boot_cpu_id, num_cpus) as usize);
+    hal::cpu::write_sscratch(Cpu::init(boot_cpu_id, num_cpus) as usize);
 
     Cpu::current().activate_kernel_page_table();
 
@@ -208,10 +208,10 @@ pub extern "C" fn kernel_init(hart_id: usize, device_tree_pointer: *const ()) ->
 
 pub extern "C" fn prepare_for_scheduling() -> ! {
     // Enable all interrupts
-    arch::cpu::write_sie(usize::MAX);
+    hal::cpu::write_sie(usize::MAX);
 
     // Enable global interrupts
-    arch::cpu::csrs_sstatus(0b10);
+    hal::cpu::csrs_sstatus(0b10);
 
     timer::set_timer(0);
 
@@ -249,7 +249,7 @@ fn hart_has_supervisor(hart_id: usize) -> bool {
         let Some(isa_str) = isa.consume_str() else {
             return true;
         };
-        return arch::isa::IsaExtensions::parse(isa_str).is_some_and(|i| i.has_supervisor());
+        return hal::isa::IsaExtensions::parse(isa_str).is_some_and(|i| i.has_supervisor());
     }
     true
 }
@@ -265,9 +265,9 @@ fn start_other_harts(current_hart_id: usize, number_of_cpus: usize) {
         }
 
         let cpu_struct = Cpu::init(cpu::CpuId::from_hart_id(hart_id), number_of_cpus);
-        arch::sbi::extensions::hart_state_extension::start_hart(
+        hal::sbi::extensions::hart_state_extension::start_hart(
             hart_id,
-            arch::linker_symbols::start_hart_addr(),
+            hal::linker_symbols::start_hart_addr(),
             cpu_struct as usize,
         )
         .assert_success();

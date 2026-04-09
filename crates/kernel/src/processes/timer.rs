@@ -63,7 +63,7 @@ pub fn sleep(duration: &timespec) -> Result<Sleep, Errno> {
     let freq = *TIMEBASE_FREQ;
     let clocks = u64::try_from(duration.tv_sec)? * freq
         + u64::try_from(duration.tv_nsec)? * freq / 1_000_000_000;
-    let wakeup_time = arch::timer::get_current_clocks() + clocks;
+    let wakeup_time = hal::timer::get_current_clocks() + clocks;
     Ok(Sleep::new(wakeup_time))
 }
 
@@ -71,7 +71,7 @@ impl Future for Sleep {
     type Output = ();
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        if arch::timer::get_current_clocks() >= self.wakeup_time {
+        if hal::timer::get_current_clocks() >= self.wakeup_time {
             return Poll::Ready(());
         }
         if !self.registered {
@@ -88,7 +88,7 @@ impl Future for Sleep {
 }
 
 pub fn wakeup_wakers() {
-    let current = arch::timer::get_current_clocks();
+    let current = hal::timer::get_current_clocks();
     let mut lg = WAKEUP_QUEUE.lock();
     let threads = lg.split_off_lower_than(&current);
     for wakers in threads.into_values() {
@@ -99,7 +99,7 @@ pub fn wakeup_wakers() {
 }
 
 pub fn current_time() -> timespec {
-    let clocks = arch::timer::get_current_clocks();
+    let clocks = hal::timer::get_current_clocks();
     let freq = *TIMEBASE_FREQ;
     let secs = clocks / freq;
     let remaining_clocks = clocks % freq;
@@ -112,8 +112,8 @@ pub fn current_time() -> timespec {
 
 pub fn set_timer(milliseconds: u64) {
     debug!("enabling timer {milliseconds} ms");
-    let current = arch::timer::get_current_clocks();
+    let current = hal::timer::get_current_clocks();
     let next = current.wrapping_add(*TIMEBASE_FREQ * milliseconds / 1000);
-    arch::sbi::extensions::timer_extension::sbi_set_timer(next).assert_success();
-    arch::cpu::enable_timer_interrupt();
+    hal::sbi::extensions::timer_extension::sbi_set_timer(next).assert_success();
+    hal::cpu::enable_timer_interrupt();
 }

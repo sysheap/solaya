@@ -6,15 +6,15 @@ use crate::{
     processes::{task::Task, thread::ThreadState, timer, waker::ThreadWaker},
     syscalls::linux::LinuxSyscallHandler,
 };
-use arch::trap_cause::{
-    InterruptCause,
-    exception::{ENVIRONMENT_CALL_FROM_U_MODE, STORE_AMO_PAGE_FAULT},
-    interrupt,
-};
 use common::syscalls::trap_frame::{Register, TrapFrame};
 use core::{
     panic,
     task::{Context, Poll},
+};
+use hal::trap_cause::{
+    InterruptCause,
+    exception::{ENVIRONMENT_CALL_FROM_U_MODE, STORE_AMO_PAGE_FAULT},
+    interrupt,
 };
 use headers::syscall_types::SIGSEGV;
 
@@ -23,8 +23,8 @@ pub extern "C" fn get_process_satp_value() -> usize {
 }
 
 fn assert_sepc_not_in_trap_handler() {
-    let sepc = arch::cpu::read_sepc();
-    let trap_base = arch::linker_symbols::asm_handle_trap_addr();
+    let sepc = hal::cpu::read_sepc();
+    let trap_base = hal::linker_symbols::asm_handle_trap_addr();
     assert!(
         !(trap_base..trap_base + 64).contains(&sepc),
         "BUG: sepc {sepc:#x} points into trap handler {trap_base:#x}"
@@ -89,7 +89,7 @@ fn check_thread_ownership_and_reschedule_if_needed(trap_frame: TrapFrame) -> boo
                 ThreadState::Waiting | ThreadState::Runnable | ThreadState::Stopped => {
                     // Syscall put us in Waiting/Stopped (and possibly got woken to Runnable).
                     // Save state before rescheduling.
-                    let sepc = arch::cpu::read_sepc() + 4; // Skip ecall
+                    let sepc = hal::cpu::read_sepc() + 4; // Skip ecall
                     t.set_register_state(trap_frame);
                     t.set_program_counter(VirtAddr::new(sepc));
                     true
@@ -160,7 +160,7 @@ fn handle_syscall() {
                 // Save updated registers to thread, deliver signals, then load back.
                 // Read sepc from hardware — the thread's stored PC is stale for
                 // the synchronous path (only updated on reschedule).
-                let sepc = arch::cpu::read_sepc();
+                let sepc = hal::cpu::read_sepc();
                 let signal_result = Cpu::with_scheduler(|s| {
                     s.get_current_thread().with_lock(|mut t| {
                         t.set_register_state(trap_frame);
@@ -200,7 +200,7 @@ fn handle_syscall() {
             // Save register state BEFORE suspending.
             // When thread suspends, queue_current_process_back won't save registers
             // (since state is Waiting, not Running), so we must save them here.
-            let sepc = arch::cpu::read_sepc();
+            let sepc = hal::cpu::read_sepc();
             s.get_current_thread().with_lock(|mut t| {
                 t.set_register_state(trap_frame);
                 t.set_program_counter(VirtAddr::new(sepc));
@@ -213,8 +213,8 @@ fn handle_syscall() {
 
 fn handle_unhandled_exception() {
     let cause = InterruptCause::from_scause();
-    let stval = arch::cpu::read_stval();
-    let sepc = arch::cpu::read_sepc();
+    let stval = hal::cpu::read_stval();
+    let sepc = hal::cpu::read_sepc();
     info!(
         "handle_unhandled_exception: cause={} sepc={:#x} stval={:#x}",
         cause.get_reason(),
@@ -249,7 +249,7 @@ fn handle_unhandled_exception() {
 }
 
 fn handle_store_page_fault() {
-    let stval = arch::cpu::read_stval();
+    let stval = hal::cpu::read_stval();
     let process = Cpu::with_scheduler(|s| s.get_current_process());
     let resolved = process.with_lock(|mut p| p.resolve_cow_page(VirtAddr::new(stval)));
     if !resolved {
@@ -280,7 +280,7 @@ fn handle_supervisor_software_interrupt() {
             if is_worker {
                 s.get_current_thread().with_lock(|mut t| {
                     t.set_register_state(Cpu::read_trap_frame());
-                    t.set_program_counter(VirtAddr::new(arch::cpu::read_sepc()));
+                    t.set_program_counter(VirtAddr::new(hal::cpu::read_sepc()));
                     t.suspend_unless_wakeup_pending();
                 });
             }
@@ -288,12 +288,12 @@ fn handle_supervisor_software_interrupt() {
         s.schedule();
     });
 
-    arch::cpu::clear_supervisor_software_interrupt();
+    hal::cpu::clear_supervisor_software_interrupt();
     assert_sepc_not_in_trap_handler();
 }
 
 fn handle_unimplemented() {
-    let sepc = arch::cpu::read_sepc();
+    let sepc = hal::cpu::read_sepc();
     let cause = InterruptCause::from_scause();
     panic!(
         "Unimplemented trap occurred! (sepc: {:x?}) (cause: {:?})",

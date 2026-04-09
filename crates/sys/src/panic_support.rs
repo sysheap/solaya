@@ -15,7 +15,7 @@ static IN_PANIC: AtomicBool = AtomicBool::new(false);
 pub fn panic_disable_interrupts() {
     // SAFETY: Called during panic — no further interrupt handling needed.
     unsafe {
-        arch::cpu::disable_global_interrupts();
+        hal::cpu::disable_global_interrupts();
     }
 }
 

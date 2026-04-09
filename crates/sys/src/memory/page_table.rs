@@ -337,6 +337,6 @@ pub fn activate_page_table(satp_val: usize) {
     // SAFETY: satp_val encodes a valid page table that identity-maps all
     // kernel memory, so execution can continue after the switch.
     unsafe {
-        arch::cpu::write_satp_and_fence(satp_val);
+        hal::cpu::write_satp_and_fence(satp_val);
     }
 }
