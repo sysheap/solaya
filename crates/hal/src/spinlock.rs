@@ -29,7 +29,7 @@ impl<T> Spinlock<T> {
     }
 
     pub fn try_with_lock<'a, R>(&'a self, f: impl FnOnce(SpinlockGuard<'a, T>) -> R) -> Option<R> {
-        let interrupt_guard = hal::cpu::InterruptGuard::new();
+        let interrupt_guard = crate::cpu::InterruptGuard::new();
         let value = self
             .locked
             .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed);
@@ -45,7 +45,7 @@ impl<T> Spinlock<T> {
     }
 
     pub fn lock(&self) -> SpinlockGuard<'_, T> {
-        let interrupt_guard = hal::cpu::InterruptGuard::new();
+        let interrupt_guard = crate::cpu::InterruptGuard::new();
         self.detect_same_cpu_deadlock();
         while self
             .locked
@@ -67,7 +67,7 @@ impl<T> Spinlock<T> {
             return;
         }
         if self.locked.load(Ordering::Relaxed) {
-            let cpu_id = crate::cpu::cpu_id().as_usize();
+            let cpu_id = crate::cpu_id().as_usize();
             assert_ne!(
                 self.owner_cpu.load(Ordering::Relaxed),
                 cpu_id,
@@ -82,7 +82,7 @@ impl<T> Spinlock<T> {
     #[cfg(not(miri))]
     fn set_owner(&self) {
         self.owner_cpu
-            .store(crate::cpu::cpu_id().as_usize(), Ordering::Relaxed);
+            .store(crate::cpu_id().as_usize(), Ordering::Relaxed);
     }
 
     #[cfg(miri)]
@@ -121,7 +121,7 @@ unsafe impl<T: Send> Send for Spinlock<T> {}
 
 pub struct SpinlockGuard<'a, T> {
     spinlock: &'a Spinlock<T>,
-    _interrupt_guard: hal::cpu::InterruptGuard,
+    _interrupt_guard: crate::cpu::InterruptGuard,
 }
 
 impl<T> Drop for SpinlockGuard<'_, T> {

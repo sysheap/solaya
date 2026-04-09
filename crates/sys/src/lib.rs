@@ -12,12 +12,7 @@ extern crate alloc;
 
 #[cfg(not(kani))]
 mod asm;
-pub mod cpu;
 pub mod klibc;
 pub mod memory;
-pub mod panic_support;
 
-pub use klibc::{
-    mmio::MMIO,
-    spinlock::{Spinlock, SpinlockGuard},
-};
+pub use hal::{Spinlock, SpinlockGuard, cpu_id, mmio, mmio::MMIO, panic_support, per_cpu as cpu};
