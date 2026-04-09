@@ -155,14 +155,6 @@ mod tests {
         addr.as_usize() >> 12
     }
 
-    fn virt_align_down(addr: VirtAddr) -> VirtAddr {
-        VirtAddr::new(addr.as_usize() & !0xFFF)
-    }
-
-    fn virt_align_up(addr: VirtAddr) -> VirtAddr {
-        VirtAddr::new((addr.as_usize() + 0xFFF) & !0xFFF)
-    }
-
     fn virt_vpn_level(addr: VirtAddr, level: u8) -> usize {
         assert!(level < 3);
         (addr.as_usize() >> (12 + level as usize * 9)) & 0x1FF
