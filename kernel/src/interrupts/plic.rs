@@ -5,11 +5,6 @@ use crate::{
 use alloc::vec::Vec;
 use arch::CpuId;
 
-pub static PLIC_BASE: RuntimeInitializedData<usize> = RuntimeInitializedData::new();
-pub static PLIC_SIZE: RuntimeInitializedData<usize> = RuntimeInitializedData::new();
-static PLIC_S_MODE_CONTEXT: RuntimeInitializedData<usize> = RuntimeInitializedData::new();
-static PLIC_NUM_SOURCES: RuntimeInitializedData<u32> = RuntimeInitializedData::new();
-
 struct InterruptHandler {
     irq: u32,
     handler: fn(),
@@ -18,6 +13,9 @@ struct InterruptHandler {
 static INTERRUPT_HANDLERS: Spinlock<Vec<InterruptHandler>> = Spinlock::new(Vec::new());
 
 pub struct Plic {
+    base: usize,
+    size: usize,
+    num_sources: u32,
     priority_register_base: MMIO<u32>,
     enable_register: MMIO<u32>,
     threshold_register: MMIO<u32>,
@@ -27,19 +25,32 @@ pub struct Plic {
 const S_MODE_EXTERNAL_INTERRUPT: u32 = 0x09;
 
 impl Plic {
-    fn new(plic_base: usize, context: usize) -> Self {
+    fn new(base: usize, size: usize, num_sources: u32, context: usize) -> Self {
         Self {
-            priority_register_base: MMIO::new(plic_base),
-            enable_register: MMIO::new(plic_base + 0x2000 + (0x80 * context)),
-            threshold_register: MMIO::new(plic_base + 0x20_0000 + (0x1000 * context)),
-            claim_complete_register: MMIO::new(plic_base + 0x20_0004 + (0x1000 * context)),
+            base,
+            size,
+            num_sources,
+            priority_register_base: MMIO::new(base),
+            enable_register: MMIO::new(base + 0x2000 + (0x80 * context)),
+            threshold_register: MMIO::new(base + 0x20_0000 + (0x1000 * context)),
+            claim_complete_register: MMIO::new(base + 0x20_0004 + (0x1000 * context)),
         }
     }
-    fn disable_all(&mut self, num_sources: u32) {
-        let num_words = num_sources.div_ceil(32);
+
+    pub fn base(&self) -> usize {
+        self.base
+    }
+
+    pub fn size(&self) -> usize {
+        self.size
+    }
+
+    fn disable_all(&mut self) {
+        let num_words = self.num_sources.div_ceil(32);
+        let region_elements = self.size / 4;
         for word in 0..num_words as usize {
             self.enable_register
-                .add_within_region(word, *PLIC_SIZE / 4)
+                .add_within_region(word, region_elements)
                 .write(0);
         }
     }
@@ -55,14 +66,14 @@ impl Plic {
         let bit = interrupt_id % 32;
         let mut reg = self
             .enable_register
-            .add_within_region(word_offset as usize, *PLIC_SIZE / 4);
+            .add_within_region(word_offset as usize, self.size / 4);
         reg |= 1 << bit;
     }
 
     fn set_priority(&mut self, interrupt_id: u32, priority: u32) {
         assert!(priority <= 7);
         self.priority_register_base
-            .add_within_region(interrupt_id as usize, *PLIC_SIZE / 4)
+            .add_within_region(interrupt_id as usize, self.size / 4)
             .write(priority);
     }
 
@@ -96,21 +107,25 @@ pub fn discover_from_device_tree(boot_cpu_id: CpuId) {
         .parse_reg_property()
         .expect("PLIC node must have a reg property");
 
-    PLIC_BASE.initialize(reg.address);
-    PLIC_SIZE.initialize(reg.size);
-
-    info!("PLIC at {:#x} size {:#x}", *PLIC_BASE, *PLIC_SIZE);
-
     let num_sources = plic_node
         .get_property("riscv,ndev")
         .and_then(|mut p| p.consume_sized_type::<BigEndian<u32>>())
         .expect("PLIC must have riscv,ndev property")
         .get();
-    PLIC_NUM_SOURCES.initialize(num_sources);
 
     let context = find_s_mode_context(boot_cpu_id, &plic_node);
-    info!("PLIC S-mode context for boot hart: {context}");
-    PLIC_S_MODE_CONTEXT.initialize(context);
+
+    info!(
+        "PLIC at {:#x} size {:#x}, S-mode context for boot hart: {context}",
+        reg.address, reg.size
+    );
+
+    PLIC.initialize(Spinlock::new(Plic::new(
+        reg.address,
+        reg.size,
+        num_sources,
+        context,
+    )));
 }
 
 /// Parse the PLIC's `interrupts-extended` property and the CPU nodes to find
@@ -178,9 +193,8 @@ fn find_s_mode_context(boot_cpu_id: CpuId, plic_node: &device_tree::Node<'_>) ->
 
 pub fn init_plic() {
     info!("Initializing PLIC");
-    PLIC.initialize(Spinlock::new(Plic::new(*PLIC_BASE, *PLIC_S_MODE_CONTEXT)));
     let mut plic = PLIC.lock();
-    plic.disable_all(*PLIC_NUM_SOURCES);
+    plic.disable_all();
     plic.set_threshold(0);
     plic.drain_pending();
 }
