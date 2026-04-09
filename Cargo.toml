@@ -1,10 +1,11 @@
 [workspace]
 members = [
-    "arch",
     "boot",
-    "common", "headers",
-    "kernel",
-    "sys",
+    "crates/arch",
+    "crates/common",
+    "crates/headers",
+    "crates/kernel",
+    "crates/sys",
     "userspace",
 ]
 default-members = ["boot"]
