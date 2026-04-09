@@ -13,4 +13,4 @@ name = "boot"
 test = false
 
 [dependencies]
-solaya = { path = "../kernel" }
+solaya = { path = "../crates/kernel" }
