@@ -18,12 +18,9 @@ pub use sys::memory::{
 pub use runtime_mappings::initialize_runtime_mappings;
 
 pub fn kernel_device_mappings() -> alloc::vec::Vec<page_tables::MappingDescription> {
-    use crate::{
-        interrupts::plic,
-        io::{TEST_DEVICE_ADDRESS, uart::UART_BASE_ADDRESS},
-        processes::timer,
-    };
+    use crate::{interrupts::plic, io::TEST_DEVICE_ADDRESS, processes::timer};
     use alloc::vec::Vec;
+    use console::uart::UART_BASE_ADDRESS;
 
     let mut mappings = Vec::new();
     let (plic_base, plic_size) = {

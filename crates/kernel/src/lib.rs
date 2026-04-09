@@ -54,7 +54,6 @@ mod fs;
 pub mod interrupts;
 mod io;
 mod klibc;
-mod logging;
 mod memory;
 mod net;
 #[cfg(not(miri))]
@@ -64,6 +63,8 @@ mod processes;
 mod syscalls;
 
 mod test;
+
+pub use console::{debug, info, print, println, warn};
 
 // When running unit tests, the kernel is compiled as a standalone binary (not via
 // boot crate). Assembly in sys references these symbols by name.
