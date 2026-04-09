@@ -2,6 +2,7 @@
 #![feature(macro_metavar_expr_concat)]
 
 pub mod isa;
+pub mod mmio;
 
 #[cfg(feature = "riscv64")]
 mod riscv64;

@@ -1,3 +1,4 @@
+use crate::mmio::MMIO;
 use core::sync::atomic::{AtomicUsize, Ordering};
 
 static L2_CACHE_BASE: AtomicUsize = AtomicUsize::new(0);
@@ -19,20 +20,13 @@ pub fn flush_range(start: usize, size: usize) {
     if base == 0 || size == 0 {
         return;
     }
-    let flush64 = (base + FLUSH64_OFFSET) as *mut u64;
+    let mut flush64: MMIO<u64> = MMIO::new(base + FLUSH64_OFFSET);
     let aligned_start = start & !(CACHE_LINE_SIZE - 1);
     let end = start + size;
 
-    // SAFETY: fence ensures all prior stores are visible before flushing.
-    unsafe { core::arch::asm!("fence rw, rw", options(nostack, preserves_flags)) };
-
     let mut line = aligned_start;
     while line < end {
-        // SAFETY: flush64 points to the L2 cache controller FLUSH64 MMIO register,
-        // mapped during kernel init. Writing a physical address flushes that cache line.
-        unsafe { core::ptr::write_volatile(flush64, line as u64) };
-        // SAFETY: fence between flushes ensures each is processed before the next.
-        unsafe { core::arch::asm!("fence rw, rw", options(nostack, preserves_flags)) };
+        flush64.write(line as u64);
         line += CACHE_LINE_SIZE;
     }
 }
