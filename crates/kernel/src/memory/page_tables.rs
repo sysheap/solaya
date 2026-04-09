@@ -105,7 +105,7 @@ impl RootPageTableHolder {
     }
 
     fn is_active(&self) -> bool {
-        let satp = arch::cpu::read_satp();
+        let satp = hal::cpu::read_satp();
         let ppn = satp & 0xfffffffffff;
         let page_table_address = ppn << 12;
 

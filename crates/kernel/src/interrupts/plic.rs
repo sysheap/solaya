@@ -3,7 +3,7 @@ use crate::{
     klibc::{MMIO, Spinlock, big_endian::BigEndian, runtime_initialized::RuntimeInitializedData},
 };
 use alloc::vec::Vec;
-use arch::CpuId;
+use hal::CpuId;
 
 struct InterruptHandler {
     irq: u32,

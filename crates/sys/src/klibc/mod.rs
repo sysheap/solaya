@@ -4,5 +4,5 @@ pub mod spinlock;
 pub mod util;
 pub mod validated_ptr;
 
-pub use arch::mmio::{self, MMIO};
+pub use hal::mmio::{self, MMIO};
 pub use spinlock::{Spinlock, SpinlockGuard};

@@ -1,7 +1,7 @@
 use alloc::{boxed::Box, sync::Arc};
 use common::syscalls::trap_frame::TrapFrame;
 
-pub use arch::CpuId;
+pub use hal::CpuId;
 pub use sys::cpu::cpu_id;
 
 use crate::{
@@ -9,7 +9,7 @@ use crate::{
     memory::page_tables::RootPageTableHolder,
     processes::{process::Process, scheduler::CpuScheduler, thread::ThreadWeakRef},
 };
-use arch::sbi::extensions::ipi_extension::sbi_send_ipi;
+use hal::sbi::extensions::ipi_extension::sbi_send_ipi;
 
 pub(crate) const KERNEL_STACK_SIZE: usize = KiB(512);
 

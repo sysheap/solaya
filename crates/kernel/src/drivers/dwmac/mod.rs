@@ -553,12 +553,12 @@ impl DwmacDevice {
 
         // Flush descriptor rings from CPU cache to RAM so DMA sees them
         let rx_base = &self.rx_ring.descriptors[0] as *const _ as usize;
-        arch::cache::flush_range(
+        hal::cache::flush_range(
             rx_base,
             RX_RING_SIZE * core::mem::size_of::<DmaDescriptor>(),
         );
         let tx_base = &self.tx_ring.descriptors[0] as *const _ as usize;
-        arch::cache::flush_range(
+        hal::cache::flush_range(
             tx_base,
             TX_RING_SIZE * core::mem::size_of::<DmaDescriptor>(),
         );
@@ -621,7 +621,7 @@ impl crate::net::NetworkDevice for DwmacDevice {
         loop {
             // Invalidate descriptor so CPU reads DMA's writes from RAM
             let desc_addr = &self.rx_ring.descriptors[self.rx_idx] as *const _ as usize;
-            arch::cache::flush_range(desc_addr, core::mem::size_of::<DmaDescriptor>());
+            hal::cache::flush_range(desc_addr, core::mem::size_of::<DmaDescriptor>());
 
             let des3 = MMIO::<u32>::new(
                 &self.rx_ring.descriptors[self.rx_idx].des3 as *const u32 as usize,
@@ -636,7 +636,7 @@ impl crate::net::NetworkDevice for DwmacDevice {
             if length > 0 && length <= PACKET_BUF_SIZE {
                 // Invalidate RX buffer so CPU reads DMA-written packet data
                 let buf_addr = &self.rx_buffers[self.rx_idx].0 as *const _ as usize;
-                arch::cache::flush_range(buf_addr, length);
+                hal::cache::flush_range(buf_addr, length);
 
                 let data = self.rx_buffers[self.rx_idx].0[..length].to_vec();
                 received.push(data);
@@ -652,7 +652,7 @@ impl crate::net::NetworkDevice for DwmacDevice {
 
             // Flush descriptor to RAM so DMA sees OWN bit
             let desc_addr = desc as *const _ as usize;
-            arch::cache::flush_range(desc_addr, core::mem::size_of::<DmaDescriptor>());
+            hal::cache::flush_range(desc_addr, core::mem::size_of::<DmaDescriptor>());
 
             // Update tail pointer
             write_reg(self.base, DMA_CH0_RXDESC_TAIL_PTR, desc_addr as u32);
@@ -670,7 +670,7 @@ impl crate::net::NetworkDevice for DwmacDevice {
         let mut found = false;
         for _ in 0..1_000_000 {
             let desc_addr = &self.tx_ring.descriptors[self.tx_idx] as *const _ as usize;
-            arch::cache::flush_range(desc_addr, core::mem::size_of::<DmaDescriptor>());
+            hal::cache::flush_range(desc_addr, core::mem::size_of::<DmaDescriptor>());
             let des3 = MMIO::<u32>::new(
                 &self.tx_ring.descriptors[self.tx_idx].des3 as *const u32 as usize,
             )
@@ -688,7 +688,7 @@ impl crate::net::NetworkDevice for DwmacDevice {
 
         // Flush TX buffer to RAM so DMA reads actual packet data
         let buf_addr = &self.tx_buffers[self.tx_idx].0 as *const _ as usize;
-        arch::cache::flush_range(buf_addr, length);
+        hal::cache::flush_range(buf_addr, length);
 
         let desc = &mut self.tx_ring.descriptors[self.tx_idx];
         desc.des0 = buf_addr as u32;
@@ -698,7 +698,7 @@ impl crate::net::NetworkDevice for DwmacDevice {
 
         // Flush descriptor to RAM so DMA sees OWN bit and buffer address
         let desc_addr = desc as *const _ as usize;
-        arch::cache::flush_range(desc_addr, core::mem::size_of::<DmaDescriptor>());
+        hal::cache::flush_range(desc_addr, core::mem::size_of::<DmaDescriptor>());
 
         // Advance TX index and write tail pointer to trigger DMA
         self.tx_idx = (self.tx_idx + 1) % TX_RING_SIZE;

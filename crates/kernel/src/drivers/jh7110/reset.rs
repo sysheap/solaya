@@ -15,7 +15,7 @@ pub fn trigger_reset() -> ! {
         spin_forever();
     }
     info!("Falling back to SBI SRST");
-    let _ = arch::sbi::extensions::srst_extension::sbi_system_reset(0, 0);
+    let _ = hal::sbi::extensions::srst_extension::sbi_system_reset(0, 0);
     spin_forever();
 }
 

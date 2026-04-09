@@ -12,13 +12,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "arch"
-version = "0.1.0"
-dependencies = [
- "common",
-]
-
-[[package]]
 name = "bindgen"
 version = "0.72.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -110,6 +103,13 @@ name = "glob"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0cc23270f6e1808e30a928bdc84dea0b9b4136a8bc82338574f23baf47bbd280"
+
+[[package]]
+name = "hal"
+version = "0.1.0"
+dependencies = [
+ "common",
+]
 
 [[package]]
 name = "headers"
@@ -251,10 +251,10 @@ checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
 name = "solaya"
 version = "0.1.0"
 dependencies = [
- "arch",
  "common",
  "elf",
  "gimli 0.33.1",
+ "hal",
  "headers",
  "klib",
  "sys",
@@ -276,8 +276,8 @@ dependencies = [
 name = "sys"
 version = "0.1.0"
 dependencies = [
- "arch",
  "common",
+ "hal",
  "headers",
  "klib",
 ]

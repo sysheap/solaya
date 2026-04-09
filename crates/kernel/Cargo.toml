@@ -11,10 +11,10 @@ default-target = "riscv64gc-unknown-none-elf"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
-default = ["arch/riscv64"]
+default = ["hal/riscv64"]
 
 [dependencies]
-arch = { path = "../arch", default-features = false }
+hal = { path = "../hal", default-features = false }
 common = { path = "../common", default-features = false }
 headers = { path = "../headers" }
 sys = { path = "../sys", default-features = false }

@@ -11,7 +11,7 @@ pub static STARTING_CPU_ID: RuntimeInitializedData<CpuId> = RuntimeInitializedDa
 /// After setup, reads the cpu_id field from the per-CPU struct pointed to by sscratch.
 #[cfg(not(miri))]
 pub fn cpu_id() -> CpuId {
-    let ptr = arch::cpu::read_sscratch() as *const u8;
+    let ptr = hal::cpu::read_sscratch() as *const u8;
     if ptr.is_null() {
         return CpuId::from_hart_id(0);
     }
@@ -28,7 +28,7 @@ pub fn cpu_id() -> CpuId {
 /// Return a reference to the per-CPU struct pointed to by sscratch.
 /// Panics if sscratch is null or unaligned.
 pub fn per_cpu_ref<T>() -> &'static T {
-    let ptr = arch::cpu::read_sscratch() as *const T;
+    let ptr = hal::cpu::read_sscratch() as *const T;
     assert!(!ptr.is_null() && ptr.is_aligned());
     // SAFETY: The per-CPU struct is statically allocated via Box::leak and
     // never freed. Non-null and aligned checked above.
@@ -37,7 +37,7 @@ pub fn per_cpu_ref<T>() -> &'static T {
 
 /// Return a reference to the per-CPU struct, or None if sscratch is null/unaligned.
 pub fn try_per_cpu_ref<T>() -> Option<&'static T> {
-    let ptr = arch::cpu::read_sscratch() as *const T;
+    let ptr = hal::cpu::read_sscratch() as *const T;
     if ptr.is_null() || !ptr.is_aligned() {
         return None;
     }
@@ -49,7 +49,7 @@ pub fn try_per_cpu_ref<T>() -> Option<&'static T> {
 /// Read a field from the per-CPU struct using a volatile read.
 /// `offset` is the byte offset of the field from the struct start.
 pub fn per_cpu_volatile_read<T>(offset: usize) -> T {
-    let ptr = arch::cpu::read_sscratch() as *const u8;
+    let ptr = hal::cpu::read_sscratch() as *const u8;
     assert!(!ptr.is_null());
     // SAFETY: Per-CPU struct is statically allocated. The caller provides a
     // valid offset (computed via offset_of!).
@@ -62,7 +62,7 @@ pub fn per_cpu_volatile_read<T>(offset: usize) -> T {
 /// Write a field in the per-CPU struct using a volatile write.
 /// `offset` is the byte offset of the field from the struct start.
 pub fn per_cpu_volatile_write<T>(offset: usize, value: T) {
-    let ptr = arch::cpu::read_sscratch() as *mut u8;
+    let ptr = hal::cpu::read_sscratch() as *mut u8;
     assert!(!ptr.is_null());
     // SAFETY: Per-CPU struct is statically allocated. The caller provides a
     // valid offset (computed via offset_of!).
@@ -76,9 +76,9 @@ pub fn per_cpu_volatile_write<T>(offset: usize, value: T) {
 pub fn disable_interrupts_and_halt() -> ! {
     // SAFETY: We are shutting down — disabling interrupts prevents further preemption.
     unsafe {
-        arch::cpu::disable_global_interrupts();
+        hal::cpu::disable_global_interrupts();
     }
     loop {
-        arch::cpu::wait_for_interrupt();
+        hal::cpu::wait_for_interrupt();
     }
 }

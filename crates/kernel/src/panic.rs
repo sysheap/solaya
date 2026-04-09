@@ -23,7 +23,7 @@ pub fn panic_handler(info: &PanicInfo) -> ! {
     use crate::{asm::wfi_loop, cpu::cpu_id, io::uart::CONSOLE_UART};
 
     // sys wrapper exists specifically because kernel has forbid(unsafe_code) —
-    // the raw arch::cpu::disable_global_interrupts call is unsafe and cannot
+    // the raw hal::cpu::disable_global_interrupts call is unsafe and cannot
     // be emitted from here directly. Do not inline.
     sys::panic_support::panic_disable_interrupts();
 

@@ -13,7 +13,7 @@ test = false
 bench = false
 
 [dependencies]
-arch = { path = "../arch", default-features = false }
+hal = { path = "../hal", default-features = false }
 common = { path = "../common", default-features = false }
 headers = { path = "../headers" }
 klib = { path = "../klib" }

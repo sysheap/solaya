@@ -1,7 +1,7 @@
 [workspace]
 members = [
     "boot",
-    "crates/arch",
+    "crates/hal",
     "crates/common",
     "crates/headers",
     "crates/kernel",
