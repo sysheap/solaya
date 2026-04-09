@@ -26,9 +26,13 @@ pub fn kernel_device_mappings() -> alloc::vec::Vec<page_tables::MappingDescripti
     use alloc::vec::Vec;
 
     let mut mappings = Vec::new();
+    let (plic_base, plic_size) = {
+        let plic = plic::PLIC.lock();
+        (plic.base(), plic.size())
+    };
     mappings.push(page_tables::MappingDescription {
-        virtual_address_start: VirtAddr::new(*plic::PLIC_BASE),
-        size: *plic::PLIC_SIZE,
+        virtual_address_start: VirtAddr::new(plic_base),
+        size: plic_size,
         privileges: page_tables::XWRMode::ReadWrite,
         name: "PLIC",
     });
