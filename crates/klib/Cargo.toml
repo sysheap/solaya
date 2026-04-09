@@ -1,0 +1,13 @@
+[package]
+name = "klib"
+edition = "2024"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+
+[dependencies]
+common = { path = "../common", default-features = false }
+
+[lib]
+test = false
+bench = false

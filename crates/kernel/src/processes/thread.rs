@@ -31,7 +31,7 @@ use headers::{
     errno::Errno,
     syscall_types::{_NSIG, sigaction, sigaltstack, sigset_t, stack_t},
 };
-use sys::klibc::send_sync::UnsafeSendSync;
+use klib::send_sync::UnsafeSendSync;
 
 use crate::klibc::Spinlock;
 

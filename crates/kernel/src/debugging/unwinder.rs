@@ -1,4 +1,5 @@
-use crate::{debug, klibc::array_vec::ArrayVec};
+use crate::debug;
+use klib::array_vec::ArrayVec;
 
 use super::eh_frame_parser::{Instruction, ParsedFDE};
 

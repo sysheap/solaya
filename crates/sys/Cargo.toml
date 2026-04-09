@@ -16,3 +16,4 @@ bench = false
 arch = { path = "../arch", default-features = false }
 common = { path = "../common", default-features = false }
 headers = { path = "../headers" }
+klib = { path = "../klib" }

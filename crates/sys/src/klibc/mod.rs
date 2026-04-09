@@ -1,8 +1,5 @@
-pub mod array_vec;
-pub mod deconstructed_vec;
-pub mod runtime_initialized;
-pub mod send_sync;
-pub mod sizes;
+pub use klib::{array_vec, deconstructed_vec, runtime_initialized, send_sync, sizes};
+
 pub mod spinlock;
 pub mod util;
 pub mod validated_ptr;

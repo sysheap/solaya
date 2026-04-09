@@ -4,7 +4,7 @@ use core::{
 };
 
 use crate::klibc::{MMIO, Spinlock};
-use sys::klibc::send_sync::UnsafeSendSync;
+use klib::send_sync::UnsafeSendSync;
 
 pub const UART_BASE_ADDRESS: usize = 0x1000_0000;
 
@@ -146,7 +146,7 @@ fn detect_reg_shift(base: usize) -> u8 {
 }
 
 pub fn on_uart_interrupt() {
-    let mut raw_bytes = crate::klibc::array_vec::ArrayVec::<u8, 64>::new();
+    let mut raw_bytes = klib::array_vec::ArrayVec::<u8, 64>::new();
     {
         let uart = CONSOLE_UART.lock();
         while let Some(input) = uart.read() {

@@ -456,8 +456,8 @@ mod tests {
     const DTB: &[u8] = include_bytes_align_as!(Header, "test/test_data/dtb");
 
     // Static DeviceTree to avoid Box::leak per test (miri leak check).
-    static TEST_DT: crate::klibc::runtime_initialized::RuntimeInitializedData<DeviceTree> =
-        crate::klibc::runtime_initialized::RuntimeInitializedData::new();
+    static TEST_DT: klib::runtime_initialized::RuntimeInitializedData<DeviceTree> =
+        klib::runtime_initialized::RuntimeInitializedData::new();
 
     fn ensure_dt_initialized() {
         if !TEST_DT.is_initialized() {

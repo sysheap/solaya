@@ -18,6 +18,7 @@ arch = { path = "../arch", default-features = false }
 common = { path = "../common", default-features = false }
 headers = { path = "../headers" }
 sys = { path = "../sys", default-features = false }
+klib = { path = "../klib" }
 
 [lib]
 name = "solaya"
