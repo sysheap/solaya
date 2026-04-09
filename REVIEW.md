@@ -74,31 +74,3 @@ Rule of thumb: when adding a shared primitive, put it in the lowest crate
 that anyone who needs it can depend on. When an existing primitive is stuck
 in the wrong layer, move it rather than duplicating it or hoisting the dep
 graph the wrong way.
-
-## 7. Latent gaps worth following up
-
-The following are not review-comment fixes — they're observations from this
-pass that are worth tracking separately:
-
-- **`just unit-test` doesn't actually run the `arch` / `sys` lib tests.**
-  Both crates set `[lib].test = false`, so `cargo test -p sys ...` and
-  `cargo test -p arch ...` in the current justfile only run doc tests. The
-  `#[cfg(test)] mod tests` blocks in `sys/src/memory/address.rs`,
-  `sys/src/memory/page.rs`, `sys/src/klibc/spinlock.rs`,
-  `sys/src/klibc/runtime_initialized.rs`, and now `arch/src/isa.rs` compile
-  but never execute via CI. They pass when invoked explicitly with
-  `cargo test -p <crate> --lib --target x86_64-unknown-linux-gnu
-  --no-default-features`. Either drop `test = false` or add `--lib` to the
-  justfile recipe.
-
-- **Floating `TODO:` comments.** The two `TODO:` markers in
-  `kernel/src/drivers/dwmac/mod.rs` (abstract register offsets into a
-  "device type", and a `NonCachable<T>` wrapper analogous to `MMIO<T>`)
-  should be tracked as issues rather than as code comments — TODOs in the
-  tree tend to rot and get missed.
-
-- **`mmio_struct!` is duplicated.** The macro exists identically in
-  `kernel/src/klibc/mmio.rs`; the sys copy was dead code (nobody imported
-  `sys::mmio_struct!`) and was removed as part of this change. If the
-  kernel's copy ever needs to move down the stack, put it next to `MMIO`
-  in `arch` and re-export it once.
