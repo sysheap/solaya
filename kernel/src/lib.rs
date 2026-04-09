@@ -218,9 +218,49 @@ pub extern "C" fn prepare_for_scheduling() -> ! {
     wfi_loop();
 }
 
+/// Returns whether the device tree advertises supervisor mode for `hart_id`.
+///
+/// On the StarFive JH7110 the SBI hart count includes the S7 monitor core
+/// (hart 0), which has no S-mode and no MMU. Trying to start it from a
+/// supervisor-mode kernel is undefined behavior. Filter by `riscv,isa`
+/// containing `s` to skip such harts.
+///
+/// Permissive on missing data: any failure to locate `/cpus`, the `reg`
+/// property, or `riscv,isa` returns `true` so the hart is started anyway.
+/// We only skip on positive evidence that S-mode is absent.
+fn hart_has_supervisor(hart_id: usize) -> bool {
+    let Some(cpus_node) = device_tree::THE.root_node().find_node("cpus") else {
+        return true;
+    };
+    for cpu in cpus_node.children() {
+        let Some(mut reg) = cpu.get_property("reg") else {
+            continue;
+        };
+        let Some(reg_val) = reg.consume_sized_type::<crate::klibc::big_endian::BigEndian<u32>>()
+        else {
+            continue;
+        };
+        if reg_val.get() as usize != hart_id {
+            continue;
+        }
+        let Some(mut isa) = cpu.get_property("riscv,isa") else {
+            return true;
+        };
+        let Some(isa_str) = isa.consume_str() else {
+            return true;
+        };
+        return arch::isa::IsaExtensions::parse(isa_str).is_some_and(|i| i.has_supervisor());
+    }
+    true
+}
+
 fn start_other_harts(current_hart_id: usize, number_of_cpus: usize) {
     for hart_id in 0..number_of_cpus {
         if hart_id == current_hart_id {
+            continue;
+        }
+        if !hart_has_supervisor(hart_id) {
+            info!("Skipping hart {hart_id}: no supervisor mode");
             continue;
         }
 
