@@ -20,17 +20,17 @@ fn test_panic_handler(info: &PanicInfo) -> ! {
 pub fn panic_handler(info: &PanicInfo) -> ! {
     use core::sync::atomic::Ordering;
 
-    use crate::{asm::wfi_loop, cpu::Cpu, io::uart::CONSOLE_UART};
+    use crate::{asm::wfi_loop, cpu::cpu_id, io::uart::CONSOLE_UART};
 
     sys::panic_support::panic_disable_interrupts();
 
-    let cpu_id = Cpu::cpu_id().as_usize() as isize;
+    let my_cpu_id = cpu_id().as_usize() as isize;
 
     // Check if we are the first cpu encountering a panic
     if CPU_ENTERED_PANIC
-        .compare_exchange(-1, cpu_id, Ordering::SeqCst, Ordering::Relaxed)
+        .compare_exchange(-1, my_cpu_id, Ordering::SeqCst, Ordering::Relaxed)
         .is_err()
-        && CPU_ENTERED_PANIC.load(Ordering::Relaxed) != cpu_id
+        && CPU_ENTERED_PANIC.load(Ordering::Relaxed) != my_cpu_id
     {
         // Suspend here because panic happened on another cpu
         wfi_loop();
@@ -39,7 +39,7 @@ pub fn panic_handler(info: &PanicInfo) -> ! {
     CONSOLE_UART.panic_force_unlock();
 
     println!("\nKERNEL Panic");
-    println!("\nPanic Occurred on cpu {}!", Cpu::cpu_id());
+    println!("\nPanic Occurred on cpu {}!", cpu_id());
     println!("Message: {}", info.message());
     if let Some(location) = info.location() {
         println!("Location: {}", location);
@@ -48,7 +48,7 @@ pub fn panic_handler(info: &PanicInfo) -> ! {
     abort_if_double_panic();
     crate::debugging::backtrace::print();
 
-    println!("\nPanic Occurred on cpu {}!", Cpu::cpu_id());
+    println!("\nPanic Occurred on cpu {}!", cpu_id());
     println!("Message: {}", info.message());
     if let Some(location) = info.location() {
         println!("Location: {}", location);

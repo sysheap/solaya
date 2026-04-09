@@ -4,7 +4,7 @@ use super::{
     thread::{ThreadRef, ThreadState},
 };
 use crate::{
-    cpu::Cpu,
+    cpu::{Cpu, cpu_id},
     debug, info,
     memory::VirtAddr,
     processes::{
@@ -259,7 +259,7 @@ impl CpuScheduler {
             debug!("Current thread is already powersave thread - don't queuing back");
             return;
         }
-        let cpu_id = Cpu::cpu_id();
+        let cpu_id = cpu_id();
         let old = self.swap_current_with_powersave();
         let should_requeue = old.with_lock(|mut t| {
             if t.get_state() == (ThreadState::Running { cpu_id }) {
@@ -297,9 +297,7 @@ impl CpuScheduler {
             if let Some(candidate) = next {
                 let accepted = candidate.with_lock(|mut t| {
                     if t.get_state() == ThreadState::Runnable {
-                        t.set_state(ThreadState::Running {
-                            cpu_id: Cpu::cpu_id(),
-                        });
+                        t.set_state(ThreadState::Running { cpu_id: cpu_id() });
                         true
                     } else {
                         false
@@ -314,9 +312,7 @@ impl CpuScheduler {
                 }
             } else {
                 self.powersave_thread.with_lock(|mut t| {
-                    t.set_state(ThreadState::Running {
-                        cpu_id: Cpu::cpu_id(),
-                    });
+                    t.set_state(ThreadState::Running { cpu_id: cpu_id() });
                 });
                 debug!("Next runnable is powersave");
             }
@@ -346,7 +342,7 @@ impl CpuScheduler {
                     }
                     super::signal::SignalDeliveryResult::Continue => {}
                 }
-                let cpu_id = Cpu::cpu_id();
+                let cpu_id = cpu_id();
                 assert!(
                     t.get_state() == ThreadState::Running { cpu_id },
                     "Thread {} not assigned to this CPU (state: {:?}, expected cpu: {})",
@@ -376,7 +372,7 @@ impl CpuScheduler {
 
     pub fn set_cpu_reg_for_current_thread(&self) -> bool {
         self.current_thread.with_lock(|t| {
-            let cpu_id = Cpu::cpu_id();
+            let cpu_id = cpu_id();
             if matches!(t.get_state(), ThreadState::Zombie(_) | ThreadState::Stopped) {
                 debug!(
                     "Thread {} was killed/stopped during scheduling, rescheduling",
