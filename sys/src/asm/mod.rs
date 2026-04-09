@@ -1,4 +1,4 @@
-#[cfg(not(miri))]
+#[cfg(all(not(miri), target_arch = "riscv64"))]
 core::arch::global_asm!(
     ".pushsection .text",
     ".balign {PAGE_SIZE}",
