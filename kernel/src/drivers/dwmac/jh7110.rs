@@ -68,7 +68,7 @@ fn deassert_reset(reset_id: u32) {
         }
         core::hint::spin_loop();
     }
-    info!("DWMAC JH7110: reset {} deassert timed out", reset_id);
+    panic!("DWMAC JH7110: reset {} deassert timed out", reset_id);
 }
 
 /// GMAC configuration for the JH7110 SoC.
