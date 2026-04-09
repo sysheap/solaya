@@ -1,50 +1,64 @@
-/// A validated single-letter RISC-V ISA extension (one of `'a'..='z'`).
+/// A single-letter RISC-V ISA extension as defined by the Unprivileged ISA
+/// spec (§"ISA Extension Naming Conventions") plus the privileged-mode letters
+/// `S` and `U` that appear in real `riscv,isa` strings.
 ///
-/// Making the element type non-constructible from arbitrary characters means
-/// [`IsaExtensions::contains`] cannot be called with an invalid letter — the
-/// compiler rejects it instead of returning `false` at runtime.
+/// `K, O, R, W, Y` are not assigned by the spec. `Z` is exclusively a
+/// multi-letter prefix (`Zba`, `Zicsr`, …), never a single-letter extension.
+/// `X` is for non-standard custom extensions, always written as `X<name>`.
+/// None of those are representable.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Extension(u8);
+#[repr(u8)]
+pub enum Extension {
+    I,
+    E,
+    M,
+    A,
+    F,
+    D,
+    G,
+    Q,
+    L,
+    C,
+    B,
+    J,
+    T,
+    P,
+    V,
+    N,
+    H,
+    S,
+    U,
+}
 
 impl Extension {
-    pub const A: Self = Self(b'a');
-    pub const B: Self = Self(b'b');
-    pub const C: Self = Self(b'c');
-    pub const D: Self = Self(b'd');
-    pub const E: Self = Self(b'e');
-    pub const F: Self = Self(b'f');
-    pub const G: Self = Self(b'g');
-    pub const H: Self = Self(b'h');
-    pub const I: Self = Self(b'i');
-    pub const J: Self = Self(b'j');
-    pub const K: Self = Self(b'k');
-    pub const L: Self = Self(b'l');
-    pub const M: Self = Self(b'm');
-    pub const N: Self = Self(b'n');
-    pub const O: Self = Self(b'o');
-    pub const P: Self = Self(b'p');
-    pub const Q: Self = Self(b'q');
-    pub const R: Self = Self(b'r');
-    pub const S: Self = Self(b's');
-    pub const T: Self = Self(b't');
-    pub const U: Self = Self(b'u');
-    pub const V: Self = Self(b'v');
-    pub const W: Self = Self(b'w');
-    pub const X: Self = Self(b'x');
-    pub const Y: Self = Self(b'y');
-    pub const Z: Self = Self(b'z');
-
-    /// Return `Some` if `letter` is ASCII lowercase `'a'..='z'`.
+    /// Return `Some` if `letter` is a defined single-letter RISC-V extension.
     pub const fn from_letter(letter: u8) -> Option<Self> {
-        if letter.is_ascii_lowercase() {
-            Some(Self(letter))
-        } else {
-            None
-        }
+        Some(match letter {
+            b'i' => Self::I,
+            b'e' => Self::E,
+            b'm' => Self::M,
+            b'a' => Self::A,
+            b'f' => Self::F,
+            b'd' => Self::D,
+            b'g' => Self::G,
+            b'q' => Self::Q,
+            b'l' => Self::L,
+            b'c' => Self::C,
+            b'b' => Self::B,
+            b'j' => Self::J,
+            b't' => Self::T,
+            b'p' => Self::P,
+            b'v' => Self::V,
+            b'n' => Self::N,
+            b'h' => Self::H,
+            b's' => Self::S,
+            b'u' => Self::U,
+            _ => return None,
+        })
     }
 
     const fn bit(self) -> u32 {
-        1 << (self.0 - b'a')
+        1 << (self as u32)
     }
 }
 
@@ -210,11 +224,19 @@ mod tests {
     }
 
     #[test]
-    fn extension_rejects_non_letters() {
-        assert!(Extension::from_letter(b'1').is_none());
+    fn from_letter_only_accepts_defined_extensions() {
+        assert!(Extension::from_letter(b'i').is_some());
+        assert!(Extension::from_letter(b's').is_some());
+        // Z is a multi-letter prefix only, never a single-letter extension.
+        assert!(Extension::from_letter(b'z').is_none());
+        // K, O, R, W, Y are not assigned by the spec.
+        assert!(Extension::from_letter(b'k').is_none());
+        assert!(Extension::from_letter(b'w').is_none());
+        // X is for non-standard extensions, always written as X<name>.
+        assert!(Extension::from_letter(b'x').is_none());
+        // Non-letter / wrong-case input.
         assert!(Extension::from_letter(b'A').is_none());
+        assert!(Extension::from_letter(b'1').is_none());
         assert!(Extension::from_letter(b'_').is_none());
-        assert!(Extension::from_letter(b'a').is_some());
-        assert!(Extension::from_letter(b'z').is_some());
     }
 }
