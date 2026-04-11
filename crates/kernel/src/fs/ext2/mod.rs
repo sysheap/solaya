@@ -56,7 +56,7 @@ async fn read_superblock(dev: usize) -> Ext2Superblock {
         .expect("superblock read must succeed");
     assert!(n == sb_size, "short superblock read");
 
-    sys::klibc::util::read_from_bytes(&buf)
+    klib::util::read_from_bytes(&buf)
 }
 
 async fn read_block_group_descriptors(

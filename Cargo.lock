@@ -277,7 +277,7 @@ dependencies = [
  "hal",
  "headers",
  "klib",
- "sys",
+ "mm",
  "unwinding",
 ]
 
@@ -290,17 +290,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-ident",
-]
-
-[[package]]
-name = "sys"
-version = "0.1.0"
-dependencies = [
- "common",
- "hal",
- "headers",
- "klib",
- "mm",
 ]
 
 [[package]]

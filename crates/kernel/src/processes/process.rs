@@ -18,8 +18,8 @@ use alloc::{
 };
 use common::pid::Tid;
 use core::{self, fmt::Debug, ptr::null_mut};
+use hal::validated_ptr::ValidatedPtr;
 use headers::errno::Errno;
-use sys::klibc::validated_ptr::ValidatedPtr;
 
 pub const POWERSAVE_TID: Tid = Tid::new(0);
 

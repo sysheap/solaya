@@ -5,7 +5,6 @@ members = [
     "crates/common",
     "crates/headers",
     "crates/kernel",
-    "crates/sys",
     "crates/klib",
     "crates/mm",
     "userspace",

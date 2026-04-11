@@ -31,5 +31,5 @@ pub fn exit_reset() -> ! {
 }
 
 pub fn wait_for_the_end() -> ! {
-    sys::cpu::disable_interrupts_and_halt();
+    hal::per_cpu::disable_interrupts_and_halt();
 }

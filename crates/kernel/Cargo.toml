@@ -18,8 +18,8 @@ hal = { path = "../hal", default-features = false }
 common = { path = "../common", default-features = false }
 console = { path = "../console" }
 headers = { path = "../headers" }
-sys = { path = "../sys", default-features = false }
 klib = { path = "../klib" }
+mm = { path = "../mm" }
 
 [lib]
 name = "solaya"

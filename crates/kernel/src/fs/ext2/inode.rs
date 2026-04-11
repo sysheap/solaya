@@ -26,7 +26,7 @@ pub async fn read_inode(
         .expect("inode read must succeed");
     assert!(n == inode_size, "short inode read");
 
-    sys::klibc::util::read_from_bytes(&buf)
+    klib::util::read_from_bytes(&buf)
 }
 
 pub async fn read_inode_data(dev: usize, sb: &Ext2Superblock, inode: &Ext2Inode) -> Vec<u8> {

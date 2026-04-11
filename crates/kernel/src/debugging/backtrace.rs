@@ -11,8 +11,7 @@ use crate::{
     memory::{VirtAddr, linker_information::LinkerInformation},
 };
 use alloc::vec::Vec;
-use hal::backtrace::CalleeSavedRegs;
-use sys::klibc::validated_ptr::ValidatedPtr;
+use hal::{backtrace::CalleeSavedRegs, validated_ptr::ValidatedPtr};
 
 #[allow(dead_code)]
 #[derive(Debug)]
