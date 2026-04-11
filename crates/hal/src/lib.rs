@@ -1,14 +1,14 @@
 //! Hardware Abstraction Layer for Solaya.
 //!
 //! Owns everything that touches raw hardware: CSRs, MMIO, cache ops, SBI,
-//! the trap cause enum, linker symbols, assembly stubs. Also owns the
-//! primitives that are built directly on top of those — `Spinlock`
-//! (needs `InterruptGuard`), the per-CPU accessors that read `sscratch`,
-//! and the panic-mode interrupt disable wrapper.
+//! the trap cause enum, linker symbols, assembly stubs, and the RISC-V Sv39
+//! page table types. Also owns primitives built directly on top of
+//! hardware — `Spinlock` (needs `InterruptGuard`), the per-CPU accessors
+//! that read `sscratch`, `ValidatedPtr`, and the panic-mode interrupt
+//! disable wrapper.
 //!
-//! Layering invariant: may depend on `common`, `klib`. May not depend on
-//! device drivers, I/O devices, or anything that owns global state beyond
-//! the panic-mode flag.
+//! Layering invariant: may depend on `abi`, `klib`, `headers`. May not
+//! depend on device drivers, I/O devices, `console`, `mm`, or `kernel`.
 #![no_std]
 #![feature(macro_metavar_expr_concat)]
 
