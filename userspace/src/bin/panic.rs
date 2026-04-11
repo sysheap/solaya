@@ -1,4 +1,4 @@
-use common::ioctl::trigger_kernel_panic;
+use abi::ioctl::trigger_kernel_panic;
 
 extern crate userspace;
 

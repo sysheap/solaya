@@ -452,7 +452,7 @@ impl<'a> ElfFile<'a> {
 
 #[cfg(test)]
 mod tests {
-    use common::include_bytes_align_as;
+    use abi::include_bytes_align_as;
 
     use crate::klibc::elf::ProgramHeaderType;
 

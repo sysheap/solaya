@@ -1,5 +1,5 @@
+use abi::syscalls::trap_frame::TrapFrame;
 use alloc::{boxed::Box, sync::Arc};
-use common::syscalls::trap_frame::TrapFrame;
 
 pub use hal::{CpuId, per_cpu::cpu_id};
 

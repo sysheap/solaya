@@ -6,7 +6,7 @@ use crate::{
     processes::{task::Task, thread::ThreadState, timer, waker::ThreadWaker},
     syscalls::linux::LinuxSyscallHandler,
 };
-use common::syscalls::trap_frame::{Register, TrapFrame};
+use abi::syscalls::trap_frame::{Register, TrapFrame};
 use core::{
     panic,
     task::{Context, Poll},

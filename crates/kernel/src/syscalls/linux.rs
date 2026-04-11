@@ -11,7 +11,7 @@ use crate::{
     },
     syscalls::macros::linux_syscalls,
 };
-use common::{
+use abi::{
     pid::Tid,
     syscalls::trap_frame::{Register, TrapFrame},
 };

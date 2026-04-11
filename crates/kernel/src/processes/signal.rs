@@ -4,7 +4,7 @@ use crate::{
     memory::VirtAddr,
     processes::{thread::Thread, userspace_ptr::UserspacePtr},
 };
-use common::syscalls::trap_frame::Register;
+use abi::syscalls::trap_frame::Register;
 use headers::syscall_types::{
     SA_NODEFER, SA_RESETHAND, SIGABRT, SIGALRM, SIGBUS, SIGCHLD, SIGCONT, SIGFPE, SIGHUP, SIGILL,
     SIGINT, SIGIO, SIGKILL, SIGPIPE, SIGPROF, SIGPWR, SIGQUIT, SIGSEGV, SIGSTKFLT, SIGSTOP, SIGSYS,

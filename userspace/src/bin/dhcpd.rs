@@ -1,6 +1,6 @@
 use std::{net::UdpSocket, os::fd::AsRawFd};
 
-use common::ioctl::{get_mac_address, set_ip_address};
+use abi::ioctl::{get_mac_address, set_ip_address};
 
 const DHCP_SERVER_PORT: u16 = 67;
 const DHCP_CLIENT_PORT: u16 = 68;

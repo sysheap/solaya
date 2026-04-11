@@ -17,7 +17,7 @@ pub struct CalleeSavedRegs {
     x27: usize,
 }
 
-common::static_assert_size!(CalleeSavedRegs, 0x70);
+abi::static_assert_size!(CalleeSavedRegs, 0x70);
 
 impl core::fmt::Display for CalleeSavedRegs {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {

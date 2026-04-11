@@ -3,6 +3,10 @@
 version = 4
 
 [[package]]
+name = "abi"
+version = "0.1.0"
+
+[[package]]
 name = "aho-corasick"
 version = "1.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -71,14 +75,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "common"
-version = "0.1.0"
-
-[[package]]
 name = "console"
 version = "0.1.0"
 dependencies = [
- "common",
+ "abi",
  "hal",
  "klib",
 ]
@@ -117,7 +117,7 @@ checksum = "0cc23270f6e1808e30a928bdc84dea0b9b4136a8bc82338574f23baf47bbd280"
 name = "hal"
 version = "0.1.0"
 dependencies = [
- "common",
+ "abi",
  "headers",
  "klib",
 ]
@@ -142,7 +142,7 @@ dependencies = [
 name = "klib"
 version = "0.1.0"
 dependencies = [
- "common",
+ "abi",
 ]
 
 [[package]]
@@ -270,7 +270,7 @@ checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
 name = "solaya"
 version = "0.1.0"
 dependencies = [
- "common",
+ "abi",
  "console",
  "elf",
  "gimli 0.33.1",
@@ -311,7 +311,7 @@ dependencies = [
 name = "userspace"
 version = "0.1.0"
 dependencies = [
- "common",
+ "abi",
  "headers",
 ]
 

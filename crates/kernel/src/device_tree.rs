@@ -450,7 +450,7 @@ mod tests {
         info,
         klibc::big_endian::BigEndian,
     };
-    use common::include_bytes_align_as;
+    use abi::include_bytes_align_as;
 
     const DTB: &[u8] = include_bytes_align_as!(Header, "test/test_data/dtb");
 

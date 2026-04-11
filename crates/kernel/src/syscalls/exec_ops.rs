@@ -6,7 +6,7 @@ use crate::{
     klibc::{consumable_buffer::ConsumableBuffer, elf::ElfFile},
     processes::{loader, process::Process, userspace_ptr::UserspacePtr},
 };
-use common::syscalls::trap_frame::{Register, TrapFrame};
+use abi::syscalls::trap_frame::{Register, TrapFrame};
 
 use super::linux::{LinuxSyscallHandler, LinuxSyscalls};
 

@@ -17,7 +17,7 @@ use crate::{
     },
     syscalls::linux_validator::LinuxUserspaceArg,
 };
-use common::{pid::Tid, syscalls::trap_frame::Register};
+use abi::{pid::Tid, syscalls::trap_frame::Register};
 
 use super::linux::LinuxSyscallHandler;
 

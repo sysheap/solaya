@@ -10,7 +10,7 @@ default = ["riscv64"]
 riscv64 = []
 
 [dependencies]
-common = { path = "../common", default-features = false }
+abi = { path = "../abi", default-features = false }
 headers = { path = "../headers" }
 klib = { path = "../klib" }
 

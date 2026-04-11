@@ -15,7 +15,7 @@ default = ["hal/riscv64"]
 
 [dependencies]
 hal = { path = "../hal", default-features = false }
-common = { path = "../common", default-features = false }
+abi = { path = "../abi", default-features = false }
 console = { path = "../console" }
 headers = { path = "../headers" }
 klib = { path = "../klib" }

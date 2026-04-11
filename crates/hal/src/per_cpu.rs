@@ -1,4 +1,4 @@
-pub use common::cpu::{
+pub use abi::cpu::{
     CPU_ID_OFFSET, CpuBase, CpuId, KERNEL_PAGE_TABLES_SATP_OFFSET, TRAP_FRAME_OFFSET,
 };
 

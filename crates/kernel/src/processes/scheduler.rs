@@ -14,8 +14,8 @@ use crate::{
     },
     test::qemu_exit,
 };
+use abi::syscalls::trap_frame::Register;
 use alloc::sync::Arc;
-use common::syscalls::trap_frame::Register;
 use core::task::{Context, Poll};
 use headers::errno::Errno;
 pub struct CpuScheduler {
@@ -246,7 +246,7 @@ impl CpuScheduler {
         Cpu::current().ipi_to_all_but_me();
     }
 
-    pub fn send_tty_signal(&mut self, sig: u32, fg_pgid: common::pid::Tid) {
+    pub fn send_tty_signal(&mut self, sig: u32, fg_pgid: abi::pid::Tid) {
         debug!("send_tty_signal: sig={sig} fg_pgid={fg_pgid}");
         process_table::THE.with_lock(|mut pt| {
             pt.send_signal_to_pgid(fg_pgid, sig);

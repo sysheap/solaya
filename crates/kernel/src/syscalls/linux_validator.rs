@@ -1,6 +1,6 @@
 use crate::processes::{process::ProcessRef, userspace_ptr::UserspacePtr};
+use abi::pointer::Pointer;
 use alloc::vec::Vec;
-use common::pointer::Pointer;
 use core::marker::PhantomData;
 use headers::errno::Errno;
 

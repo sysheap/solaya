@@ -11,5 +11,5 @@ forced-target = "riscv64gc-unknown-linux-musl"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-common = { path = "../crates/common" }
+abi = { path = "../crates/abi" }
 headers = { path = "../crates/headers" }

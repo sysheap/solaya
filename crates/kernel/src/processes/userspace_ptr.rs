@@ -1,4 +1,4 @@
-use common::pointer::Pointer;
+use abi::pointer::Pointer;
 use headers::errno::Errno;
 
 use crate::{klibc::SpinlockGuard, processes::process::Process};

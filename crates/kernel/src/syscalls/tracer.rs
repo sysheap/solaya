@@ -13,8 +13,8 @@ use crate::{
         trace_config::TRACED_PROCESSES,
     },
 };
+use abi::syscalls::trap_frame::{Register, TrapFrame};
 use alloc::vec::Vec;
-use common::syscalls::trap_frame::{Register, TrapFrame};
 use core::ffi::{c_int, c_uint, c_ulong};
 use headers::errno::Errno;
 
@@ -85,7 +85,7 @@ fn format_arg(raw: usize, fmt: ArgFormat) -> alloc::string::String {
     }
 }
 
-fn log_enter(trap_frame: &TrapFrame, tid: common::pid::Tid) {
+fn log_enter(trap_frame: &TrapFrame, tid: abi::pid::Tid) {
     let nr = trap_frame[Register::a7];
     let args = [
         trap_frame[Register::a0],
@@ -114,7 +114,7 @@ fn log_enter(trap_frame: &TrapFrame, tid: common::pid::Tid) {
     println!("[SYSCALL ENTER] tid={tid} {}({arg_strs})", meta.name);
 }
 
-fn log_exit(trap_frame: &TrapFrame, tid: common::pid::Tid, result: &Result<isize, Errno>) {
+fn log_exit(trap_frame: &TrapFrame, tid: abi::pid::Tid, result: &Result<isize, Errno>) {
     let nr = trap_frame[Register::a7];
     let name = find_metadata(nr).map(|m| m.name).unwrap_or("unknown");
 

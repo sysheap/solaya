@@ -1,6 +1,6 @@
 use core::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign};
 
-use common::numbers::Number;
+use abi::numbers::Number;
 
 /// Fence ensuring prior stores to `*self.addr` are visible before
 /// subsequent operations. Only emitted on riscv64; other targets
