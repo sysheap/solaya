@@ -6,6 +6,7 @@
 //! for shared ABI types.
 
 #![cfg_attr(not(any(miri, test)), no_std)]
+#![feature(ptr_mask)]
 
 extern crate alloc;
 
@@ -16,3 +17,4 @@ pub mod non_empty_vec;
 pub mod runtime_initialized;
 pub mod send_sync;
 pub mod sizes;
+pub mod util;

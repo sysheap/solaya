@@ -15,10 +15,12 @@
 extern crate alloc;
 
 pub mod isa;
+pub mod memory;
 pub mod mmio;
 pub mod panic_support;
 pub mod per_cpu;
 pub mod spinlock;
+pub mod validated_ptr;
 
 #[cfg(feature = "riscv64")]
 mod riscv64;
