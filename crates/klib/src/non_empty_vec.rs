@@ -66,14 +66,14 @@ mod tests {
 
     use super::NonEmptyVec;
 
-    #[test_case]
+    #[test]
     fn new_creates_single_element() {
         let v = NonEmptyVec::new(42);
         assert!(v.len() == 1);
         assert!(v[0] == 42);
     }
 
-    #[test_case]
+    #[test]
     fn push_grows_and_preserves_order() {
         let v = NonEmptyVec::new(1).push(2).push(3);
         assert!(v.len() == 3);
@@ -82,20 +82,20 @@ mod tests {
         assert!(v[2] == 3);
     }
 
-    #[test_case]
+    #[test]
     fn into_first_returns_first_element() {
         let v = NonEmptyVec::new(10).push(20);
         assert!(v.into_first() == 10);
     }
 
-    #[test_case]
+    #[test]
     fn into_iter_yields_all_in_order() {
         let v = NonEmptyVec::new(1).push(2).push(3);
         let collected: vec::Vec<i32> = v.into_iter().collect();
         assert!(collected == vec![1, 2, 3]);
     }
 
-    #[test_case]
+    #[test]
     fn iter_yields_references_in_order() {
         let v = NonEmptyVec::new(10).push(20);
         let collected: vec::Vec<&i32> = v.iter().collect();

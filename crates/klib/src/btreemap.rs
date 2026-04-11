@@ -24,7 +24,7 @@ mod tests {
 
     use super::SplitOffLowerThan;
 
-    #[test_case]
+    #[test]
     fn basic_split() {
         let mut map: BTreeMap<i32, &str> = BTreeMap::new();
         map.insert(1, "one");
@@ -43,7 +43,7 @@ mod tests {
         assert_eq!(map.get(&7), Some(&"seven"));
     }
 
-    #[test_case]
+    #[test]
     fn empty_map() {
         let mut map: BTreeMap<i32, i32> = BTreeMap::new();
         let lower = map.split_off_lower_than(&10);
@@ -52,7 +52,7 @@ mod tests {
         assert!(map.is_empty());
     }
 
-    #[test_case]
+    #[test]
     fn all_keys_below_threshold() {
         let mut map: BTreeMap<i32, &str> = BTreeMap::new();
         map.insert(1, "one");
@@ -65,7 +65,7 @@ mod tests {
         assert!(map.is_empty());
     }
 
-    #[test_case]
+    #[test]
     fn all_keys_above_threshold() {
         let mut map: BTreeMap<i32, &str> = BTreeMap::new();
         map.insert(10, "ten");
@@ -78,7 +78,7 @@ mod tests {
         assert_eq!(map.len(), 3);
     }
 
-    #[test_case]
+    #[test]
     fn key_at_exact_boundary() {
         let mut map: BTreeMap<i32, &str> = BTreeMap::new();
         map.insert(5, "five");
