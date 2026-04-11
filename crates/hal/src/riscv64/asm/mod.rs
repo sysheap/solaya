@@ -1,4 +1,4 @@
-use common::cpu::{KERNEL_PAGE_TABLES_SATP_OFFSET, TRAP_FRAME_OFFSET};
+use abi::cpu::{KERNEL_PAGE_TABLES_SATP_OFFSET, TRAP_FRAME_OFFSET};
 use core::arch::global_asm;
 
 global_asm!(

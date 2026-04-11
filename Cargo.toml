@@ -2,7 +2,7 @@
 members = [
     "boot",
     "crates/hal",
-    "crates/common",
+    "crates/abi",
     "crates/headers",
     "crates/kernel",
     "crates/klib",

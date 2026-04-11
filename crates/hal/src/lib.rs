@@ -32,6 +32,6 @@ mod stub;
 #[cfg(not(feature = "riscv64"))]
 pub use stub::*;
 
-pub use common::cpu::CpuId;
+pub use abi::cpu::CpuId;
 pub use per_cpu::cpu_id;
 pub use spinlock::{Spinlock, SpinlockGuard};

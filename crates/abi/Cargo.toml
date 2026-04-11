@@ -1,5 +1,5 @@
 [package]
-name = "common"
+name = "abi"
 edition = "2024"
 description.workspace = true
 authors.workspace = true

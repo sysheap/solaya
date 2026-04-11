@@ -9,7 +9,7 @@ use crate::processes::{
     futex::{self, FutexWait},
     process_table,
 };
-use common::pid::Tid;
+use abi::pid::Tid;
 
 use super::{linux::LinuxSyscallHandler, linux_validator::LinuxUserspaceArg};
 

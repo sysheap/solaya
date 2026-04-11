@@ -1,5 +1,5 @@
+use abi::pointer::Pointer;
 use alloc::vec::Vec;
-use common::pointer::Pointer;
 use headers::errno::Errno;
 
 pub trait PtrValidator {

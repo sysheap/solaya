@@ -11,15 +11,15 @@ use crate::{
         userspace_ptr::{ContainsUserspacePtr, UserspacePtr},
     },
 };
+use abi::{
+    errors::LoaderError,
+    pid::Tid,
+    syscalls::trap_frame::{Register, TrapFrame},
+};
 use alloc::{
     collections::BTreeMap,
     string::String,
     sync::{Arc, Weak},
-};
-use common::{
-    errors::LoaderError,
-    pid::Tid,
-    syscalls::trap_frame::{Register, TrapFrame},
 };
 use core::{
     ffi::{c_int, c_uint},

@@ -115,7 +115,7 @@ pub trait FromU8Buffer: Copy {
     fn from_u8_buffer(buffer: &[u8]) -> Self;
 }
 
-impl<T: common::numbers::Number> FromU8Buffer for T {
+impl<T: abi::numbers::Number> FromU8Buffer for T {
     fn from_u8_buffer(buffer: &[u8]) -> Self {
         T::from_le_bytes(buffer)
     }

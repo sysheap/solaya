@@ -1,7 +1,7 @@
 use core::fmt::{Debug, Display};
 
 use super::consumable_buffer::FromU8Buffer;
-use common::numbers::Number;
+use abi::numbers::Number;
 
 #[derive(PartialEq, Eq, Clone, Copy, Default)]
 #[repr(transparent)]

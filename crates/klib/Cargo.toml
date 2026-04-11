@@ -6,7 +6,7 @@ authors.workspace = true
 description.workspace = true
 
 [dependencies]
-common = { path = "../common", default-features = false }
+abi = { path = "../abi", default-features = false }
 
 [lib]
 test = false

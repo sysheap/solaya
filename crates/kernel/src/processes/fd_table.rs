@@ -1,5 +1,5 @@
+use abi::pid::Tid;
 use alloc::collections::BTreeMap;
-use common::pid::Tid;
 use core::fmt;
 use headers::{
     errno::Errno,

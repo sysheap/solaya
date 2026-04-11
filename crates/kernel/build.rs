@@ -56,7 +56,7 @@ fn generate_userspace_programs_include() -> Result<(), Box<dyn Error>> {
 
     let mut content = String::new();
 
-    writeln!(content, "use common::include_bytes_align_as;\n")?;
+    writeln!(content, "use abi::include_bytes_align_as;\n")?;
 
     // Use BTreeMap to have the program names in a sorted order
     let mut programs: BTreeMap<String, String> = BTreeMap::new();

@@ -15,7 +15,7 @@ use crate::{
     },
     syscalls::linux_validator::LinuxUserspaceArg,
 };
-use common::{
+use abi::{
     ioctl::{ARPHRD_ETHER, Ifreq, SIOCGIFHWADDR, SIOCSIFADDR, SOLAYA_LIST_PROGRAMS, SOLAYA_PANIC},
     pid::Tid,
 };

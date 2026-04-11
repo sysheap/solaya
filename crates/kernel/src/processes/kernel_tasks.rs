@@ -1,9 +1,9 @@
+use abi::{pid::Tid, syscalls::trap_frame::TrapFrame};
 use alloc::{
     collections::{BTreeMap, VecDeque},
     sync::Arc,
     task::Wake,
 };
-use common::{pid::Tid, syscalls::trap_frame::TrapFrame};
 use core::{
     sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
     task::{Context, Waker},
@@ -69,7 +69,7 @@ pub fn create_worker_thread() {
         RootPageTableHolder::new_with_kernel_mapping(&crate::memory::kernel_device_mappings());
 
     let mut register_state = TrapFrame::zero();
-    register_state[common::syscalls::trap_frame::Register::sp] = stack_top;
+    register_state[abi::syscalls::trap_frame::Register::sp] = stack_top;
 
     let tid = get_next_tid();
     let thread = super::thread::Thread::new_process(

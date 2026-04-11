@@ -4,12 +4,12 @@ use core::{
 };
 
 use crate::klibc::util::align_up;
+use abi::{pointer::Pointer, unwrap_or_return};
 use alloc::{
     boxed::Box,
     string::{String, ToString},
     vec::Vec,
 };
-use common::{pointer::Pointer, unwrap_or_return};
 use headers::errno::Errno;
 
 use crate::{

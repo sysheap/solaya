@@ -7,7 +7,7 @@ use headers::{
 };
 
 use crate::{processes::process_table, syscalls::linux_validator::LinuxUserspaceArg};
-use common::pid::Tid;
+use abi::pid::Tid;
 
 use super::linux::LinuxSyscallHandler;
 
