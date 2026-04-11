@@ -130,16 +130,16 @@
         };
 
         baseHook = ''
-          rm -rf musl headers/linux_headers headers/musl_headers
+          rm -rf musl crates/headers/linux_headers crates/headers/musl_headers
 
           ln -sf ${musl-riscv}/src musl
-          ln -sf ${musl-riscv.linuxHeaders}/ headers/linux_headers
-          ln -sf ${musl-riscv.dev}/include headers/musl_headers
+          ln -sf ${musl-riscv.linuxHeaders}/ crates/headers/linux_headers
+          ln -sf ${musl-riscv.dev}/include crates/headers/musl_headers
 
-          mkdir -p kernel/compiled_userspace_nix
-          ln -sf "${dash}/bin/dash" "./kernel/compiled_userspace_nix/dash"
-          ln -sf "${dash}/bin/dash" "./kernel/compiled_userspace_nix/sh"
-          ln -sf "${doom-riscv}/bin/doom" "./kernel/compiled_userspace_nix/doom"
+          mkdir -p crates/kernel/compiled_userspace_nix
+          ln -sf "${dash}/bin/dash" "./crates/kernel/compiled_userspace_nix/dash"
+          ln -sf "${dash}/bin/dash" "./crates/kernel/compiled_userspace_nix/sh"
+          ln -sf "${doom-riscv}/bin/doom" "./crates/kernel/compiled_userspace_nix/doom"
         '';
 
         hook = baseHook + ''
