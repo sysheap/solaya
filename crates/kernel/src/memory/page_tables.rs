@@ -22,8 +22,8 @@ use crate::{
 };
 
 use super::{PhysAddr, VirtAddr, heap_size, linker_information::LinkerInformation};
-pub use sys::memory::page_table::XWRMode;
-use sys::memory::page_table::{OwnedPageTable, PageTable, PageTableEntry, activate_page_table};
+pub use hal::memory::page_table::XWRMode;
+use hal::memory::page_table::{OwnedPageTable, PageTable, PageTableEntry, activate_page_table};
 
 #[derive(Clone)]
 pub struct MappingDescription {
@@ -575,7 +575,7 @@ impl RootPageTableHolder {
     }
 }
 
-impl sys::klibc::validated_ptr::PtrValidator for RootPageTableHolder {
+impl hal::validated_ptr::PtrValidator for RootPageTableHolder {
     fn validate_userspace<PTR: Pointer>(&self, ptr: PTR, len: usize) -> Result<PTR, Errno> {
         if !self.is_valid_userspace_fat_ptr(ptr, len, PTR::WRITABLE) {
             return Err(Errno::EFAULT);
@@ -597,7 +597,7 @@ mod tests {
     use super::{MappingEntry, RootPageTableHolder};
     use crate::memory::{PhysAddr, VirtAddr};
     use alloc::string::ToString;
-    use sys::memory::page_table::XWRMode;
+    use hal::memory::page_table::XWRMode;
 
     #[test_case]
     fn check_drop_of_page_table_holder() {

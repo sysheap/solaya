@@ -1,8 +1,7 @@
 use alloc::{boxed::Box, sync::Arc};
 use common::syscalls::trap_frame::TrapFrame;
 
-pub use hal::CpuId;
-pub use sys::cpu::cpu_id;
+pub use hal::{CpuId, per_cpu::cpu_id};
 
 use crate::{
     klibc::{Spinlock, SpinlockGuard, sizes::KiB},
@@ -14,10 +13,10 @@ use hal::sbi::extensions::ipi_extension::sbi_send_ipi;
 pub(crate) const KERNEL_STACK_SIZE: usize = KiB(512);
 
 // repr(C) is required: CpuBase must be the first field so that assembly
-// offsets computed from sys::cpu work correctly via the sscratch pointer.
+// offsets computed from hal::per_cpu work correctly via the sscratch pointer.
 #[repr(C)]
 pub struct Cpu {
-    base: sys::cpu::CpuBase,
+    base: hal::per_cpu::CpuBase,
     scheduler: Spinlock<CpuScheduler>,
     kernel_page_tables: RootPageTableHolder,
     number_cpus: usize,
@@ -59,7 +58,7 @@ impl Cpu {
         let satp_value = page_tables.get_satp_value_from_page_tables();
 
         let cpu = Box::new(Self {
-            base: sys::cpu::CpuBase {
+            base: hal::per_cpu::CpuBase {
                 kernel_page_tables_satp_value: satp_value,
                 trap_frame: TrapFrame::zero(),
                 cpu_id,
@@ -73,15 +72,18 @@ impl Cpu {
     }
 
     pub fn current() -> &'static Cpu {
-        sys::cpu::per_cpu_ref::<Cpu>()
+        hal::per_cpu::per_cpu_ref::<Cpu>()
     }
 
     pub fn read_trap_frame() -> TrapFrame {
-        sys::cpu::per_cpu_volatile_read::<TrapFrame>(sys::cpu::TRAP_FRAME_OFFSET)
+        hal::per_cpu::per_cpu_volatile_read::<TrapFrame>(hal::per_cpu::TRAP_FRAME_OFFSET)
     }
 
     pub fn write_trap_frame(trap_frame: TrapFrame) {
-        sys::cpu::per_cpu_volatile_write::<TrapFrame>(sys::cpu::TRAP_FRAME_OFFSET, trap_frame);
+        hal::per_cpu::per_cpu_volatile_write::<TrapFrame>(
+            hal::per_cpu::TRAP_FRAME_OFFSET,
+            trap_frame,
+        );
     }
 
     pub fn with_scheduler<R>(f: impl FnOnce(SpinlockGuard<'_, CpuScheduler>) -> R) -> R {

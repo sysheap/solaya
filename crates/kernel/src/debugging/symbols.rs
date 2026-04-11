@@ -5,7 +5,7 @@ pub static THE: RuntimeInitializedData<&'static str> = RuntimeInitializedData::n
 
 pub fn init() {
     let symbols_start = LinkerInformation::__start_symbols();
-    let cstr = sys::klibc::util::cstr_from_null_terminated_ptr(symbols_start.as_ptr());
+    let cstr = klib::util::cstr_from_null_terminated_ptr(symbols_start.as_ptr());
     let str = cstr.to_str().expect("Symbols must be UTF-8");
     info!("Initialized symbols ({} bytes)", str.len());
     THE.initialize(str);

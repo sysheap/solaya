@@ -1,9 +1,6 @@
+use core::ops::{BitAnd, Rem, Sub};
 #[cfg(test)]
 use core::ops::{BitAndAssign, BitOrAssign, Not, Shl, Shr};
-use core::{
-    fmt::Display,
-    ops::{BitAnd, Rem, Sub},
-};
 
 use crate::memory::PAGE_SIZE;
 
@@ -53,21 +50,6 @@ pub fn align_down(value: usize, alignment: usize) -> usize {
     value & !(alignment - 1)
 }
 
-pub struct PrintMemorySizeHumanFriendly(pub usize);
-
-impl Display for PrintMemorySizeHumanFriendly {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        let mut size = self.0 as f64;
-        for format in ["", "KiB", "MiB", "GiB"] {
-            if size < 1024.0 {
-                return write!(f, "{size:.2} {format}");
-            }
-            size /= 1024.0;
-        }
-        write!(f, "{size:.2} TiB")
-    }
-}
-
 pub fn copy_slice<T: Copy>(src: &[T], dst: &mut [T]) {
     assert!(dst.len() >= src.len());
     dst[..src.len()].copy_from_slice(src);
@@ -84,7 +66,7 @@ pub trait BufferExtension {
 
 impl BufferExtension for [u8] {
     fn interpret_as<T>(&self) -> &T {
-        sys::klibc::util::ref_from_bytes(self)
+        klib::util::ref_from_bytes(self)
     }
 
     fn split_as<T>(&self) -> (&T, &[u8]) {
@@ -95,7 +77,7 @@ impl BufferExtension for [u8] {
 
 pub trait ByteInterpretable {
     fn as_slice(&self) -> &[u8] {
-        sys::klibc::util::as_byte_slice(self)
+        klib::util::as_byte_slice(self)
     }
 }
 
@@ -134,7 +116,7 @@ impl<T, const N: usize> InBytes for [T; N] {
 mod kani_proofs {
     use super::*;
     use crate::memory::PAGE_SIZE;
-    use sys::klibc::util::{clear_bit, get_multiple_bits, set_bit, set_multiple_bits};
+    use klib::util::{clear_bit, get_multiple_bits, set_bit, set_multiple_bits};
 
     #[kani::proof]
     fn align_up_is_at_least_input() {

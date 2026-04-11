@@ -98,7 +98,7 @@ extern crate alloc;
 
 pub extern "C" fn kernel_init(hart_id: usize, device_tree_pointer: *const ()) -> ! {
     let boot_cpu_id = cpu::CpuId::from_hart_id(hart_id);
-    sys::cpu::STARTING_CPU_ID.initialize(boot_cpu_id);
+    hal::per_cpu::STARTING_CPU_ID.initialize(boot_cpu_id);
 
     CONSOLE_UART.lock().init();
 

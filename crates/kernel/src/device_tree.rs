@@ -11,7 +11,7 @@ use core::{
     mem::size_of,
     ops::Range,
 };
-use sys::klibc::validated_ptr::ValidatedPtr;
+use hal::validated_ptr::ValidatedPtr;
 
 const FDT_MAGIC: u32 = 0xd00dfeed;
 const FDT_VERSION: u32 = 17;
@@ -50,7 +50,7 @@ impl DeviceTree {
         // Read just the header first to get totalsize.
         let dt_ptr = ValidatedPtr::<u8>::from_trusted(device_tree_pointer.cast());
         let header_slice = dt_ptr.as_static_slice(size_of::<Header>());
-        let header: &Header = sys::klibc::util::ref_from_bytes(header_slice);
+        let header: &Header = klib::util::ref_from_bytes(header_slice);
         assert_eq!(header.magic.get(), FDT_MAGIC);
         assert_eq!(
             header.version.get(),
@@ -64,7 +64,7 @@ impl DeviceTree {
     }
 
     fn header(&self) -> &Header {
-        sys::klibc::util::ref_from_bytes(self.data)
+        klib::util::ref_from_bytes(self.data)
     }
 
     pub fn get_reserved_areas(&self) -> &[ReserveEntry] {
@@ -74,14 +74,13 @@ impl DeviceTree {
         let max_entries = remaining.len() / entry_size;
         let mut len = 0;
         while len < max_entries {
-            let entry: &ReserveEntry =
-                sys::klibc::util::ref_from_bytes(&remaining[len * entry_size..]);
+            let entry: &ReserveEntry = klib::util::ref_from_bytes(&remaining[len * entry_size..]);
             if entry.address == 0 && entry.size == 0 {
                 break;
             }
             len += 1;
         }
-        sys::klibc::util::slice_from_bytes(remaining, 0, len)
+        klib::util::slice_from_bytes(remaining, 0, len)
     }
 
     pub fn root_node(&self) -> Node<'_> {

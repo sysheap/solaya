@@ -7,7 +7,7 @@ pub mod leb128;
 pub mod util;
 pub mod writable_buffer;
 
-pub use sys::klibc::{
+pub use hal::{
     mmio::{self, MMIO},
     spinlock::{Spinlock, SpinlockGuard},
 };

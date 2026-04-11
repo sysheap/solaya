@@ -1,4 +1,4 @@
-use sys::memory::heap::SpinlockHeap;
+use mm::heap::SpinlockHeap;
 
 #[cfg(not(any(kani, miri)))]
 #[global_allocator]

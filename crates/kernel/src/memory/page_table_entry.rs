@@ -1,6 +1,6 @@
 #[cfg(any(kani, test))]
-use sys::memory::page_table::PageTableEntry;
-use sys::memory::page_table::XWRMode;
+use hal::memory::page_table::PageTableEntry;
+use hal::memory::page_table::XWRMode;
 
 use crate::klibc::elf;
 
@@ -21,7 +21,7 @@ impl From<elf::ProgramHeaderFlags> for XWRMode {
 #[cfg(kani)]
 mod kani_proofs {
     use super::*;
-    use sys::memory::address::PhysAddr;
+    use hal::memory::address::PhysAddr;
 
     fn entry_from_bits(bits: usize) -> PageTableEntry {
         PageTableEntry(core::ptr::without_provenance_mut(bits))
@@ -114,7 +114,7 @@ mod tests {
     use super::*;
     use crate::klibc::elf::ProgramHeaderFlags;
     use core::ptr::null_mut;
-    use sys::memory::address::PhysAddr;
+    use hal::memory::address::PhysAddr;
 
     #[test_case]
     fn page_table_entry_validity_bit() {

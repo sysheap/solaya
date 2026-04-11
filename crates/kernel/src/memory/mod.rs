@@ -2,7 +2,7 @@ use crate::{device_tree, info, klibc::Spinlock};
 
 use core::{ops::Range, ptr::NonNull};
 use linker_information::LinkerInformation;
-use sys::memory::page_allocator::{MetadataPageAllocator, PageAllocator};
+use mm::page_allocator::{MetadataPageAllocator, PageAllocator};
 
 pub mod heap;
 pub mod linker_information;
@@ -10,9 +10,10 @@ pub mod page_table_entry;
 pub mod page_tables;
 mod runtime_mappings;
 
-pub use sys::memory::{
-    address::{PhysAddr, VirtAddr},
-    page::{PAGE_SIZE, Page, Pages, PagesAsSlice, PinnedHeapPages, page_slice_at_phys},
+pub use hal::memory::{PhysAddr, VirtAddr};
+pub use mm::{
+    PAGE_SIZE,
+    page::{Page, Pages, PagesAsSlice, PinnedHeapPages, page_slice_at_phys},
 };
 
 pub use runtime_mappings::initialize_runtime_mappings;
@@ -107,13 +108,10 @@ pub fn init_page_allocator(reserved_areas: &[Range<*const u8>]) {
         heap_start,
         heap_start + heap_size,
         heap_size,
-        crate::klibc::util::PrintMemorySizeHumanFriendly(heap_size)
+        klib::util::PrintMemorySizeHumanFriendly(heap_size)
     );
 
-    let memory = sys::memory::linker_region_as_uninit_slice(
-        sys::memory::VirtAddr::new(heap_start.as_usize()),
-        heap_size,
-    );
+    let memory = mm::linker_region_as_uninit_slice(VirtAddr::new(heap_start.as_usize()), heap_size);
     PAGE_ALLOCATOR.lock().init(memory, reserved_areas);
 }
 
