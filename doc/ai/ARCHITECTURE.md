@@ -21,7 +21,7 @@ arch/src/              # Hardware abstraction layer (no_std crate)
     sbi/               # SBI ecall + extensions (timer, IPI, hart state)
     timer.rs           # rdtime, CLINT constants
     trap_cause.rs      # Interrupt/exception cause constants
-  stub/                # No-op stubs for non-riscv64 (Kani, miri)
+  stub/                # No-op stubs for non-riscv64 (miri, unit tests)
 
 sys/src/               # Self-contained system library (no kernel deps)
   cpu.rs               # CpuBase struct, per-CPU access helpers

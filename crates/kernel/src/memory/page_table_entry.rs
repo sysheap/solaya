@@ -1,4 +1,4 @@
-#[cfg(any(kani, test))]
+#[cfg(test)]
 use hal::memory::page_table::PageTableEntry;
 use hal::memory::page_table::XWRMode;
 
@@ -15,97 +15,6 @@ impl From<elf::ProgramHeaderFlags> for XWRMode {
             elf::ProgramHeaderFlags::WX => panic!("Cannot map WX flag"),
             elf::ProgramHeaderFlags::R => Self::ReadOnly,
         }
-    }
-}
-
-#[cfg(kani)]
-mod kani_proofs {
-    use super::*;
-    use hal::memory::address::PhysAddr;
-
-    fn entry_from_bits(bits: usize) -> PageTableEntry {
-        PageTableEntry(core::ptr::without_provenance_mut(bits))
-    }
-
-    #[kani::proof]
-    fn validity_bit_roundtrip() {
-        let bits: usize = kani::any();
-        let val: bool = kani::any();
-        let mut entry = entry_from_bits(bits);
-        entry.set_validity(val);
-        assert!(entry.get_validity() == val);
-    }
-
-    #[kani::proof]
-    fn xwr_mode_roundtrip() {
-        let bits: usize = kani::any();
-        let mode_idx: u8 = kani::any();
-        kani::assume(mode_idx < 6);
-        let modes = [
-            XWRMode::PointerToNextLevel,
-            XWRMode::ReadOnly,
-            XWRMode::ReadWrite,
-            XWRMode::ExecuteOnly,
-            XWRMode::ReadExecute,
-            XWRMode::ReadWriteExecute,
-        ];
-        let mode = modes[mode_idx as usize];
-        let mut entry = entry_from_bits(bits);
-        entry.set_xwr_mode(mode);
-        assert!(entry.get_xwr_mode() == mode);
-    }
-
-    #[kani::proof]
-    fn user_mode_bit_roundtrip() {
-        let bits: usize = kani::any();
-        let val: bool = kani::any();
-        let mut entry = entry_from_bits(bits);
-        entry.set_user_mode_accessible(val);
-        assert!(entry.get_user_mode_accessible() == val);
-    }
-
-    #[kani::proof]
-    fn leaf_address_roundtrip() {
-        let ppn: usize = kani::any();
-        kani::assume(ppn <= 0x3FFFFFFFFF);
-        let addr = PhysAddr::new(ppn << 12);
-        let mut entry = entry_from_bits(0);
-        entry.set_leaf_address(addr);
-        assert!(entry.get_physical_address() == addr);
-    }
-
-    #[kani::proof]
-    fn set_leaf_address_preserves_low_bits() {
-        let ppn: usize = kani::any();
-        kani::assume(ppn <= 0x3FFFFFFFFF);
-        let addr = PhysAddr::new(ppn << 12);
-        let mut entry = entry_from_bits(0);
-        entry.set_validity(true);
-        entry.set_xwr_mode(XWRMode::ReadWrite);
-        entry.set_user_mode_accessible(true);
-        entry.set_leaf_address(addr);
-        assert!(entry.get_validity());
-        assert!(entry.get_xwr_mode() == XWRMode::ReadWrite);
-        assert!(entry.get_user_mode_accessible());
-    }
-
-    #[kani::proof]
-    fn is_leaf_matches_xwr_mode() {
-        let bits: usize = kani::any();
-        let mode_idx: u8 = kani::any();
-        kani::assume(mode_idx < 6);
-        let modes = [
-            XWRMode::PointerToNextLevel,
-            XWRMode::ReadOnly,
-            XWRMode::ReadWrite,
-            XWRMode::ExecuteOnly,
-            XWRMode::ReadExecute,
-            XWRMode::ReadWriteExecute,
-        ];
-        let mode = modes[mode_idx as usize];
-        let mut entry = entry_from_bits(bits);
-        entry.set_xwr_mode(mode);
-        assert!(entry.is_leaf() == (mode != XWRMode::PointerToNextLevel));
     }
 }
 

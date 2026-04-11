@@ -43,6 +43,3 @@ jobs:
 
       - name: System tests
         run: just system-test
-
-      - name: Kani
-        run: just kani

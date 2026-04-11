@@ -51,7 +51,7 @@ Quick reference to find detailed documentation. Each file covers a specific subs
 ```
 arch/src/          - Hardware abstraction layer (CSR, SBI, timer, trap causes)
   riscv64/         - Real RISC-V implementations (+ backtrace, linker symbols)
-  stub/            - No-op stubs for non-riscv64 targets (Kani, miri)
+  stub/            - No-op stubs for non-riscv64 targets (miri, unit tests)
 
 sys/src/           - Self-contained system library (no_std, no kernel deps)
   cpu.rs           - CpuBase struct, per-CPU access via sscratch

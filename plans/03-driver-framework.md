@@ -606,7 +606,7 @@ arch/src/
     cpu.rs            # CR/MSR access, IDT setup
     apic.rs           # APIC driver
     mod.rs
-  stub/               # existing (for Kani/miri)
+  stub/               # existing (for miri/tests)
 ```
 
 The key principle: **driver code must not contain `#[cfg(target_arch)]`**. Architecture differences should be hidden behind the `arch` crate and the interrupt controller trait. A VirtIO net driver should compile identically on RISC-V and x86.

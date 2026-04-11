@@ -9,7 +9,7 @@ The maintainer reviews all code via GitHub PRs. Claude Code is the primary "work
 - A `claude-code-review.yml` GitHub Actions workflow for PR code review
 - Hook files (doc-check, commit-reminder, question-reminder)
 - A `claude.yml` GitHub Action that triggers on `@claude` mentions in issues and PRs
-- CI pipeline (build, fmt, clippy, unit-test, miri, system-test, kani)
+- CI pipeline (build, fmt, clippy, unit-test, miri, system-test)
 - 12 documentation files in `doc/ai/` covering every subsystem
 
 The goal: maximize autonomous AI output while the maintainer retains architectural control via PR review. This plan addresses how to organize work, specify tasks, handle parallel agents, and learn from reviews.
@@ -20,7 +20,7 @@ The goal: maximize autonomous AI output while the maintainer retains architectur
 
 ### Option A: GitHub Issues Only
 
-Issues are the current approach. The 9 open issues range from one-liners ("Implement dynamic linking") to discussion prompts ("Decide if we should keep kani").
+Issues are the current approach. The 9 open issues range from one-liners ("Implement dynamic linking") to discussion prompts.
 
 **Pros:**
 - Standard tooling. `gh` CLI works. Claude Code Action already triggers on `@claude` mentions in issues.
@@ -193,7 +193,7 @@ Avoid deep dependency chains. Prefer independent tasks that can run in parallel.
       |
       v
 6. CI runs automatically (ci.yml)
-   - build, fmt, clippy, unit-test, miri, system-test, kani
+   - build, fmt, clippy, unit-test, miri, system-test
       |
       v
 7. Maintainer reviews PR on GitHub

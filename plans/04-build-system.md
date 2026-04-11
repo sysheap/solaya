@@ -6,9 +6,9 @@
 
 The current build system is a three-layer stack:
 
-1. **Nix flake** (`flake.nix`) -- provides the entire development environment: Rust nightly toolchain, RISC-V cross-compiler (GCC + binutils for riscv64-musl), QEMU, cargo-nextest, Kani, pwndbg, and pre-built userspace dependencies (musl libc, dash shell, Doom). Nix also cross-compiles musl and dash for RISC-V and symlinks them into the source tree via `shellHook`.
+1. **Nix flake** (`flake.nix`) -- provides the entire development environment: Rust nightly toolchain, RISC-V cross-compiler (GCC + binutils for riscv64-musl), QEMU, cargo-nextest, pwndbg, and pre-built userspace dependencies (musl libc, dash shell, Doom). Nix also cross-compiles musl and dash for RISC-V and symlinks them into the source tree via `shellHook`.
 
-2. **just** (`justfile`) -- ~30 recipes orchestrating the multi-stage build: build-coreutils, build-userspace, build-cargo, patch-symbols, run, test, clippy, miri, kani, debug, etc.
+2. **just** (`justfile`) -- ~30 recipes orchestrating the multi-stage build: build-coreutils, build-userspace, build-cargo, patch-symbols, run, test, clippy, miri, debug, etc.
 
 3. **Cargo workspace** -- 5 crates (kernel, arch, common, headers, userspace) in the main workspace, plus 3 standalone workspaces (system-tests, mcp-server, qemu-infra). The kernel uses `per-package-target` to set `default-target = "riscv64gc-unknown-none-elf"`, and userspace uses `forced-target = "riscv64gc-unknown-linux-musl"`.
 
@@ -30,7 +30,7 @@ Additional build-time machinery:
 ### Weaknesses
 
 - **Single architecture hardcoded everywhere**: riscv64 is baked into the justfile, `.cargo/config.toml`, the linker script path, qemu_wrapper.sh, and build.rs. Adding x86_64 requires touching all of these.
-- **Nix complexity**: The flake.nix is already 170 lines with custom overlays for musl debug symbols, a cross-compiled Doom build, and a custom Kani derivation. Few contributors will be comfortable modifying it.
+- **Nix complexity**: The flake.nix is already 170 lines with custom overlays for musl debug symbols and a cross-compiled Doom build. Few contributors will be comfortable modifying it.
 - **Scattered build logic**: Build steps span justfile (shell), build.rs (Rust), flake.nix (Nix), and qemu_wrapper.sh (bash). Understanding "what happens when I type `just build`" requires reading 4 files in 3 languages.
 - **No parameterization**: There is no `ARCH` variable. You cannot do `just build ARCH=x86_64`. The justfile has zero conditional logic.
 - **Symbol patching is fragile**: The post-build `objcopy --update-section` step to embed symbols is architecture-specific (uses riscv64 nm/objcopy) and would break for a second architecture.
@@ -170,7 +170,7 @@ arch/src/
     timer.rs          # rdtime, timer constants
     trap_cause.rs     # Interrupt/exception cause codes
   stub/
-    cpu.rs            # No-op stubs for Kani/miri/unit tests
+    cpu.rs            # No-op stubs for miri/unit tests
     sbi.rs
     timer.rs
     trap_cause.rs
@@ -194,7 +194,7 @@ arch/src/
     timer.rs          # APIC timer / TSC / PIT
     trap_cause.rs     # x86 exception vectors (0-31)
   stub/
-    (unchanged, for Kani/miri/tests)
+    (unchanged, for miri/tests)
 ```
 
 **Key design principle**: The `arch` crate exposes a uniform API. Each architecture module must export the same set of public functions and types. The kernel imports `arch::cpu::read_*`, `arch::timer::*`, etc. without knowing which architecture it is running on.
@@ -394,7 +394,7 @@ To enable: `qemu-system-x86_64 -enable-kvm -cpu host` (instead of software emula
 ### 5.1 Current State
 
 The current CI (`ci.yml`) runs on self-hosted runners with Nix:
-- Jobs: build, fmt, clippy, unit-test, miri, system-test, kani
+- Jobs: build, fmt, clippy, unit-test, miri, system-test
 - All jobs depend on `build` completing first
 - Uses `direnv export gha` to load the Nix environment
 - Concurrency group prevents parallel CI runs
@@ -409,10 +409,10 @@ This works but is fragile (self-hosted runners require maintenance) and not acce
                     +---+----+
                         |
           +-------------+-------------+
-          |             |             |
-     +----v----+  +-----v-----+  +---v---+
-     |   fmt   |  |  clippy   |  | kani  |
-     +---------+  +-----------+  +-------+
+          |             |
+     +----v----+  +-----v-----+
+     |   fmt   |  |  clippy   |
+     +---------+  +-----------+
           |             |
      +----v----+  +-----v-----+
      |  miri   |  | unit-test |
