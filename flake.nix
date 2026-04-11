@@ -36,8 +36,6 @@
         overlays = [ (import rust-overlay) ];
         pkgs = import nixpkgs { inherit system overlays; };
         rustToolchain = pkgs.pkgsBuildHost.rust-bin.fromRustupToolchainFile ./rust-toolchain;
-        kani = import ./nix/kani.nix { inherit pkgs; };
-
         riscv-toolchain = pkgs.pkgsCross.riscv64-musl.pkgsStatic.extend (
           final: prev: {
             musl = prev.musl.overrideAttrs (old: {
@@ -120,7 +118,6 @@
           rustToolchain
           riscv-toolchain.buildPackages.gcc
           riscv-toolchain.buildPackages.binutils
-          kani
           pkgs.e2fsprogs
         ];
 

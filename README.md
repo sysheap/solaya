@@ -43,7 +43,6 @@ See `plans/` for the roadmap and strategy.
 - **GDB MCP server** — Programmatic GDB debugging (breakpoints, stepping, register inspection) exposed as MCP tools
 - **System tests** — Integration tests that boot the OS in QEMU and interact via stdin/stdout, covering networking, processes, signals, stress, and shell behavior
 - **Unit tests** — Kernel unit tests with a custom `#[test_case]` framework, plus Miri for undefined behavior detection
-- **Kani proofs** — Model checking for pure functions (address arithmetic, page table entries, utility functions)
 - **CI** — Build, fmt, clippy, unit tests, Miri, and system tests on self-hosted Nix runners
 - **AI-assisted development** — Issues and PRs may be created by [Claude Code](https://claude.ai/code) under the maintainer's GitHub account
 

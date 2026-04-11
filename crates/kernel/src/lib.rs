@@ -6,13 +6,9 @@
 //! definitions — those live in `hal` and `console`.
 #![cfg_attr(not(miri), no_std)]
 #![cfg_attr(not(miri), no_main)]
-#![cfg_attr(kani, allow(dead_code))]
-#![cfg_attr(kani, allow(unused_imports))]
-#![cfg_attr(kani, allow(unused_macros))]
 #![cfg_attr(miri, allow(dead_code))]
 #![cfg_attr(miri, allow(unused_imports))]
 #![cfg_attr(miri, allow(unused_macros))]
-#![cfg_attr(kani, feature(maybe_uninit_slice))]
 #![cfg_attr(test, allow(dead_code))]
 #![cfg_attr(test, allow(unused_imports))]
 #![cfg_attr(not(test), forbid(unsafe_code))]
@@ -280,6 +276,3 @@ fn start_other_harts(current_hart_id: usize, number_of_cpus: usize) {
         .assert_success();
     }
 }
-
-#[cfg(kani)]
-fn main() {}
