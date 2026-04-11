@@ -13,7 +13,7 @@ mcp-server/target/
 /.direnv
 /.gdb_sources
 /musl
-/headers/musl_headers
+/crates/headers/musl_headers
 
 __pycache__/
 disk.img
