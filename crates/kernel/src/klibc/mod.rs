@@ -32,13 +32,13 @@ macro_rules! mmio_struct {
             #[allow(non_camel_case_types, dead_code)]
             pub trait ${concat($name, Fields)} {
                 $(
-                    fn $field_name(&self) -> $crate::klibc::mmio::MMIO<$field_type>;
+                    fn $field_name(&self) -> ::hal::mmio::MMIO<$field_type>;
                 )*
             }
 
-            impl ${concat($name, Fields)} for $crate::klibc::mmio::MMIO<$name> {
+            impl ${concat($name, Fields)} for ::hal::mmio::MMIO<$name> {
                 $(
-                    fn $field_name(&self) -> $crate::klibc::mmio::MMIO<$field_type> {
+                    fn $field_name(&self) -> ::hal::mmio::MMIO<$field_type> {
                         self.new_type_with_offset(core::mem::offset_of!($name, $field_name))
                     }
                 )*

@@ -1,3 +1,9 @@
+//! The OS. Processes, memory management integration, filesystems, networking,
+//! device drivers, syscalls, and trap handling.
+//!
+//! Layering invariant: may depend on `console`, `mm`, `hal`, `klib`, `abi`,
+//! `headers`. May not contain raw CSR access, raw MMIO, or log-macro
+//! definitions — those live in `hal` and `console`.
 #![cfg_attr(not(miri), no_std)]
 #![cfg_attr(not(miri), no_main)]
 #![cfg_attr(kani, allow(dead_code))]

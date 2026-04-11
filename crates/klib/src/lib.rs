@@ -1,9 +1,7 @@
 //! Hardware-free Rust utilities shared across the kernel-side crates.
 //!
-//! Layering invariant: this crate must not depend on anything that touches
-//! hardware (no CSR, no MMIO, no assembly) and must compile on the host
-//! (`cargo test` works without cross-compiling). May depend on `common`
-//! for shared ABI types.
+//! Layering invariant: may depend on `abi`. May not touch CSRs, MMIO,
+//! assembly, or statics that represent hardware state.
 
 #![cfg_attr(not(any(miri, test)), no_std)]
 #![feature(ptr_mask)]

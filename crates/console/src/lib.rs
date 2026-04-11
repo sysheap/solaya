@@ -1,7 +1,7 @@
 //! Console I/O: the UART driver, the single `CONSOLE_UART` static, and the
 //! `info!`/`warn!`/`debug!`/`print!`/`println!` logging macros.
 //!
-//! Layering invariant: may depend on `hal`, `klib`, `common`. Owns the
+//! Layering invariant: may depend on `hal`, `klib`, `abi`. Owns the
 //! one place where kernel output becomes bytes on the wire. Callers must
 //! not define a second UART or a second logging macro anywhere in the
 //! workspace.

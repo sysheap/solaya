@@ -1,63 +1,11 @@
-use core::ops::{BitAnd, Rem, Sub};
-#[cfg(test)]
-use core::ops::{BitAndAssign, BitOrAssign, Not, Shl, Shr};
-
-use crate::memory::PAGE_SIZE;
-
-const _: () = assert!(core::mem::size_of::<usize>() == core::mem::size_of::<u64>());
-
-/// Lossless `u64` → `usize` conversion. Clippy warns about `as usize` on u64
-/// because it could truncate on 32-bit targets. The compile-time assert above
-/// guarantees we are on a 64-bit platform, so this is safe.
-#[allow(clippy::wrong_self_convention)]
-pub trait UsizeExt {
-    fn as_usize(self) -> usize;
-}
-
-impl UsizeExt for u64 {
-    fn as_usize(self) -> usize {
-        self as usize
-    }
-}
-
-pub fn wrapping_add_signed(base: usize, offset: i64) -> usize {
-    if offset >= 0 {
-        base.wrapping_add(offset.unsigned_abs().as_usize())
-    } else {
-        base.wrapping_sub(offset.unsigned_abs().as_usize())
-    }
-}
-
-pub fn align_up_page_size(value: usize) -> usize {
-    align_up(value, PAGE_SIZE)
-}
-
-pub const fn align_up(value: usize, alignment: usize) -> usize {
-    let remainder = value % alignment;
-    if remainder == 0 {
-        value
-    } else {
-        value + alignment - remainder
-    }
-}
+pub use klib::util::{
+    InBytes, UsizeExt, align_up, as_byte_slice, copy_slice, is_aligned, is_power_of_2_or_zero,
+    ref_from_bytes, wrapping_add_signed,
+};
+pub use mm::util::*;
 
 #[cfg(miri)]
-pub fn align_down(value: usize, alignment: usize) -> usize {
-    assert!(
-        alignment.is_power_of_two(),
-        "alignment must be a power of two"
-    );
-    value & !(alignment - 1)
-}
-
-pub fn copy_slice<T: Copy>(src: &[T], dst: &mut [T]) {
-    assert!(dst.len() >= src.len());
-    dst[..src.len()].copy_from_slice(src);
-}
-
-pub const fn minimum_amount_of_pages(value: usize) -> usize {
-    align_up(value, PAGE_SIZE) / PAGE_SIZE
-}
+pub use klib::util::align_down;
 
 pub trait BufferExtension {
     fn interpret_as<T>(&self) -> &T;
@@ -66,7 +14,7 @@ pub trait BufferExtension {
 
 impl BufferExtension for [u8] {
     fn interpret_as<T>(&self) -> &T {
-        klib::util::ref_from_bytes(self)
+        ref_from_bytes(self)
     }
 
     fn split_as<T>(&self) -> (&T, &[u8]) {
@@ -77,38 +25,7 @@ impl BufferExtension for [u8] {
 
 pub trait ByteInterpretable {
     fn as_slice(&self) -> &[u8] {
-        klib::util::as_byte_slice(self)
-    }
-}
-
-pub fn is_power_of_2_or_zero<DataType>(value: DataType) -> bool
-where
-    DataType:
-        BitAnd<Output = DataType> + PartialEq<DataType> + From<u8> + Sub<Output = DataType> + Copy,
-{
-    value & (value - DataType::from(1)) == DataType::from(0)
-}
-
-pub fn is_aligned<DataType>(value: DataType, alignment: DataType) -> bool
-where
-    DataType: Rem<DataType, Output = DataType> + PartialEq<DataType> + From<u8>,
-{
-    value % alignment == DataType::from(0)
-}
-
-pub trait InBytes {
-    fn in_bytes(&self) -> usize;
-}
-
-impl<T> InBytes for alloc::vec::Vec<T> {
-    fn in_bytes(&self) -> usize {
-        self.len() * core::mem::size_of::<T>()
-    }
-}
-
-impl<T, const N: usize> InBytes for [T; N] {
-    fn in_bytes(&self) -> usize {
-        N * core::mem::size_of::<T>()
+        as_byte_slice(self)
     }
 }
 
@@ -116,7 +33,6 @@ impl<T, const N: usize> InBytes for [T; N] {
 mod kani_proofs {
     use super::*;
     use crate::memory::PAGE_SIZE;
-    use klib::util::{clear_bit, get_multiple_bits, set_bit, set_multiple_bits};
 
     #[kani::proof]
     fn align_up_is_at_least_input() {
@@ -211,6 +127,7 @@ mod kani_proofs {
 #[cfg(test)]
 mod tests {
     use crate::memory::PAGE_SIZE;
+    use klib::util::BufferExtension;
 
     #[test_case]
     fn align_up() {
@@ -236,8 +153,6 @@ mod tests {
 
     #[test_case]
     fn split_as_parses_header_and_remainder() {
-        use super::BufferExtension;
-
         #[repr(C)]
         struct Header {
             tag: u16,
@@ -247,7 +162,6 @@ mod tests {
 
         let payload = [0xAA, 0xBB, 0xCC];
         let total_len = core::mem::size_of::<Header>() + payload.len();
-        // Use repr(C, align(2)) to guarantee Header-compatible alignment without unsafe.
         #[repr(C, align(2))]
         struct AlignedBuf([u8; 16]);
         let mut storage = AlignedBuf([0u8; 16]);
