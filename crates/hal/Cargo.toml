@@ -11,6 +11,7 @@ riscv64 = []
 
 [dependencies]
 common = { path = "../common", default-features = false }
+headers = { path = "../headers" }
 klib = { path = "../klib" }
 
 [lib]

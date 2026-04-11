@@ -10,8 +10,6 @@
 
 extern crate alloc;
 
-#[cfg(not(kani))]
-mod asm;
 pub mod klibc;
 pub mod memory;
 
