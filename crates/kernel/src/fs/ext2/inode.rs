@@ -1,6 +1,7 @@
 use alloc::{vec, vec::Vec};
+use driver_api::BlockDevice;
 
-use crate::{drivers::virtio::block, klibc::util::BufferExtension};
+use crate::klibc::util::BufferExtension;
 
 use super::structures::{
     EXT2_DIND_BLOCK, EXT2_IND_BLOCK, EXT2_NDIR_BLOCKS, EXT2_TIND_BLOCK, Ext2BlockGroupDescriptor,
@@ -8,7 +9,7 @@ use super::structures::{
 };
 
 pub async fn read_inode(
-    dev: usize,
+    dev: &dyn BlockDevice,
     sb: &Ext2Superblock,
     bgds: &[Ext2BlockGroupDescriptor],
     inode_number: u32,
@@ -21,7 +22,8 @@ pub async fn read_inode(
 
     let offset = bgds[group].bg_inode_table as usize * block_size + index * inode_size;
     let mut buf = vec![0u8; inode_size];
-    let n = block::read(dev, offset, &mut buf)
+    let n = dev
+        .read(offset as u64, &mut buf)
         .await
         .expect("inode read must succeed");
     assert!(n == inode_size, "short inode read");
@@ -29,7 +31,11 @@ pub async fn read_inode(
     klib::util::read_from_bytes(&buf)
 }
 
-pub async fn read_inode_data(dev: usize, sb: &Ext2Superblock, inode: &Ext2Inode) -> Vec<u8> {
+pub async fn read_inode_data(
+    dev: &dyn BlockDevice,
+    sb: &Ext2Superblock,
+    inode: &Ext2Inode,
+) -> Vec<u8> {
     let file_size = inode.i_size as usize;
     if file_size == 0 {
         return Vec::new();
@@ -94,7 +100,7 @@ pub async fn read_inode_data(dev: usize, sb: &Ext2Superblock, inode: &Ext2Inode)
 }
 
 async fn read_block_data(
-    dev: usize,
+    dev: &dyn BlockDevice,
     block_num: u32,
     block_size: usize,
     remaining: usize,
@@ -104,16 +110,18 @@ async fn read_block_data(
     let to_read = remaining.min(block_size);
     let start = data.len();
     data.resize(start + to_read, 0);
-    let n = block::read(dev, offset, &mut data[start..start + to_read])
+    let n = dev
+        .read(offset as u64, &mut data[start..start + to_read])
         .await
         .expect("block read must succeed");
     assert!(n == to_read, "short block read");
 }
 
-async fn read_block_pointers(dev: usize, block_num: u32, block_size: usize) -> Vec<u32> {
+async fn read_block_pointers(dev: &dyn BlockDevice, block_num: u32, block_size: usize) -> Vec<u32> {
     let mut buf = vec![0u8; block_size];
     let offset = block_num as usize * block_size;
-    let n = block::read(dev, offset, &mut buf)
+    let n = dev
+        .read(offset as u64, &mut buf)
         .await
         .expect("indirect block read must succeed");
     assert!(n == block_size, "short indirect block read");
@@ -127,7 +135,7 @@ async fn read_block_pointers(dev: usize, block_num: u32, block_size: usize) -> V
 }
 
 async fn read_indirect(
-    dev: usize,
+    dev: &dyn BlockDevice,
     indirect_block: u32,
     block_size: usize,
     file_size: usize,
@@ -144,7 +152,7 @@ async fn read_indirect(
 }
 
 async fn read_doubly_indirect(
-    dev: usize,
+    dev: &dyn BlockDevice,
     dind_block: u32,
     block_size: usize,
     file_size: usize,
@@ -160,7 +168,7 @@ async fn read_doubly_indirect(
 }
 
 async fn read_triply_indirect(
-    dev: usize,
+    dev: &dyn BlockDevice,
     tind_block: u32,
     block_size: usize,
     file_size: usize,
