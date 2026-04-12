@@ -612,3 +612,27 @@ Do not paper over disagreement.
     when host-target builds started running from `driver-api`'s tests.
     Minor docs added to `unsafe fn`s; this is expected for any crate that
     gets compiled on the host going forward.
+- v2 (post-Phase-2): `trait NetDevice` + the two network driver
+  migrations landed. Adjustments to the design:
+  - `MacAddress` moved to `driver-api`. The `NetDevice::mac()` method
+    needs to name the type, and duplicating a `[u8; 6]` newtype in kernel
+    and driver-api would break trait-object flow between the two. Kernel's
+    `net::mac::MacAddress` is now a thin re-export. All existing use
+    sites keep compiling.
+  - `NetDevice::send` is **infallible** (`fn send(&self, Vec<u8>)`), not
+    `Result`. Matches the current driver surface exactly — both virtio-net
+    and DWMAC panic on backpressure today. Revisit in Phase 6 when
+    `BusContext` gives drivers a clean way to report a full queue.
+  - `NetDevice::send`/`receive` take `&self` (the design called for it).
+    Drivers naturally need `&mut` to tick ring indices, so each migrates
+    via a `VirtioNetHandle` / `DwmacHandle` wrapper that holds the real
+    device behind a `Spinlock`. Same pattern as `BlockDeviceHandle` in
+    Phase 1. Handles move to `crates/drivers/` in Phase 7.
+  - `net::assign_network_device` is gone; `NetDeviceRegistry` is the
+    source of truth and `net::primary_device()` reads from it. The four
+    `net::has_network_device()` call sites (syscalls::net_ops,
+    syscalls::ioctl_ops) were left alone — `has_network_device()` now
+    just checks the registry length.
+  - MTU is hard-coded to 1500 in both handles. Neither driver negotiates
+    a larger MTU with the device today, but the trait method is in
+    place so the negotiated value can surface when we add it.
