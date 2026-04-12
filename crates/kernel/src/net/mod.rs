@@ -12,7 +12,7 @@ use driver_api::NetDevice;
 use crate::{
     debug,
     drivers::NetDeviceRegistry,
-    klibc::{MMIO, Spinlock, runtime_initialized::RuntimeInitializedData},
+    klibc::Spinlock,
     net::{ipv4::IpV4Header, udp::UdpHeader},
 };
 
@@ -55,19 +55,13 @@ fn primary_device() -> Option<Arc<dyn NetDevice>> {
     NetDeviceRegistry::global().get(0)
 }
 
-static ISR_STATUS: RuntimeInitializedData<MMIO<u32>> = RuntimeInitializedData::new();
 static NETWORK_INTERRUPT_COUNTER: AtomicU64 = AtomicU64::new(0);
 static NETWORK_INTERRUPT_WAKERS: Spinlock<Vec<Waker>> = Spinlock::new(Vec::new());
 
-pub fn init_isr_status(isr: MMIO<u32>) {
-    ISR_STATUS.initialize(isr);
-}
-
-pub fn on_network_interrupt() {
-    // Read + write-back: VirtIO is read-to-clear, DWMAC4 is write-1-to-clear.
-    let mut isr_reg = MMIO::<u32>::new(ISR_STATUS.addr());
-    let isr = isr_reg.read();
-    isr_reg.write(isr);
+/// Called by per-driver IRQ handlers after they've acknowledged the device's
+/// own ISR register. Bumps the RX wake counter and drains pending wakers so
+/// `network_rx_task` can run.
+pub fn notify_packet_arrival() {
     NETWORK_INTERRUPT_COUNTER.fetch_add(1, Ordering::SeqCst);
     let wakers: Vec<Waker> = NETWORK_INTERRUPT_WAKERS.lock().drain(..).collect();
     for waker in wakers {

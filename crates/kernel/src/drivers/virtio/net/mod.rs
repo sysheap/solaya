@@ -389,16 +389,34 @@ pub struct VirtioNetHandle {
     inner: Spinlock<NetworkDevice>,
     mac: MacAddress,
     name: String,
+    isr_status: MMIO<u32>,
+    // Filled in after construction (the IrqRegistration needs the Arc to the
+    // handle, which can only exist after the handle itself).
+    irq: Spinlock<Option<crate::interrupts::plic::IrqRegistration>>,
 }
 
 impl VirtioNetHandle {
-    pub fn new(device: NetworkDevice) -> Self {
+    pub fn new(device: NetworkDevice, isr_status: MMIO<u32>) -> Self {
         let mac = device.mac_address;
         Self {
             inner: Spinlock::new(device),
             mac,
             name: String::from("eth0"),
+            isr_status,
+            irq: Spinlock::new(None),
         }
+    }
+
+    pub fn set_irq_registration(&self, registration: crate::interrupts::plic::IrqRegistration) {
+        *self.irq.lock() = Some(registration);
+    }
+}
+
+impl driver_api::IrqHandler for VirtioNetHandle {
+    fn handle(&self) {
+        // VirtIO ISR status is read-to-clear.
+        let _status = self.isr_status.read();
+        crate::net::notify_packet_arrival();
     }
 }
 

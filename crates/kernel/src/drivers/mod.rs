@@ -38,11 +38,15 @@ fn init_network_device(pci_devices: &mut Vec<PCIDevice>) {
         let plic_irq = device.plic_interrupt_id();
         let init =
             virtio::net::NetworkDevice::initialize(device).expect("Initialization must work.");
-        let handle: Arc<dyn driver_api::NetDevice> =
-            Arc::new(virtio::net::VirtioNetHandle::new(init.device));
-        NetDeviceRegistry::global().register(handle);
-        net::init_isr_status(init.interrupt_status);
-        plic::register_interrupt(plic_irq, net::on_network_interrupt);
+        let handle = Arc::new(virtio::net::VirtioNetHandle::new(
+            init.device,
+            init.interrupt_status,
+        ));
+        let irq_handler: Arc<dyn driver_api::IrqHandler> = handle.clone();
+        let registration = plic::register(plic_irq, irq_handler);
+        handle.set_irq_registration(registration);
+        let net_device: Arc<dyn driver_api::NetDevice> = handle;
+        NetDeviceRegistry::global().register(net_device);
         kernel_tasks::spawn(net::network_rx_task());
     }
 }
@@ -56,17 +60,18 @@ fn init_block_devices(pci_devices: &mut Vec<PCIDevice>) {
         let plic_irq = device.plic_interrupt_id();
         let init = virtio::block::BlockDevice::initialize(device)
             .expect("Block device initialization must work.");
-        virtio::block::register_isr_status(init.interrupt_status);
+        let irq_handler: Arc<dyn driver_api::IrqHandler> =
+            Arc::new(virtio::block::BlockIrqHandler::new(init.interrupt_status));
+        let irq = plic::register(plic_irq, irq_handler);
         let idx = virtio::block::assign_block_device(init.device);
         let handle: Arc<dyn driver_api::BlockDevice> =
-            Arc::new(virtio::block::BlockDeviceHandle::new(idx));
+            Arc::new(virtio::block::BlockDeviceHandle::new(idx, irq));
         let registered_idx = BlockDeviceRegistry::global().register(handle.clone());
         assert!(
             registered_idx == idx,
             "registry index must match virtio BLOCK_DEVICES index during Phase 1"
         );
         fs::devfs::register_block_device(handle);
-        plic::register_interrupt(plic_irq, virtio::block::on_block_interrupt);
     }
 
     if BlockDeviceRegistry::global().len() > 0
@@ -184,13 +189,14 @@ pub fn init_dwmac_devices() {
         let Some(device) = dwmac::DwmacDevice::new(reg.address, mac, phy_addr) else {
             continue;
         };
-        let isr_status = device.isr_status_mmio();
 
         if !net::has_network_device() {
-            let handle: Arc<dyn driver_api::NetDevice> = Arc::new(dwmac::DwmacHandle::new(device));
-            NetDeviceRegistry::global().register(handle);
-            net::init_isr_status(isr_status);
-            plic::register_interrupt(plic_irq, net::on_network_interrupt);
+            let handle = Arc::new(dwmac::DwmacHandle::new(device));
+            let irq_handler: Arc<dyn driver_api::IrqHandler> = handle.clone();
+            let registration = plic::register(plic_irq, irq_handler);
+            handle.set_irq_registration(registration);
+            let net_device: Arc<dyn driver_api::NetDevice> = handle;
+            NetDeviceRegistry::global().register(net_device);
             kernel_tasks::spawn(net::network_rx_task());
             info!("DWMAC: GMAC{} registered as network device", gmac_index);
         }
@@ -233,12 +239,15 @@ fn init_input_device(pci_devices: &mut Vec<PCIDevice>) {
         let plic_irq = device.plic_interrupt_id();
         let init = virtio::input::InputDevice::initialize(device)
             .expect("Input device initialization must work.");
-        virtio::input::init_isr_status(init.interrupt_status);
-        let handle = Arc::new(virtio::input::VirtioInputHandle::new(init.device));
-        virtio::input::store_handle(handle.clone());
+        let handle = Arc::new(virtio::input::VirtioInputHandle::new(
+            init.device,
+            init.interrupt_status,
+        ));
+        let irq_handler: Arc<dyn driver_api::IrqHandler> = handle.clone();
+        let registration = plic::register(plic_irq, irq_handler);
+        handle.set_irq_registration(registration);
         let trait_handle: Arc<dyn driver_api::InputDevice> = handle;
         InputDeviceRegistry::global().register(trait_handle.clone());
         fs::devfs::register_input_device(trait_handle);
-        plic::register_interrupt(plic_irq, virtio::input::on_input_interrupt);
     }
 }
