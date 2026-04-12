@@ -25,8 +25,7 @@ just deadlock-hunt            # Run system tests in loop with GDB enabled
 ## Project Structure
 
 ```
-boot/             # Entry point wrapper (#[no_mangle] fns, calls into kernel)
-kernel/           # Main kernel logic (RISC-V 64-bit, no_std, #![forbid(unsafe_code)])
+boot/              # Entry point wrapper (#[no_mangle] fns, calls into `solaya`)
 crates/abi/        # Shared no_std ABI types (was "common")
 crates/headers/    # Linux/musl UAPI bindgen bindings
 crates/klib/       # Hardware-free utilities (array_vec, runtime_initialized, util, ...)
@@ -36,13 +35,17 @@ crates/console/    # UART driver + log macros
 crates/driver-api/ # Trait-only driver API (Block/Net/Char/Display/Input/Rng/IrqHandler/DmaBuffer/BusContext)
 crates/drivers/    # Concrete drivers (virtio/*, dwmac, bochs). Never depends on `solaya`.
 crates/kernel/     # Main kernel logic. Crate name is `solaya`. #![forbid(unsafe_code)].
-boot/              # Entry point wrapper (calls into `solaya`)
 userspace/         # Userspace programs (musl libc)
 system-tests/      # Integration tests (run on x86, test via QEMU)
 qemu-infra/        # Shared QEMU communication library (used by system-tests + mcp-server)
 mcp-server/        # MCP server for AI agent interaction with QEMU
+gdb_mcp_server/    # Python MCP server exposing GDB as tools (pygdbmi + FastMCP)
 doc/ai/            # Detailed AI documentation (see OVERVIEW.md, DRIVER_ARCHITECTURE.md)
 ```
+
+**Crate dependency order** (lower layers must not depend on higher ones):
+`abi` → `klib` → `hal` → `mm` → `console` → `driver-api` → `drivers` → `kernel` (`solaya`) → `boot`.
+`headers` is leaf-only (bindgen output, depended on by `abi` and `kernel`).
 
 ## Key Kernel Subsystems
 
@@ -67,7 +70,7 @@ doc/ai/            # Detailed AI documentation (see OVERVIEW.md, DRIVER_ARCHITEC
 | crates/kernel/src/drivers/ | Thin orchestrator: PCI/DT enumeration, typed registries. No policy. |
 | crates/kernel/src/init/ | Policy layer: mount ext2, spawn network_rx_task |
 | crates/kernel/src/pci/ | PCI enumeration + PciBusContext |
-| crates/kernel/src/device_tree.rs | Device-tree parser + DtBusContext |
+| crates/kernel/src/device_tree/ | Device-tree parser + DtBusContext |
 | crates/kernel/src/platform/ | Emergency reset (JH7110 syscon, SBI fallback) |
 | crates/kernel/src/io/ | UART extensions, TtyDevice |
 
@@ -88,7 +91,7 @@ const LOG_FOLLOWING_MODULES: &[&str] = &["kernel::processes::scheduler"];
 ```
 
 ### Syscall Tracer
-Edit `kernel/src/syscalls/trace_config.rs` to add process names:
+Edit `crates/kernel/src/syscalls/trace_config.rs` to add process names:
 ```rust
 pub const TRACED_PROCESSES: &[&str] = &["prog2"];
 ```
@@ -149,45 +152,30 @@ Kernel unit tests use `#[test_case]` macro (custom test framework).
 
 ## Key Files Quick Reference
 
+Entry points and non-obvious locations. For directory-level reference use **Key Kernel Subsystems** above, or `indxr` `lookup_symbol` / `search_relevant` for symbols.
+
 | Purpose | File |
 |---------|------|
 | Boot entry points | boot/src/main.rs |
 | Kernel init | crates/kernel/src/lib.rs |
-| CPU struct (base) | crates/hal/src/cpu.rs |
+| CPU struct (base) | crates/hal/src/per_cpu.rs |
 | CPU struct (full) | crates/kernel/src/cpu.rs |
 | CSR access | crates/hal/src/riscv64/cpu.rs |
 | SBI calls | crates/hal/src/riscv64/sbi/ |
 | Assembly (boot, trap) | crates/hal/src/riscv64/asm/ |
 | Syscall dispatch | crates/kernel/src/syscalls/linux.rs (thin trait methods) |
 | Syscall impls | crates/kernel/src/syscalls/*_ops.rs |
-| Process struct | crates/kernel/src/processes/process.rs |
-| Scheduler | crates/kernel/src/processes/scheduler.rs |
-| Page table types | crates/hal/src/memory/page_table.rs |
-| Page table mapping | crates/kernel/src/memory/page_tables.rs |
-| Address types | crates/hal/src/memory/address.rs, crates/kernel/src/pci/address.rs |
-| Page allocator | crates/mm/src/page_allocator.rs |
-| Heap allocator | crates/mm/src/heap.rs |
-| Trap handler | crates/kernel/src/interrupts/trap.rs |
-| Driver API traits | crates/driver-api/src/lib.rs (+ bus.rs, dma.rs) |
-| Driver enumeration | crates/kernel/src/drivers/mod.rs |
-| Driver registries | crates/kernel/src/drivers/registry.rs |
+| Syscall tracer config | crates/kernel/src/syscalls/trace_config.rs |
 | Policy layer (mount/spawn) | crates/kernel/src/init/mod.rs |
-| VirtIO drivers | crates/drivers/src/virtio/ |
-| DWMAC driver | crates/drivers/src/dwmac/ |
-| MMIO type | crates/hal/src/mmio.rs |
-| Spinlock | crates/hal/src/spinlock.rs |
-| ValidatedPtr | crates/hal/src/validated_ptr.rs |
-| Logging | crates/console/src/ |
+| Driver API traits | crates/driver-api/src/lib.rs (+ bus.rs, dma.rs) |
 | Log config | crates/console/src/logging/configuration.rs |
 | QEMU infra | qemu-infra/src/qemu.rs |
 | MCP server | mcp-server/src/server.rs |
-| Signals | crates/kernel/src/processes/signal.rs |
-| Syscall tracer config | crates/kernel/src/syscalls/trace_config.rs |
 
 ## Detailed Documentation
 
 See `doc/ai/OVERVIEW.md` for comprehensive subsystem documentation including:
-- Per-CPU struct architecture (`kernel/src/cpu.rs`) for multi-core support
+- Per-CPU struct architecture (`crates/kernel/src/cpu.rs`) for multi-core support
 - Async syscall model
 - Memory layout and page tables
 
