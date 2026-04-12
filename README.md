@@ -97,7 +97,8 @@ sudo apt-get install -y --no-install-recommends \
     texinfo gawk \
     pkg-config \
     rsync \
-    qemu-system-misc
+    e2fsprogs \
+    qemu-system-misc qemu-system-data
 ```
 
 **Fedora.**  Same tools, Fedora package names:
@@ -113,11 +114,20 @@ sudo dnf install -y \
     texinfo gawk \
     pkgconf-pkg-config \
     rsync \
-    qemu-system-riscv
+    e2fsprogs \
+    qemu-system-riscv seavgabios-bin
 ```
 
-Optional, but recommended for running the system tests:
-`cargo install cargo-nextest --locked`.
+`e2fsprogs` is needed by the ext2 system tests (they shell out to
+`mkfs.ext2`).  The `qemu-system-data` (Ubuntu) / `seavgabios-bin`
+(Fedora) package ships `vgabios-bochs-display.bin`, which the
+framebuffer + doom system tests need for `-device bochs-display`.
+
+**cargo-nextest.**  Required for running the system tests:
+
+```bash
+cargo install cargo-nextest --locked
+```
 
 ## What Can I Do?
 
