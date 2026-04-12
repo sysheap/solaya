@@ -715,7 +715,7 @@ pub struct DwmacHandle {
     mac: MacAddress,
     name: alloc::string::String,
     isr_status: MMIO<u32>,
-    irq: crate::klibc::Spinlock<Option<crate::interrupts::plic::IrqRegistration>>,
+    irq: crate::klibc::Spinlock<Option<driver_api::IrqRegistration>>,
 }
 
 impl DwmacHandle {
@@ -731,7 +731,7 @@ impl DwmacHandle {
         }
     }
 
-    pub fn set_irq_registration(&self, registration: crate::interrupts::plic::IrqRegistration) {
+    pub fn set_irq_registration(&self, registration: driver_api::IrqRegistration) {
         *self.irq.lock() = Some(registration);
     }
 }

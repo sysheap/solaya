@@ -392,7 +392,7 @@ pub struct VirtioNetHandle {
     isr_status: MMIO<u32>,
     // Filled in after construction (the IrqRegistration needs the Arc to the
     // handle, which can only exist after the handle itself).
-    irq: Spinlock<Option<crate::interrupts::plic::IrqRegistration>>,
+    irq: Spinlock<Option<driver_api::IrqRegistration>>,
 }
 
 impl VirtioNetHandle {
@@ -407,7 +407,7 @@ impl VirtioNetHandle {
         }
     }
 
-    pub fn set_irq_registration(&self, registration: crate::interrupts::plic::IrqRegistration) {
+    pub fn set_irq_registration(&self, registration: driver_api::IrqRegistration) {
         *self.irq.lock() = Some(registration);
     }
 }

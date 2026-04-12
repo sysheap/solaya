@@ -4,39 +4,32 @@ use crate::{
 };
 use alloc::{sync::Arc, vec::Vec};
 use core::sync::atomic::{AtomicU64, Ordering};
-use driver_api::IrqHandler;
+use driver_api::{IrqController, IrqHandler, IrqRegistration};
 use hal::CpuId;
-
-/// Opaque slot identifier used to unregister an IRQ handler. A monotonic
-/// counter instead of a `Vec` index — `swap_remove` would otherwise
-/// invalidate other tokens.
-#[derive(Clone, Copy, PartialEq, Eq)]
-struct SlotId(u64);
 
 struct InterruptHandler {
     irq: u32,
-    slot: SlotId,
+    slot: u64,
     handler: Arc<dyn IrqHandler>,
 }
 
 static INTERRUPT_HANDLERS: Spinlock<Vec<InterruptHandler>> = Spinlock::new(Vec::new());
 static NEXT_SLOT_ID: AtomicU64 = AtomicU64::new(0);
 
-/// RAII guard returned by [`register`]. Dropping it disables the IRQ at the
-/// PLIC (when the last handler on that line goes away) and removes the
-/// handler entry.
-///
-/// Drivers store the `IrqRegistration` inside their handle struct so
-/// interrupt teardown is automatic on `Drop`.
-#[must_use = "dropping this immediately unregisters the IRQ handler"]
-pub struct IrqRegistration {
-    slot: SlotId,
+/// Zero-sized `IrqController` implementation that routes `unregister` calls
+/// back into this module's static state. Held as `Arc<dyn IrqController>`
+/// inside every `IrqRegistration` the PLIC hands out.
+struct PlicController;
+
+impl IrqController for PlicController {
+    fn unregister(&self, slot: u64) {
+        unregister(slot);
+    }
 }
 
-impl Drop for IrqRegistration {
-    fn drop(&mut self) {
-        unregister(self.slot);
-    }
+fn controller() -> Arc<dyn IrqController> {
+    // A ZST `Arc` is essentially free to construct; no need to cache it.
+    Arc::new(PlicController)
 }
 
 pub struct Plic {
@@ -243,14 +236,14 @@ pub fn register(irq: u32, handler: Arc<dyn IrqHandler>) -> IrqRegistration {
     plic.enable(irq);
     plic.set_priority(irq, 1);
     drop(plic);
-    let slot = SlotId(NEXT_SLOT_ID.fetch_add(1, Ordering::Relaxed));
+    let slot = NEXT_SLOT_ID.fetch_add(1, Ordering::Relaxed);
     INTERRUPT_HANDLERS
         .lock()
         .push(InterruptHandler { irq, slot, handler });
-    IrqRegistration { slot }
+    IrqRegistration::new(controller(), slot)
 }
 
-fn unregister(slot: SlotId) {
+fn unregister(slot: u64) {
     let removed = {
         let mut handlers = INTERRUPT_HANDLERS.lock();
         let Some(pos) = handlers.iter().position(|h| h.slot == slot) else {
