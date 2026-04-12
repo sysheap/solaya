@@ -19,7 +19,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!("cargo:rustc-link-arg=-Tcrates/kernel/{arch}.ld");
 
     if is_miri_execution() {
-        // Under Miri, the file already exists from a prior `just build`.
+        // Under Miri, the file already exists from a prior build.
         return Ok(());
     }
 
