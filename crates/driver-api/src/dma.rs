@@ -11,7 +11,7 @@
 //! page allocator. `Drop` releases the pages automatically. `driver-api` keeps
 //! `#![forbid(unsafe_code)]` because all `unsafe` lives inside `mm`.
 
-use klib::util::Zeroable;
+use klib::util::AnyBitPattern;
 use mm::page::{Pages, PagesAsSlice, PinnedHeapPages};
 
 use crate::BusError;
@@ -105,15 +105,18 @@ impl DmaBuffer {
     /// The allocation is zero-initialized and page-aligned (alignments up to
     /// 4 KiB are supported). Callers use this to project virtio ring headers,
     /// DWMAC descriptor rings, etc. onto DMA memory without a raw cast in the
-    /// kernel crate. `T: Zeroable` is the type-level proof that the all-zero
-    /// bit pattern is a valid `T`.
+    /// kernel crate. The `T: AnyBitPattern` bound is required because the
+    /// underlying bytes may have been written by a device with arbitrary bit
+    /// patterns (e.g. virtio used ring, DWMAC RX descriptors) between DMA
+    /// memory being handed to hardware and this projection; the bound is the
+    /// type-level proof that every such bit pattern is a valid `T`.
     ///
     /// # Panics
     ///
     /// Panics if `size_of::<T>() > self.len()` or if `align_of::<T>() >
     /// PAGE_SIZE` (alignments beyond the page boundary cannot be guaranteed
     /// from the page-aligned base).
-    pub fn as_typed_mut<T: Zeroable>(&mut self) -> &mut T {
+    pub fn as_typed_mut<T: AnyBitPattern>(&mut self) -> &mut T {
         assert!(
             core::mem::size_of::<T>() <= self.len,
             "T does not fit in DmaBuffer"
@@ -123,15 +126,17 @@ impl DmaBuffer {
             "T alignment exceeds page size"
         );
         // SAFETY: `pages.addr()` is a page-aligned pointer to at least
-        // `size_of::<T>()` zero-initialized bytes (PinnedHeapPages::new fills
-        // with `Page::zero()`). Size and alignment are checked above; the
-        // `T: Zeroable` bound proves all-zero is a valid `T`. The returned
-        // reference is tied to `&mut self`, so no aliasing is possible.
+        // `size_of::<T>()` bytes of owned memory (PinnedHeapPages). Size and
+        // alignment are checked above; the `T: AnyBitPattern` bound proves
+        // that whatever bit pattern currently occupies those bytes is a valid
+        // `T` — this covers both the initial zero-init state and any later
+        // device-written state. The returned reference is tied to `&mut self`,
+        // so no aliasing is possible.
         unsafe { &mut *(self.pages.addr() as *mut T) }
     }
 
     /// Read-only sibling of `as_typed_mut`.
-    pub fn as_typed<T: Zeroable>(&self) -> &T {
+    pub fn as_typed<T: AnyBitPattern>(&self) -> &T {
         assert!(
             core::mem::size_of::<T>() <= self.len,
             "T does not fit in DmaBuffer"
