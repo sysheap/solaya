@@ -1,17 +1,22 @@
-use alloc::{boxed::Box, collections::BTreeMap, vec::Vec};
+use alloc::{collections::BTreeMap, vec::Vec};
 
 use crate::{debug, klibc::MMIO};
+use driver_api::DmaBuffer;
 use klib::{deconstructed_vec::DeconstructedVec, non_empty_vec::NonEmptyVec};
 
 /// A virtio queue.
-/// Using Box to prevent content from being moved.
+///
+/// The three ring areas live in [`DmaBuffer`]s — the device reads/writes them
+/// via their physical addresses. `DmaBuffer` owns the page-aligned backing
+/// memory and releases it on `Drop`, replacing the earlier `Box` + raw cast
+/// pattern.
 pub struct VirtQueue<const QUEUE_SIZE: usize> {
-    descriptor_area: Box<[virtq_desc; QUEUE_SIZE]>,
+    descriptor_area: DmaBuffer,
     free_descriptor_indices: Vec<u16>,
     outstanding_buffers: BTreeMap<u16, DeconstructedVec>,
     last_used_ring_index: u16,
-    driver_area: Box<virtq_avail<QUEUE_SIZE>>,
-    device_area: Box<virtq_used<QUEUE_SIZE>>,
+    driver_area: DmaBuffer,
+    device_area: DmaBuffer,
     queue_index: u16,
     notify: Option<MMIO<u16>>,
 }
@@ -36,13 +41,28 @@ impl<const QUEUE_SIZE: usize> VirtQueue<QUEUE_SIZE> {
             queue_size.is_power_of_two(),
             "Queue size must be a power of 2"
         );
+
+        let descriptor_area =
+            DmaBuffer::new_coherent(core::mem::size_of::<[virtq_desc; QUEUE_SIZE]>())
+                .expect("allocate virtq descriptor area");
+        let mut driver_area =
+            DmaBuffer::new_coherent(core::mem::size_of::<virtq_avail<QUEUE_SIZE>>())
+                .expect("allocate virtq driver area");
+        let mut device_area =
+            DmaBuffer::new_coherent(core::mem::size_of::<virtq_used<QUEUE_SIZE>>())
+                .expect("allocate virtq device area");
+
+        // DmaBuffer returns zeroed pages; set the non-zero defaults in place.
+        *driver_area.as_typed_mut::<virtq_avail<QUEUE_SIZE>>() = virtq_avail::default();
+        *device_area.as_typed_mut::<virtq_used<QUEUE_SIZE>>() = virtq_used::default();
+
         let queue = VirtQueue {
-            descriptor_area: Box::new(core::array::from_fn(|_| virtq_desc::default())),
+            descriptor_area,
             free_descriptor_indices: (0..queue_size).collect(),
             outstanding_buffers: BTreeMap::new(),
             last_used_ring_index: 0,
-            driver_area: Box::<virtq_avail<QUEUE_SIZE>>::default(),
-            device_area: Box::<virtq_used<QUEUE_SIZE>>::default(),
+            driver_area,
+            device_area,
             queue_index,
             notify: None,
         };
@@ -67,15 +87,32 @@ impl<const QUEUE_SIZE: usize> VirtQueue<QUEUE_SIZE> {
     }
 
     pub fn descriptor_area_physical_address(&self) -> u64 {
-        self.descriptor_area.as_ptr() as u64
+        self.descriptor_area.phys_addr()
     }
 
     pub fn driver_area_physical_address(&self) -> u64 {
-        &*self.driver_area as *const _ as u64
+        self.driver_area.phys_addr()
     }
 
     pub fn device_area_physical_address(&self) -> u64 {
-        &*self.device_area as *const _ as u64
+        self.device_area.phys_addr()
+    }
+
+    fn descriptors(&self) -> &[virtq_desc; QUEUE_SIZE] {
+        self.descriptor_area.as_typed::<[virtq_desc; QUEUE_SIZE]>()
+    }
+
+    fn descriptors_mut(&mut self) -> &mut [virtq_desc; QUEUE_SIZE] {
+        self.descriptor_area
+            .as_typed_mut::<[virtq_desc; QUEUE_SIZE]>()
+    }
+
+    fn driver_area_mut(&mut self) -> &mut virtq_avail<QUEUE_SIZE> {
+        self.driver_area.as_typed_mut::<virtq_avail<QUEUE_SIZE>>()
+    }
+
+    fn device_area(&self) -> &virtq_used<QUEUE_SIZE> {
+        self.device_area.as_typed::<virtq_used<QUEUE_SIZE>>()
     }
 
     /// Put a single buffer into the virtqueue.
@@ -106,7 +143,12 @@ impl<const QUEUE_SIZE: usize> VirtQueue<QUEUE_SIZE> {
 
         for (i, (buffer, direction)) in buffers.into_iter().enumerate() {
             let desc_idx = indices[i];
-            let descriptor = &mut self.descriptor_area[desc_idx as usize];
+            let descriptor = &mut self.descriptors_mut()[desc_idx as usize];
+            // SAFETY (documented, non-unsafe cast): `buffer.as_ptr()` is the
+            // kernel virtual address of a heap-backed Vec<u8>. The kernel
+            // identity-maps RAM, so this equals the physical address the
+            // virtio device will DMA against. Migrating per-request buffers
+            // to DmaBuffer is deferred (ring memory migrated in this phase).
             descriptor.addr = buffer.as_ptr() as u64;
             descriptor.len = u32::try_from(buffer.len()).expect("buffer length fits in u32");
 
@@ -136,11 +178,14 @@ impl<const QUEUE_SIZE: usize> VirtQueue<QUEUE_SIZE> {
         let head = indices[0];
 
         // Only head goes into the available ring
-        self.driver_area.ring[self.driver_area.idx as usize % QUEUE_SIZE] = head;
+        let driver_area = self.driver_area_mut();
+        let slot = driver_area.idx as usize % QUEUE_SIZE;
+        driver_area.ring[slot] = head;
 
         hal::cpu::memory_fence();
 
-        self.driver_area.idx = self.driver_area.idx.wrapping_add(1);
+        let driver_area = self.driver_area_mut();
+        driver_area.idx = driver_area.idx.wrapping_add(1);
 
         hal::cpu::memory_fence();
 
@@ -149,7 +194,7 @@ impl<const QUEUE_SIZE: usize> VirtQueue<QUEUE_SIZE> {
 
     pub fn receive_buffer(&mut self) -> Vec<UsedBuffer> {
         hal::cpu::memory_fence();
-        let current_device_index = self.device_area.idx;
+        let current_device_index = self.device_area().idx;
         if self.last_used_ring_index == current_device_index {
             return Vec::new();
         }
@@ -157,18 +202,18 @@ impl<const QUEUE_SIZE: usize> VirtQueue<QUEUE_SIZE> {
         let mut return_buffers: Vec<UsedBuffer> = Vec::new();
         while self.last_used_ring_index != current_device_index {
             debug!("last used ring index: {:#x?}", self.last_used_ring_index);
-            let result_descriptor =
-                &mut self.device_area.ring[self.last_used_ring_index as usize % QUEUE_SIZE];
+            let ring_slot = self.last_used_ring_index as usize % QUEUE_SIZE;
+            let result_id = self.device_area().ring[ring_slot].id;
+            let result_len = self.device_area().ring[ring_slot].len;
             assert!(
-                (result_descriptor.id as usize) < QUEUE_SIZE,
+                (result_id as usize) < QUEUE_SIZE,
                 "Device returned descriptor ID {} outside queue bounds {}",
-                result_descriptor.id,
+                result_id,
                 QUEUE_SIZE
             );
 
-            let head_index =
-                u16::try_from(result_descriptor.id).expect("descriptor id fits in u16");
-            let total_written = result_descriptor.len as usize;
+            let head_index = u16::try_from(result_id).expect("descriptor id fits in u16");
+            let total_written = result_len as usize;
 
             // Follow the descriptor chain collecting all buffers
             let mut first_buffer: Option<Vec<u8>> = None;
@@ -177,10 +222,14 @@ impl<const QUEUE_SIZE: usize> VirtQueue<QUEUE_SIZE> {
             let mut remaining_written = total_written;
 
             loop {
-                let descriptor = &mut self.descriptor_area[current_idx as usize];
-                let is_device_writable = descriptor.flags & VIRTQ_DESC_F_WRITE != 0;
-                let has_next = descriptor.flags & VIRTQ_DESC_F_NEXT != 0;
-                let next_idx = descriptor.next;
+                let (is_device_writable, has_next, next_idx) = {
+                    let descriptor = &self.descriptors()[current_idx as usize];
+                    (
+                        descriptor.flags & VIRTQ_DESC_F_WRITE != 0,
+                        descriptor.flags & VIRTQ_DESC_F_NEXT != 0,
+                        descriptor.next,
+                    )
+                };
 
                 let stored = self
                     .outstanding_buffers
@@ -202,6 +251,7 @@ impl<const QUEUE_SIZE: usize> VirtQueue<QUEUE_SIZE> {
                     rest_buffers.push(buf);
                 }
 
+                let descriptor = &mut self.descriptors_mut()[current_idx as usize];
                 descriptor.addr = 0;
                 descriptor.len = 0;
                 descriptor.flags = 0;
@@ -231,7 +281,7 @@ impl<const QUEUE_SIZE: usize> VirtQueue<QUEUE_SIZE> {
     }
 
     pub fn enable_interrupts(&mut self) {
-        self.driver_area.flags = 0;
+        self.driver_area_mut().flags = 0;
         hal::cpu::memory_fence();
     }
 

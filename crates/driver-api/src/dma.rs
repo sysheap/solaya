@@ -81,4 +81,47 @@ impl DmaBuffer {
 
     /// Ensure CPU sees device writes. No-op on today's coherent platform.
     pub fn sync_for_cpu(&self) {}
+
+    /// Reinterpret the buffer as a typed value of layout `T`.
+    ///
+    /// The allocation is zero-initialized and page-aligned (alignments up to
+    /// 4 KiB are supported). Callers use this to project virtio ring headers,
+    /// DWMAC descriptor rings, etc. onto DMA memory without a raw cast in the
+    /// kernel crate.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `size_of::<T>() > self.len()` or if `align_of::<T>() >
+    /// PAGE_SIZE` (alignments beyond the page boundary cannot be guaranteed
+    /// from the page-aligned base).
+    pub fn as_typed_mut<T>(&mut self) -> &mut T {
+        assert!(
+            core::mem::size_of::<T>() <= self.len,
+            "T does not fit in DmaBuffer"
+        );
+        assert!(
+            core::mem::align_of::<T>() <= mm::PAGE_SIZE,
+            "T alignment exceeds page size"
+        );
+        // SAFETY: `pages.addr()` is a page-aligned pointer to at least
+        // `size_of::<T>()` zero-initialized bytes (PinnedHeapPages::new fills
+        // with `Page::zero()`). T's size and alignment requirements are
+        // checked above. The returned reference is tied to `&mut self` so no
+        // aliasing is possible.
+        unsafe { &mut *(self.pages.addr() as *mut T) }
+    }
+
+    /// Read-only sibling of `as_typed_mut`.
+    pub fn as_typed<T>(&self) -> &T {
+        assert!(
+            core::mem::size_of::<T>() <= self.len,
+            "T does not fit in DmaBuffer"
+        );
+        assert!(
+            core::mem::align_of::<T>() <= mm::PAGE_SIZE,
+            "T alignment exceeds page size"
+        );
+        // SAFETY: see `as_typed_mut`. The shared reference is tied to `&self`.
+        unsafe { &*(self.pages.addr() as *const T) }
+    }
 }
