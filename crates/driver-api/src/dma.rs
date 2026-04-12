@@ -11,6 +11,7 @@
 //! page allocator. `Drop` releases the pages automatically. `driver-api` keeps
 //! `#![forbid(unsafe_code)]` because all `unsafe` lives inside `mm`.
 
+use klib::util::Zeroable;
 use mm::page::{Pages, PagesAsSlice, PinnedHeapPages};
 
 use crate::BusError;
@@ -95,22 +96,15 @@ impl DmaBuffer {
     /// The allocation is zero-initialized and page-aligned (alignments up to
     /// 4 KiB are supported). Callers use this to project virtio ring headers,
     /// DWMAC descriptor rings, etc. onto DMA memory without a raw cast in the
-    /// kernel crate.
+    /// kernel crate. `T: Zeroable` is the type-level proof that the all-zero
+    /// bit pattern is a valid `T`.
     ///
     /// # Panics
     ///
     /// Panics if `size_of::<T>() > self.len()` or if `align_of::<T>() >
     /// PAGE_SIZE` (alignments beyond the page boundary cannot be guaranteed
     /// from the page-aligned base).
-    ///
-    /// # Safety
-    ///
-    /// The caller must guarantee that the all-zero bit pattern is a valid
-    /// value of `T` (i.e. `T` is "zeroable" — no `NonZero*`, no references,
-    /// no enums whose zero discriminant is invalid, etc.). Today's callers
-    /// are POD descriptor structs (virtio ring headers, DWMAC descriptor
-    /// rings) where this trivially holds.
-    pub unsafe fn as_typed_mut<T>(&mut self) -> &mut T {
+    pub fn as_typed_mut<T: Zeroable>(&mut self) -> &mut T {
         assert!(
             core::mem::size_of::<T>() <= self.len,
             "T does not fit in DmaBuffer"
@@ -121,20 +115,14 @@ impl DmaBuffer {
         );
         // SAFETY: `pages.addr()` is a page-aligned pointer to at least
         // `size_of::<T>()` zero-initialized bytes (PinnedHeapPages::new fills
-        // with `Page::zero()`). T's size and alignment requirements are
-        // checked above. All-zero as a valid T is the caller's invariant
-        // (see # Safety). The returned reference is tied to `&mut self` so
-        // no aliasing is possible.
+        // with `Page::zero()`). Size and alignment are checked above; the
+        // `T: Zeroable` bound proves all-zero is a valid `T`. The returned
+        // reference is tied to `&mut self`, so no aliasing is possible.
         unsafe { &mut *(self.pages.addr() as *mut T) }
     }
 
     /// Read-only sibling of `as_typed_mut`.
-    ///
-    /// # Safety
-    ///
-    /// Same as [`as_typed_mut`](Self::as_typed_mut): caller must guarantee
-    /// the all-zero bit pattern is a valid `T`.
-    pub unsafe fn as_typed<T>(&self) -> &T {
+    pub fn as_typed<T: Zeroable>(&self) -> &T {
         assert!(
             core::mem::size_of::<T>() <= self.len,
             "T does not fit in DmaBuffer"

@@ -94,6 +94,30 @@ pub trait ByteInterpretable {
     }
 }
 
+/// Marker trait asserting that the all-zero bit pattern is a valid value of
+/// `Self`. Used to reinterpret zero-initialized DMA memory as a typed value
+/// (see `driver_api::DmaBuffer::as_typed`).
+///
+/// # Safety
+///
+/// Implementors vouch that every bit of `Self` may be zero simultaneously and
+/// the result is a valid `Self`. This rules out `NonZero*`, references
+/// (`&T`, `&mut T`), pointer-like smart pointers (`Box`, `Arc`, `Rc`), and
+/// enums whose zero discriminant is not a valid variant.
+pub unsafe trait Zeroable {}
+
+unsafe impl Zeroable for u8 {}
+unsafe impl Zeroable for u16 {}
+unsafe impl Zeroable for u32 {}
+unsafe impl Zeroable for u64 {}
+unsafe impl Zeroable for usize {}
+unsafe impl Zeroable for i8 {}
+unsafe impl Zeroable for i16 {}
+unsafe impl Zeroable for i32 {}
+unsafe impl Zeroable for i64 {}
+unsafe impl Zeroable for isize {}
+unsafe impl<T: Zeroable, const N: usize> Zeroable for [T; N] {}
+
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
 pub fn cstr_from_null_terminated_ptr(ptr: *const core::ffi::c_char) -> &'static core::ffi::CStr {
     assert!(
