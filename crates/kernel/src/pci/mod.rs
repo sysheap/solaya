@@ -1,7 +1,7 @@
 use crate::{
     debug, info,
-    klibc::{MMIO, Spinlock},
-    mmio_struct, pci,
+    klibc::{MMIO, Spinlock, mmio_struct},
+    pci,
 };
 use alloc::{collections::BTreeMap, vec::Vec};
 

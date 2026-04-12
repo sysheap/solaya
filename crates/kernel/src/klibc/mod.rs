@@ -12,36 +12,4 @@ pub use hal::{
     spinlock::{Spinlock, SpinlockGuard},
 };
 
-#[macro_export]
-macro_rules! mmio_struct {
-    {
-        $(#[$meta:meta])*
-        struct $name:ident {
-            $($field_name:ident : $field_type:ty),* $(,)?
-        }
-    } => {
-            $(#[$meta])*
-            #[derive(Clone, Copy, Debug)]
-            #[allow(non_camel_case_types, dead_code)]
-            pub struct $name {
-                $(
-                    $field_name: $field_type,
-                )*
-            }
-
-            #[allow(non_camel_case_types, dead_code)]
-            pub trait ${concat($name, Fields)} {
-                $(
-                    fn $field_name(&self) -> ::hal::mmio::MMIO<$field_type>;
-                )*
-            }
-
-            impl ${concat($name, Fields)} for ::hal::mmio::MMIO<$name> {
-                $(
-                    fn $field_name(&self) -> ::hal::mmio::MMIO<$field_type> {
-                        self.new_type_with_offset(core::mem::offset_of!($name, $field_name))
-                    }
-                )*
-            }
-        };
-}
+pub use hal::mmio_struct;
