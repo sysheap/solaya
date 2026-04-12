@@ -7,10 +7,7 @@
 # bootstrapped qemu-system-riscv64 directly.
 
 add_custom_target(run
-    COMMAND ${CMAKE_COMMAND} -E env
-        "SOLAYA_USERSPACE_ARTIFACT_DIR=${SOLAYA_USERSPACE_ARTIFACT_DIR}"
-        "SOLAYA_HEADERS_GENERATED=${SOLAYA_HEADERS_GENERATED}"
-        ${SOLAYA_CARGO} run --release
+    COMMAND ${SOLAYA_CARGO} run --release
     DEPENDS solaya-bin
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     USES_TERMINAL
@@ -19,10 +16,7 @@ add_custom_target(run
 )
 
 add_custom_target(run-fb
-    COMMAND ${CMAKE_COMMAND} -E env
-        "SOLAYA_USERSPACE_ARTIFACT_DIR=${SOLAYA_USERSPACE_ARTIFACT_DIR}"
-        "SOLAYA_HEADERS_GENERATED=${SOLAYA_HEADERS_GENERATED}"
-        ${SOLAYA_CARGO} run --release -- --fb
+    COMMAND ${SOLAYA_CARGO} run --release -- --fb
     DEPENDS solaya-bin
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     USES_TERMINAL
@@ -31,9 +25,7 @@ add_custom_target(run-fb
 )
 
 add_custom_target(debug
-    COMMAND ${CMAKE_COMMAND} -E env
-        "SOLAYA_USERSPACE_ARTIFACT_DIR=${SOLAYA_USERSPACE_ARTIFACT_DIR}"
-        ${CMAKE_SOURCE_DIR}/scripts/debug.sh
+    COMMAND ${CMAKE_SOURCE_DIR}/scripts/debug.sh
     DEPENDS solaya-bin
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     USES_TERMINAL
