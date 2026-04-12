@@ -68,7 +68,8 @@ make run          # boot the kernel in QEMU
 ```
 
 The cross-toolchain builds from pinned source tarballs into
-`build/toolchain/riscv64/`, so the only host deps are the packages that
+`.toolchain/riscv64/` (outside `build/` so `rm -rf build` does not nuke
+the ~1h compile), so the only host deps are the packages that
 bootstrap binutils/gcc/musl, drive the Rust build, and provide
 `qemu-system-riscv64` for running the kernel.
 

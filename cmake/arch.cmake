@@ -7,7 +7,11 @@
 #
 #   SOLAYA_ARCH        riscv64 (only arch supported today)
 #   SOLAYA_TC_TRIPLE   riscv64-unknown-linux-musl
-#   SOLAYA_TC_PREFIX   ${CMAKE_BINARY_DIR}/toolchain/${SOLAYA_ARCH}
+#   SOLAYA_TC_ROOT     where the cross-toolchain installs land. Default
+#                      ${CMAKE_SOURCE_DIR}/.toolchain so `rm -rf build` does
+#                      NOT discard the ~1h toolchain build. Override with
+#                      -DSOLAYA_TC_ROOT=/path/to/shared/toolchains.
+#   SOLAYA_TC_PREFIX   ${SOLAYA_TC_ROOT}/${SOLAYA_ARCH}
 #   SOLAYA_TC_BIN      ${SOLAYA_TC_PREFIX}/bin
 #   SOLAYA_RUST_CHANNEL  channel string from rust-toolchain.toml
 #
@@ -46,7 +50,12 @@ if(NOT SOLAYA_ARCH STREQUAL "riscv64")
 endif()
 set(SOLAYA_TC_TRIPLE "riscv64-unknown-linux-musl")
 
-set(SOLAYA_TC_PREFIX "${CMAKE_BINARY_DIR}/toolchain/${SOLAYA_ARCH}")
+if(NOT DEFINED SOLAYA_TC_ROOT)
+    set(SOLAYA_TC_ROOT "${CMAKE_SOURCE_DIR}/.toolchain" CACHE PATH
+        "Root of the bootstrapped cross-toolchain installs (outside build/)"
+    )
+endif()
+set(SOLAYA_TC_PREFIX "${SOLAYA_TC_ROOT}/${SOLAYA_ARCH}")
 set(SOLAYA_TC_BIN    "${SOLAYA_TC_PREFIX}/bin")
 
 # rust-toolchain.toml is respected by rustup only when the CWD is inside the

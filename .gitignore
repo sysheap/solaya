@@ -2,6 +2,7 @@
 /target-userspace
 /target-coreutils
 /build
+/.toolchain
 qemu-infra/target/
 qemu-infra/Cargo.lock
 mcp-server/target/

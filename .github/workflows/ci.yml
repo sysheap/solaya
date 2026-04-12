@@ -77,7 +77,7 @@ jobs:
         id: cache-toolchain
         uses: actions/cache/restore@v4
         with:
-          path: ${{ env.BUILD_DIR }}/toolchain
+          path: ${{ github.workspace }}/.toolchain
           key: toolchain-${{ runner.os }}-${{ hashFiles('cmake/checksums.cmake', 'cmake/toolchain_bootstrap.cmake', 'toolchain/pins.cmake') }}
 
       - name: Configure CMake
@@ -95,7 +95,7 @@ jobs:
         if: always() && steps.build-toolchain.outcome == 'success'
         uses: actions/cache/save@v4
         with:
-          path: ${{ env.BUILD_DIR }}/toolchain
+          path: ${{ github.workspace }}/.toolchain
           key: toolchain-${{ runner.os }}-${{ hashFiles('cmake/checksums.cmake', 'cmake/toolchain_bootstrap.cmake', 'toolchain/pins.cmake') }}
 
       - name: Build kernel

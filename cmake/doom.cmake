@@ -31,7 +31,7 @@ set(_doom_build    "${_doom_prefix}/build")
 set(_doom_bin      "${_doom_build}/doom")
 set(_doom_cc       "${SOLAYA_TC_BIN}/${SOLAYA_TC_TRIPLE}-gcc")
 set(_doom_ld       "${SOLAYA_TC_BIN}/${SOLAYA_TC_TRIPLE}-ld")
-set(_wad_file      "${CMAKE_BINARY_DIR}/toolchain/_dl/doom1.wad")
+set(_wad_file      "${SOLAYA_TC_ROOT}/_dl/doom1.wad")
 
 # Stage 1: fetch doomgeneric source (pinned commit) into _doom_src.
 ExternalProject_Add(doom-src
@@ -54,7 +54,7 @@ ExternalProject_Add(doom-src
 # happen at build time, which keeps `cmake --preset` fast on fresh clones.
 add_custom_command(
     OUTPUT  "${_wad_file}"
-    COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/toolchain/_dl"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${SOLAYA_TC_ROOT}/_dl"
     COMMAND ${CMAKE_COMMAND}
         -D "URL=${SOLAYA_DOOM_WAD_URL}"
         -D "OUT=${_wad_file}"
