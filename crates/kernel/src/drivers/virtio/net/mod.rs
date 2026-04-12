@@ -14,10 +14,9 @@ use crate::{
     },
     info,
     klibc::{
-        MMIO, Spinlock,
+        MMIO, Spinlock, mmio_struct,
         util::{BufferExtension, ByteInterpretable, is_power_of_2_or_zero},
     },
-    mmio_struct,
     net::mac::MacAddress,
 };
 use alloc::{string::String, vec::Vec};

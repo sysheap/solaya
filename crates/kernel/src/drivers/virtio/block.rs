@@ -23,11 +23,10 @@ use crate::{
     },
     info,
     klibc::{
-        MMIO, Spinlock,
+        MMIO, Spinlock, mmio_struct,
         non_empty_vec::NonEmptyVec,
         util::{ByteInterpretable, is_power_of_2_or_zero},
     },
-    mmio_struct,
 };
 
 const EXPECTED_QUEUE_SIZE: usize = 0x100;

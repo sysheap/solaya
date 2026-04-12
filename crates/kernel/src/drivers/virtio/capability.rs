@@ -1,4 +1,4 @@
-use crate::mmio_struct;
+use crate::klibc::mmio_struct;
 use driver_api::BusContext;
 
 pub const VIRTIO_VENDOR_SPECIFIC_CAPABILITY_ID: u8 = 0x9;
