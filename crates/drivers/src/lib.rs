@@ -20,4 +20,5 @@
 extern crate alloc;
 
 pub mod bochs_display;
+pub mod dwmac;
 pub mod virtio;
