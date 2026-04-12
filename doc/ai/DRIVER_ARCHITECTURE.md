@@ -934,3 +934,15 @@ Do not paper over disagreement.
   parts helper behind the old path and is deleted. DWMAC still uses
   `Vec<u8>` per-packet buffers (deferred with the rest of the DWMAC
   migration). Acceptance: `just ci` green, 69/69 system tests.
+
+- v11 (post-issue-#250-item-8): DWMAC descriptor rings and packet buffers
+  migrated to `DmaBuffer`. `DwmacDevice` now owns four `DmaBuffer`s
+  (tx_ring, rx_ring, tx_buffers, rx_buffers) accessed via
+  `as_typed_mut::<DescriptorRing<N>>()` and byte-offset slicing for the
+  packet slots. `DmaBuffer::phys_addr_u32()` is the new helper for 32-bit-
+  DMA drivers — it goes through `phys_addr()` and asserts the result fits
+  in `u32` (today's page allocator stays under 4 GiB). Every raw
+  `&field as *const _ as usize` → `as u32` cast for descriptor / buffer
+  phys addresses is gone. Compile-only verified on QEMU virt (the DWMAC
+  controller isn't wired there); runtime validation deferred to StarFive
+  VisionFive 2 hardware.

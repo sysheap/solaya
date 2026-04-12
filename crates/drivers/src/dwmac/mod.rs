@@ -1,9 +1,9 @@
 pub mod jh7110;
 
-use alloc::{boxed::Box, vec::Vec};
+use alloc::vec::Vec;
 
 use console::{debug, info};
-use driver_api::MacAddress;
+use driver_api::{DmaBuffer, MacAddress};
 use hal::{mmio::MMIO, spinlock::Spinlock};
 
 // --- Register offsets within the 64KB MMIO region ---
@@ -168,10 +168,11 @@ struct PacketBuffer([u8; PACKET_BUF_SIZE]);
 
 pub struct DwmacDevice {
     base: usize,
-    tx_ring: Box<DescriptorRing<TX_RING_SIZE>>,
-    rx_ring: Box<DescriptorRing<RX_RING_SIZE>>,
-    tx_buffers: Box<[PacketBuffer]>,
-    rx_buffers: Box<[PacketBuffer]>,
+    tx_ring: DmaBuffer,
+    rx_ring: DmaBuffer,
+    // Each DmaBuffer contains N contiguous PacketBuffer slots.
+    tx_buffers: DmaBuffer,
+    rx_buffers: DmaBuffer,
     tx_idx: usize,
     rx_idx: usize,
     mac_address: MacAddress,
@@ -214,26 +215,18 @@ impl DwmacDevice {
 
         let mut dev = Self {
             base,
-            tx_ring: Box::new(DescriptorRing {
-                descriptors: core::array::from_fn(|_| DmaDescriptor {
-                    des0: 0,
-                    des1: 0,
-                    des2: 0,
-                    des3: 0,
-                }),
-            }),
-            rx_ring: Box::new(DescriptorRing {
-                descriptors: core::array::from_fn(|_| DmaDescriptor {
-                    des0: 0,
-                    des1: 0,
-                    des2: 0,
-                    des3: 0,
-                }),
-            }),
-            tx_buffers: alloc::vec![PacketBuffer([0u8; PACKET_BUF_SIZE]); TX_RING_SIZE]
-                .into_boxed_slice(),
-            rx_buffers: alloc::vec![PacketBuffer([0u8; PACKET_BUF_SIZE]); RX_RING_SIZE]
-                .into_boxed_slice(),
+            tx_ring: DmaBuffer::new_coherent(core::mem::size_of::<DescriptorRing<TX_RING_SIZE>>())
+                .ok()?,
+            rx_ring: DmaBuffer::new_coherent(core::mem::size_of::<DescriptorRing<RX_RING_SIZE>>())
+                .ok()?,
+            tx_buffers: DmaBuffer::new_coherent(
+                TX_RING_SIZE * core::mem::size_of::<PacketBuffer>(),
+            )
+            .ok()?,
+            rx_buffers: DmaBuffer::new_coherent(
+                RX_RING_SIZE * core::mem::size_of::<PacketBuffer>(),
+            )
+            .ok()?,
             tx_idx: 0,
             rx_idx: 0,
             mac_address,
@@ -243,6 +236,62 @@ impl DwmacDevice {
             return None;
         }
         Some(dev)
+    }
+
+    fn tx_ring_mut(&mut self) -> &mut DescriptorRing<TX_RING_SIZE> {
+        self.tx_ring.as_typed_mut::<DescriptorRing<TX_RING_SIZE>>()
+    }
+
+    fn rx_ring_mut(&mut self) -> &mut DescriptorRing<RX_RING_SIZE> {
+        self.rx_ring.as_typed_mut::<DescriptorRing<RX_RING_SIZE>>()
+    }
+
+    fn rx_ring_ref(&self) -> &DescriptorRing<RX_RING_SIZE> {
+        self.rx_ring.as_typed::<DescriptorRing<RX_RING_SIZE>>()
+    }
+
+    fn tx_ring_ref(&self) -> &DescriptorRing<TX_RING_SIZE> {
+        self.tx_ring.as_typed::<DescriptorRing<TX_RING_SIZE>>()
+    }
+
+    fn tx_buffer_slice_mut(&mut self, i: usize) -> &mut [u8] {
+        let start = i * core::mem::size_of::<PacketBuffer>();
+        &mut self.tx_buffers.as_mut_slice()[start..start + PACKET_BUF_SIZE]
+    }
+
+    fn rx_buffer_slice(&self, i: usize) -> &[u8] {
+        let start = i * core::mem::size_of::<PacketBuffer>();
+        &self.rx_buffers.as_slice()[start..start + PACKET_BUF_SIZE]
+    }
+
+    /// Physical address of TX slot `i`. 32-bit for DWMAC.
+    fn tx_buffer_phys_u32(&self, i: usize) -> u32 {
+        let base = self.tx_buffers.phys_addr_u32();
+        let offset = u32::try_from(i * core::mem::size_of::<PacketBuffer>())
+            .expect("TX buffer offset fits in u32");
+        base + offset
+    }
+
+    fn rx_buffer_phys_u32(&self, i: usize) -> u32 {
+        let base = self.rx_buffers.phys_addr_u32();
+        let offset = u32::try_from(i * core::mem::size_of::<PacketBuffer>())
+            .expect("RX buffer offset fits in u32");
+        base + offset
+    }
+
+    /// Physical address of TX descriptor `i`. 32-bit.
+    fn tx_desc_phys_u32(&self, i: usize) -> u32 {
+        let base = self.tx_ring.phys_addr_u32();
+        let offset = u32::try_from(i * core::mem::size_of::<DmaDescriptor>())
+            .expect("TX descriptor offset fits in u32");
+        base + offset
+    }
+
+    fn rx_desc_phys_u32(&self, i: usize) -> u32 {
+        let base = self.rx_ring.phys_addr_u32();
+        let offset = u32::try_from(i * core::mem::size_of::<DmaDescriptor>())
+            .expect("RX descriptor offset fits in u32");
+        base + offset
     }
 
     fn init_hardware(&mut self, phy_addr: u32) -> bool {
@@ -537,16 +586,16 @@ impl DwmacDevice {
     fn setup_descriptor_rings(&mut self) {
         // Initialize RX descriptors with buffer addresses
         for i in 0..RX_RING_SIZE {
-            let buf_addr = &self.rx_buffers[i].0 as *const _ as usize;
-            let desc = &mut self.rx_ring.descriptors[i];
-            desc.des0 = buf_addr as u32;
+            let buf_phys = self.rx_buffer_phys_u32(i);
+            let desc = &mut self.rx_ring_mut().descriptors[i];
+            desc.des0 = buf_phys;
             desc.des1 = 0;
             desc.des2 = 0;
             desc.des3 = DESC3_OWN | DESC3_IOC | DESC3_BUF1V;
         }
 
         // TX descriptors start empty
-        for desc in &mut self.tx_ring.descriptors {
+        for desc in &mut self.tx_ring_mut().descriptors {
             desc.des0 = 0;
             desc.des1 = 0;
             desc.des2 = 0;
@@ -554,20 +603,23 @@ impl DwmacDevice {
         }
 
         // Flush descriptor rings from CPU cache to RAM so DMA sees them
-        let rx_base = &self.rx_ring.descriptors[0] as *const _ as usize;
+        let rx_base_virt = self.rx_ring_ref().descriptors.as_ptr() as usize;
         hal::cache::flush_range(
-            rx_base,
+            rx_base_virt,
             RX_RING_SIZE * core::mem::size_of::<DmaDescriptor>(),
         );
-        let tx_base = &self.tx_ring.descriptors[0] as *const _ as usize;
+        let tx_base_virt = self.tx_ring_ref().descriptors.as_ptr() as usize;
         hal::cache::flush_range(
-            tx_base,
+            tx_base_virt,
             TX_RING_SIZE * core::mem::size_of::<DmaDescriptor>(),
         );
 
+        let tx_base_phys = self.tx_ring.phys_addr_u32();
+        let rx_base_phys = self.rx_ring.phys_addr_u32();
+
         // TX descriptor list
         write_reg(self.base, DMA_CH0_TXDESC_LIST_HADDR, 0);
-        write_reg(self.base, DMA_CH0_TXDESC_LIST_ADDR, tx_base as u32);
+        write_reg(self.base, DMA_CH0_TXDESC_LIST_ADDR, tx_base_phys);
         write_reg(
             self.base,
             DMA_CH0_TXDESC_RING_LENGTH,
@@ -576,7 +628,7 @@ impl DwmacDevice {
 
         // RX descriptor list
         write_reg(self.base, DMA_CH0_RXDESC_LIST_HADDR, 0);
-        write_reg(self.base, DMA_CH0_RXDESC_LIST_ADDR, rx_base as u32);
+        write_reg(self.base, DMA_CH0_RXDESC_LIST_ADDR, rx_base_phys);
         write_reg(
             self.base,
             DMA_CH0_RXDESC_RING_LENGTH,
@@ -584,12 +636,16 @@ impl DwmacDevice {
         );
 
         // Tail pointer must point past the last descriptor to make all available
-        let end_of_ring = rx_base + RX_RING_SIZE * core::mem::size_of::<DmaDescriptor>();
-        write_reg(self.base, DMA_CH0_RXDESC_TAIL_PTR, end_of_ring as u32);
+        let end_of_ring = rx_base_phys
+            + u32::try_from(RX_RING_SIZE * core::mem::size_of::<DmaDescriptor>())
+                .expect("RX ring size fits in u32");
+        write_reg(self.base, DMA_CH0_RXDESC_TAIL_PTR, end_of_ring);
 
         debug!(
             "DWMAC: RX ring at {:#x}, tail at {:#x}, buf[0] at {:#x}",
-            rx_base, end_of_ring, &self.rx_buffers[0].0 as *const _ as usize
+            rx_base_phys,
+            end_of_ring,
+            self.rx_buffers.phys_addr()
         );
     }
 
@@ -621,12 +677,15 @@ impl DwmacDevice {
         let mut received = Vec::new();
 
         loop {
+            let rx_idx = self.rx_idx;
+
             // Invalidate descriptor so CPU reads DMA's writes from RAM
-            let desc_addr = &self.rx_ring.descriptors[self.rx_idx] as *const _ as usize;
-            hal::cache::flush_range(desc_addr, core::mem::size_of::<DmaDescriptor>());
+            let desc_virt =
+                &self.rx_ring_ref().descriptors[rx_idx] as *const DmaDescriptor as usize;
+            hal::cache::flush_range(desc_virt, core::mem::size_of::<DmaDescriptor>());
 
             let des3 = MMIO::<u32>::new(
-                &self.rx_ring.descriptors[self.rx_idx].des3 as *const u32 as usize,
+                &self.rx_ring_ref().descriptors[rx_idx].des3 as *const u32 as usize,
             )
             .read();
 
@@ -637,29 +696,30 @@ impl DwmacDevice {
             let length = (des3 & 0x7FFF) as usize;
             if length > 0 && length <= PACKET_BUF_SIZE {
                 // Invalidate RX buffer so CPU reads DMA-written packet data
-                let buf_addr = &self.rx_buffers[self.rx_idx].0 as *const _ as usize;
-                hal::cache::flush_range(buf_addr, length);
+                let buf_virt = self.rx_buffer_slice(rx_idx).as_ptr() as usize;
+                hal::cache::flush_range(buf_virt, length);
 
-                let data = self.rx_buffers[self.rx_idx].0[..length].to_vec();
+                let data = self.rx_buffer_slice(rx_idx)[..length].to_vec();
                 received.push(data);
             }
 
-            // Re-arm descriptor
-            let buf_addr = &self.rx_buffers[self.rx_idx].0 as *const _ as usize;
-            let desc = &mut self.rx_ring.descriptors[self.rx_idx];
-            desc.des0 = buf_addr as u32;
+            // Re-arm descriptor — compute phys addr before taking &mut borrow.
+            let buf_phys = self.rx_buffer_phys_u32(rx_idx);
+            let desc_phys = self.rx_desc_phys_u32(rx_idx);
+            let desc = &mut self.rx_ring_mut().descriptors[rx_idx];
+            desc.des0 = buf_phys;
             desc.des1 = 0;
             desc.des2 = 0;
             desc.des3 = DESC3_OWN | DESC3_IOC | DESC3_BUF1V;
 
             // Flush descriptor to RAM so DMA sees OWN bit
-            let desc_addr = desc as *const _ as usize;
-            hal::cache::flush_range(desc_addr, core::mem::size_of::<DmaDescriptor>());
+            let desc_virt = desc as *const _ as usize;
+            hal::cache::flush_range(desc_virt, core::mem::size_of::<DmaDescriptor>());
 
             // Update tail pointer
-            write_reg(self.base, DMA_CH0_RXDESC_TAIL_PTR, desc_addr as u32);
+            write_reg(self.base, DMA_CH0_RXDESC_TAIL_PTR, desc_phys);
 
-            self.rx_idx = (self.rx_idx + 1) % RX_RING_SIZE;
+            self.rx_idx = (rx_idx + 1) % RX_RING_SIZE;
         }
 
         received
@@ -667,14 +727,16 @@ impl DwmacDevice {
 
     fn send_packet(&mut self, data: Vec<u8>) {
         let length = data.len().min(PACKET_BUF_SIZE);
+        let tx_idx = self.tx_idx;
 
         // Wait for descriptor to be available (OWN cleared by hardware)
         let mut found = false;
         for _ in 0..1_000_000 {
-            let desc_addr = &self.tx_ring.descriptors[self.tx_idx] as *const _ as usize;
-            hal::cache::flush_range(desc_addr, core::mem::size_of::<DmaDescriptor>());
+            let desc_virt =
+                &self.tx_ring_ref().descriptors[tx_idx] as *const DmaDescriptor as usize;
+            hal::cache::flush_range(desc_virt, core::mem::size_of::<DmaDescriptor>());
             let des3 = MMIO::<u32>::new(
-                &self.tx_ring.descriptors[self.tx_idx].des3 as *const u32 as usize,
+                &self.tx_ring_ref().descriptors[tx_idx].des3 as *const u32 as usize,
             )
             .read();
             if des3 & DESC3_OWN == 0 {
@@ -686,26 +748,27 @@ impl DwmacDevice {
         assert!(found, "DWMAC: TX descriptor timeout, no free descriptor");
 
         // Copy data to TX buffer
-        self.tx_buffers[self.tx_idx].0[..length].copy_from_slice(&data[..length]);
+        self.tx_buffer_slice_mut(tx_idx)[..length].copy_from_slice(&data[..length]);
 
         // Flush TX buffer to RAM so DMA reads actual packet data
-        let buf_addr = &self.tx_buffers[self.tx_idx].0 as *const _ as usize;
-        hal::cache::flush_range(buf_addr, length);
+        let buf_virt = self.tx_buffer_slice_mut(tx_idx).as_ptr() as usize;
+        hal::cache::flush_range(buf_virt, length);
 
-        let desc = &mut self.tx_ring.descriptors[self.tx_idx];
-        desc.des0 = buf_addr as u32;
+        let buf_phys = self.tx_buffer_phys_u32(tx_idx);
+        let desc = &mut self.tx_ring_mut().descriptors[tx_idx];
+        desc.des0 = buf_phys;
         desc.des1 = 0;
         desc.des2 = length as u32;
         desc.des3 = DESC3_OWN | DESC3_FD | DESC3_LD | length as u32;
 
         // Flush descriptor to RAM so DMA sees OWN bit and buffer address
-        let desc_addr = desc as *const _ as usize;
-        hal::cache::flush_range(desc_addr, core::mem::size_of::<DmaDescriptor>());
+        let desc_virt = desc as *const _ as usize;
+        hal::cache::flush_range(desc_virt, core::mem::size_of::<DmaDescriptor>());
 
         // Advance TX index and write tail pointer to trigger DMA
-        self.tx_idx = (self.tx_idx + 1) % TX_RING_SIZE;
-        let next_desc = &self.tx_ring.descriptors[self.tx_idx] as *const _ as usize;
-        write_reg(self.base, DMA_CH0_TXDESC_TAIL_PTR, next_desc as u32);
+        self.tx_idx = (tx_idx + 1) % TX_RING_SIZE;
+        let next_desc_phys = self.tx_desc_phys_u32(self.tx_idx);
+        write_reg(self.base, DMA_CH0_TXDESC_TAIL_PTR, next_desc_phys);
     }
 }
 

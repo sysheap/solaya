@@ -53,6 +53,14 @@ impl DmaBuffer {
         self.pages.addr() as u64
     }
 
+    /// Physical address truncated to 32 bits. Used by drivers with a 32-bit
+    /// DMA address space (e.g. Synopsys DWMAC). Panics if the underlying
+    /// physical address does not fit — the kernel's page allocator today
+    /// stays under 4 GiB, so this is a safety net rather than a real risk.
+    pub fn phys_addr_u32(&self) -> u32 {
+        u32::try_from(self.phys_addr()).expect("DmaBuffer phys_addr must fit in 32 bits for DMA")
+    }
+
     /// Virtual (kernel) pointer to the start of the buffer.
     pub fn virt_addr(&self) -> *mut u8 {
         self.pages.addr() as *mut u8
