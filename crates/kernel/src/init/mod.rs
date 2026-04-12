@@ -8,14 +8,9 @@
 //! Called from `kernel_init` *after* all driver enumeration has completed, so
 //! the registries are populated before policy runs.
 
-use crate::{
-    drivers::{
-        BlockDeviceRegistry, DisplayDeviceRegistry, InputDeviceRegistry, NetDeviceRegistry,
-        RngDeviceRegistry,
-    },
-    fs, net,
-    processes::kernel_tasks,
-};
+use driver_api::{BlockDevice, DisplayDevice, InputDevice, NetDevice, RngDevice};
+
+use crate::{drivers::registry, fs, net, processes::kernel_tasks};
 
 /// Apply bring-up policy on top of the populated device registries.
 pub fn bring_up_system() {
@@ -25,28 +20,28 @@ pub fn bring_up_system() {
 }
 
 fn expose_devices_in_devfs() {
-    let block = BlockDeviceRegistry::global();
+    let block = registry::<dyn BlockDevice>();
     for i in 0..block.len() {
         if let Some(dev) = block.get(i) {
             fs::devfs::register_block_device(dev);
         }
     }
 
-    let display = DisplayDeviceRegistry::global();
+    let display = registry::<dyn DisplayDevice>();
     for i in 0..display.len() {
         if let Some(dev) = display.get(i) {
             fs::devfs::register_display_device(dev);
         }
     }
 
-    let input = InputDeviceRegistry::global();
+    let input = registry::<dyn InputDevice>();
     for i in 0..input.len() {
         if let Some(dev) = input.get(i) {
             fs::devfs::register_input_device(dev);
         }
     }
 
-    let rng = RngDeviceRegistry::global();
+    let rng = registry::<dyn RngDevice>();
     for i in 0..rng.len() {
         if let Some(dev) = rng.get(i) {
             fs::devfs::register_rng_device(dev);
@@ -55,13 +50,13 @@ fn expose_devices_in_devfs() {
 }
 
 fn mount_root_filesystem() {
-    if let Some(dev) = BlockDeviceRegistry::global().get(0) {
+    if let Some(dev) = registry::<dyn BlockDevice>().get(0) {
         kernel_tasks::spawn(fs::ext2::mount_ext2(dev));
     }
 }
 
 fn spawn_network_rx_task() {
-    if NetDeviceRegistry::global().len() > 0 {
+    if registry::<dyn NetDevice>().len() > 0 {
         kernel_tasks::spawn(net::network_rx_task());
     }
 }
