@@ -132,6 +132,7 @@ fn check_reboot_magic(byte: u8) -> bool {
 
 /// Poll UART for the reboot magic sequence (0xDEADBEEF).
 /// Called from panic handler with interrupts disabled.
+#[cfg(not(test))]
 pub fn poll_for_reboot() -> ! {
     CONSOLE_UART.panic_force_unlock();
     crate::println!("Polling for reboot...");

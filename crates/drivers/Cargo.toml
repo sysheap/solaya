@@ -17,3 +17,6 @@ mm = { path = "../mm" }
 [lib]
 test = true
 bench = false
+
+[lints]
+workspace = true

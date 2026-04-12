@@ -17,3 +17,6 @@ klib = { path = "../klib" }
 [lib]
 test = false
 bench = false
+
+[lints]
+workspace = true

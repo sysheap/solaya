@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use crate::klibc::{
     consumable_buffer::ConsumableBuffer,
     leb128::{SignedLEB128, UnsignedLEB128},

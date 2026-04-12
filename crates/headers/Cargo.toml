@@ -11,3 +11,6 @@ bindgen = "0.72"
 [lib]
 test = false
 bench = false
+
+[lints]
+workspace = true

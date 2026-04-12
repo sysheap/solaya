@@ -6,10 +6,14 @@
 //! definitions — those live in `hal` and `console`.
 #![cfg_attr(not(miri), no_std)]
 #![cfg_attr(not(miri), no_main)]
+// Under miri several HAL entry points (CalleeSavedRegs::with_context, SBI
+// calls, CSR reads) are stubs that panic; their transitive callees are
+// provably unreachable in that cfg only. The workspace denies dead_code
+// on the real riscv64 target and on kernel --tests, so we accept this
+// narrow allow rather than cfg-gate every backtrace/reset helper.
 #![cfg_attr(miri, allow(dead_code))]
 #![cfg_attr(miri, allow(unused_imports))]
 #![cfg_attr(miri, allow(unused_macros))]
-#![cfg_attr(test, allow(dead_code))]
 #![cfg_attr(test, allow(unused_imports))]
 #![cfg_attr(not(test), forbid(unsafe_code))]
 #![cfg_attr(test, deny(unsafe_code))]

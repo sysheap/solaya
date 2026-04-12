@@ -10,3 +10,6 @@ version.workspace = true
 [lib]
 test = false
 bench = false
+
+[lints]
+workspace = true
