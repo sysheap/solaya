@@ -20,7 +20,7 @@
 
 extern crate alloc;
 
-use alloc::{boxed::Box, vec::Vec};
+use alloc::{boxed::Box, sync::Arc, vec::Vec};
 use core::{fmt, future::Future, pin::Pin};
 
 #[allow(unsafe_code)]
@@ -238,4 +238,46 @@ pub trait IrqHandler: Send + Sync {
     /// Called in interrupt context. Acknowledge the device, wake the
     /// bottom-half task, return.
     fn handle(&self);
+}
+
+/// IRQ-controller backend (e.g. PLIC) that tears down a registration when the
+/// driver drops its [`IrqRegistration`] token.
+///
+/// Drivers never implement this trait — the kernel's interrupt controller
+/// does. It exists only so [`IrqRegistration::drop`] can call back into the
+/// concrete controller without `driver-api` depending on any kernel type.
+///
+/// `unregister` receives the opaque `slot` that the controller handed out when
+/// the registration was created; the controller uses it to locate and remove
+/// the handler entry.
+pub trait IrqController: Send + Sync {
+    /// Remove the handler associated with `slot`. Idempotent — calling twice
+    /// with the same slot is a no-op.
+    fn unregister(&self, slot: u64);
+}
+
+/// RAII guard handed back by a bus's `register_irq` call. Dropping it removes
+/// the handler from the underlying IRQ controller (disabling the IRQ line if
+/// no other handlers remain).
+///
+/// Drivers store this token inside their handle struct so interrupt teardown
+/// is automatic when the driver is dropped.
+#[must_use = "dropping this immediately unregisters the IRQ handler"]
+pub struct IrqRegistration {
+    controller: Arc<dyn IrqController>,
+    slot: u64,
+}
+
+impl IrqRegistration {
+    /// Construct an `IrqRegistration` from a controller + opaque slot. Only
+    /// IRQ-controller implementations (in the kernel) call this.
+    pub fn new(controller: Arc<dyn IrqController>, slot: u64) -> Self {
+        Self { controller, slot }
+    }
+}
+
+impl Drop for IrqRegistration {
+    fn drop(&mut self) {
+        self.controller.unregister(self.slot);
+    }
 }

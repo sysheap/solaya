@@ -175,11 +175,11 @@ pub struct BlockDeviceHandle {
     index: usize,
     name: String,
     capacity_sectors: u64,
-    _irq: crate::interrupts::plic::IrqRegistration,
+    _irq: driver_api::IrqRegistration,
 }
 
 impl BlockDeviceHandle {
-    pub fn new(index: usize, irq: crate::interrupts::plic::IrqRegistration) -> Self {
+    pub fn new(index: usize, irq: driver_api::IrqRegistration) -> Self {
         assert!(index < 26, "block device index must be < 26 (a-z)");
         let suffix = (b'a' + index as u8) as char;
         let name = alloc::format!("vd{suffix}");

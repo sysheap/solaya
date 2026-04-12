@@ -54,7 +54,7 @@ pub struct VirtioInputHandle {
     inner: Spinlock<InputDevice>,
     name: String,
     isr_status: MMIO<u32>,
-    irq: Spinlock<Option<crate::interrupts::plic::IrqRegistration>>,
+    irq: Spinlock<Option<driver_api::IrqRegistration>>,
 }
 
 impl VirtioInputHandle {
@@ -67,7 +67,7 @@ impl VirtioInputHandle {
         }
     }
 
-    pub fn set_irq_registration(&self, registration: crate::interrupts::plic::IrqRegistration) {
+    pub fn set_irq_registration(&self, registration: driver_api::IrqRegistration) {
         *self.irq.lock() = Some(registration);
     }
 }
