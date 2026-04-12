@@ -23,8 +23,12 @@ extern crate alloc;
 use alloc::{boxed::Box, sync::Arc, vec::Vec};
 use core::{fmt, future::Future, pin::Pin};
 
+pub mod bus;
 #[allow(unsafe_code)]
 pub mod dma;
+pub use bus::{
+    BarIndex, BusContext, DtBusContextExt, IrqId, MmioRegion, PciBusContextExt, PciCapabilityHeader,
+};
 pub use dma::DmaBuffer;
 
 pub use headers::errno::Errno as IoError;
