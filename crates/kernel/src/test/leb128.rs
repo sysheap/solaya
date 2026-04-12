@@ -1,9 +1,7 @@
 #[cfg(test)]
 mod tests {
-    use crate::klibc::{
-        consumable_buffer::ConsumableBuffer,
-        leb128::{SignedLEB128, UnsignedLEB128},
-    };
+    use crate::debugging::leb128::{SignedLEB128, UnsignedLEB128};
+    use klib::parser::ConsumableBuffer;
 
     #[test_case]
     fn unsigned_leb128() {

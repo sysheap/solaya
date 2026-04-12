@@ -13,11 +13,11 @@ use core::sync::atomic::{AtomicBool, Ordering};
 use crate::{
     device_tree::{self, DtBusContext},
     info,
-    klibc::big_endian::BigEndian,
     net::mac::MacAddress,
     pci::{PCIDevice, PciBusContext},
 };
 use driver_api::{BusContext, IrqId};
+use klib::big_endian::BigEndian;
 
 pub fn init_all_pci_devices(mut pci_devices: Vec<PCIDevice>) {
     init_network_device(&mut pci_devices);

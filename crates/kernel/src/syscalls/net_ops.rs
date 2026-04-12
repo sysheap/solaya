@@ -5,7 +5,7 @@ use headers::{
 };
 
 use crate::{
-    klibc::util::ByteInterpretable,
+    byte_interpretable::ByteInterpretable,
     net::{
         self, arp,
         sockets::{Port, SharedAssignedSocket},

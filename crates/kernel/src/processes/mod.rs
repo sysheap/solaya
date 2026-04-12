@@ -1,5 +1,6 @@
 pub(crate) mod brk;
 pub mod credentials;
+pub mod elf;
 pub mod fd_table;
 pub mod futex;
 pub mod kernel_tasks;
@@ -14,3 +15,4 @@ pub mod timer;
 pub mod userspace_ptr;
 pub mod wait_child;
 pub mod waker;
+pub(crate) mod writable_buffer;

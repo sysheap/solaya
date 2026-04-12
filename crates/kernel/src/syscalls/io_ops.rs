@@ -7,10 +7,10 @@ use headers::{
 
 use crate::{
     io::pipe,
-    klibc::util::UsizeExt,
     processes::fd_table::{FdFlags, FileDescriptor},
     syscalls::linux_validator::LinuxUserspaceArg,
 };
+use klib::util::UsizeExt;
 
 use super::linux::{LinuxSyscallHandler, LinuxSyscalls};
 

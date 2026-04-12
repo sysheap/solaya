@@ -9,9 +9,11 @@
 extern crate alloc;
 
 pub mod array_vec;
+pub mod big_endian;
 pub mod btreemap;
 pub mod deconstructed_vec;
 pub mod non_empty_vec;
+pub mod parser;
 pub mod runtime_initialized;
 pub mod send_sync;
 pub mod sizes;

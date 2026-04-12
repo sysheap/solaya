@@ -5,9 +5,8 @@ use crate::{
         eh_frame_parser::EhFrameParser,
         unwinder::{RegisterRule, Unwinder},
     },
-    klibc::{elf::ElfFile, util::UsizeExt},
     println,
-    processes::userspace_ptr::UserspacePtr,
+    processes::{elf::ElfFile, userspace_ptr::UserspacePtr},
     syscalls::{
         linux::{LinuxSyscallHandler, LinuxSyscalls, SYSCALL_METADATA},
         trace_config::TRACED_PROCESSES,
@@ -17,6 +16,7 @@ use abi::syscalls::trap_frame::{Register, TrapFrame};
 use alloc::vec::Vec;
 use core::ffi::{c_int, c_uint, c_ulong};
 use headers::errno::Errno;
+use klib::util::UsizeExt;
 
 #[derive(Clone, Copy)]
 pub enum ArgFormat {
@@ -241,10 +241,8 @@ fn print_userspace_backtrace(trap_frame: &TrapFrame, process_name: &str) {
         let unwinder = Unwinder::new(fde);
         let row = unwinder.find_row_for_address(lookup_addr);
 
-        let cfa = crate::klibc::util::wrapping_add_signed(
-            regs[row.cfa_register.as_usize()],
-            row.cfa_offset,
-        );
+        let cfa =
+            klib::util::wrapping_add_signed(regs[row.cfa_register.as_usize()], row.cfa_offset);
 
         let mut new_regs = regs;
         new_regs[2] = cfa; // sp = CFA
@@ -254,7 +252,7 @@ fn print_userspace_backtrace(trap_frame: &TrapFrame, process_name: &str) {
             match rule {
                 RegisterRule::None => continue,
                 RegisterRule::Offset(offset) => {
-                    let ptr_addr = crate::klibc::util::wrapping_add_signed(cfa, *offset);
+                    let ptr_addr = klib::util::wrapping_add_signed(cfa, *offset);
                     let Some(value) = read_userspace_usize(ptr_addr) else {
                         println!("  [backtrace: failed to read userspace memory at {ptr_addr:#x}]");
                         return;

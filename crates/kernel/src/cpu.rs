@@ -4,11 +4,14 @@ use alloc::{boxed::Box, sync::Arc};
 pub use hal::{CpuId, per_cpu::cpu_id};
 
 use crate::{
-    klibc::{Spinlock, SpinlockGuard, sizes::KiB},
     memory::page_tables::RootPageTableHolder,
     processes::{process::Process, scheduler::CpuScheduler, thread::ThreadWeakRef},
 };
-use hal::sbi::extensions::ipi_extension::sbi_send_ipi;
+use hal::{
+    sbi::extensions::ipi_extension::sbi_send_ipi,
+    spinlock::{Spinlock, SpinlockGuard},
+};
+use klib::sizes::KiB;
 
 pub(crate) const KERNEL_STACK_SIZE: usize = KiB(512);
 

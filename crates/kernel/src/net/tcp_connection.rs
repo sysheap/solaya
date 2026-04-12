@@ -13,7 +13,6 @@ use alloc::{
 
 use crate::{
     debug, info,
-    klibc::Spinlock,
     net::{
         arp,
         mac::MacAddress,
@@ -21,6 +20,7 @@ use crate::{
     },
     processes::kernel_tasks,
 };
+use hal::spinlock::Spinlock;
 
 use super::ipv4::IpV4Header;
 

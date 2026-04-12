@@ -12,9 +12,9 @@ use driver_api::NetDevice;
 use crate::{
     debug,
     drivers::NetDeviceRegistry,
-    klibc::Spinlock,
     net::{ipv4::IpV4Header, udp::UdpHeader},
 };
+use hal::spinlock::Spinlock;
 
 use self::{
     ethernet::EthernetHeader,

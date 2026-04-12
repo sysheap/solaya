@@ -4,14 +4,12 @@ use alloc::collections::BTreeMap;
 
 use crate::{
     assert::static_assert_size,
+    byte_interpretable::ByteInterpretable,
     debug,
-    klibc::{
-        Spinlock,
-        big_endian::BigEndian,
-        util::{BufferExtension, ByteInterpretable},
-    },
     net::ethernet::{EtherTypes, EthernetHeader},
 };
+use hal::spinlock::Spinlock;
+use klib::{big_endian::BigEndian, util::BufferExtension};
 
 use super::{current_mac_address, mac::MacAddress};
 

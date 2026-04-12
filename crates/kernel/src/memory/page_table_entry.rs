@@ -2,7 +2,7 @@
 use hal::memory::page_table::PageTableEntry;
 use hal::memory::page_table::XWRMode;
 
-use crate::klibc::elf;
+use crate::processes::elf;
 
 impl From<elf::ProgramHeaderFlags> for XWRMode {
     fn from(value: elf::ProgramHeaderFlags) -> Self {
@@ -21,7 +21,7 @@ impl From<elf::ProgramHeaderFlags> for XWRMode {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::klibc::elf::ProgramHeaderFlags;
+    use crate::processes::elf::ProgramHeaderFlags;
     use core::ptr::null_mut;
     use hal::memory::address::PhysAddr;
 

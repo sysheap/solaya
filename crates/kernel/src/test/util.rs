@@ -1,57 +1,28 @@
-pub use klib::util::{
-    InBytes, UsizeExt, align_up, as_byte_slice, copy_slice, is_aligned, ref_from_bytes,
-    wrapping_add_signed,
-};
-pub use mm::util::*;
-
-#[cfg(miri)]
-pub use klib::util::align_down;
-
-pub trait BufferExtension {
-    fn interpret_as<T>(&self) -> &T;
-    fn split_as<T>(&self) -> (&T, &[u8]);
-}
-
-impl BufferExtension for [u8] {
-    fn interpret_as<T>(&self) -> &T {
-        ref_from_bytes(self)
-    }
-
-    fn split_as<T>(&self) -> (&T, &[u8]) {
-        let (header_bytes, rest) = self.split_at(core::mem::size_of::<T>());
-        (header_bytes.interpret_as(), rest)
-    }
-}
-
-pub trait ByteInterpretable {
-    fn as_slice(&self) -> &[u8] {
-        as_byte_slice(self)
-    }
-}
 #[cfg(test)]
 mod tests {
     use crate::memory::PAGE_SIZE;
-    use klib::util::BufferExtension;
+    use klib::util::{BufferExtension, align_up, copy_slice};
+    use mm::util::minimum_amount_of_pages;
 
     #[test_case]
-    fn align_up() {
-        assert_eq!(super::align_up(26, 4), 28);
-        assert_eq!(super::align_up(37, 3), 39);
-        assert_eq!(super::align_up(64, 2), 64);
+    fn align_up_basic() {
+        assert_eq!(align_up(26, 4), 28);
+        assert_eq!(align_up(37, 3), 39);
+        assert_eq!(align_up(64, 2), 64);
     }
 
     #[test_case]
     fn align_up_number_of_pages() {
-        assert_eq!(super::minimum_amount_of_pages(PAGE_SIZE - 15), 1);
-        assert_eq!(super::minimum_amount_of_pages(PAGE_SIZE + 15), 2);
-        assert_eq!(super::minimum_amount_of_pages(PAGE_SIZE * 2), 2);
+        assert_eq!(minimum_amount_of_pages(PAGE_SIZE - 15), 1);
+        assert_eq!(minimum_amount_of_pages(PAGE_SIZE + 15), 2);
+        assert_eq!(minimum_amount_of_pages(PAGE_SIZE * 2), 2);
     }
 
     #[test_case]
     fn copy_from_slice() {
         let src = [1, 2, 3, 4, 5];
         let mut dst = [0, 0, 0, 0, 0, 0, 0];
-        super::copy_slice(&src, &mut dst);
+        copy_slice(&src, &mut dst);
         assert_eq!(dst, [1, 2, 3, 4, 5, 0, 0]);
     }
 

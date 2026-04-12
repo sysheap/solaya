@@ -7,11 +7,11 @@ use crate::{
         unwinder::{RegisterRule, Unwinder},
     },
     info,
-    klibc::{runtime_initialized::RuntimeInitializedData, util::UsizeExt},
     memory::{VirtAddr, linker_information::LinkerInformation},
 };
 use alloc::vec::Vec;
 use hal::{backtrace::CalleeSavedRegs, validated_ptr::ValidatedPtr};
+use klib::{runtime_initialized::RuntimeInitializedData, util::UsizeExt};
 
 #[allow(dead_code)]
 #[derive(Debug)]
@@ -83,10 +83,8 @@ impl<'a> Backtrace<'a> {
 
         let row = unwinder.find_row_for_address(ra);
 
-        let cfa = crate::klibc::util::wrapping_add_signed(
-            regs[row.cfa_register.as_usize()],
-            row.cfa_offset,
-        );
+        let cfa =
+            klib::util::wrapping_add_signed(regs[row.cfa_register.as_usize()], row.cfa_offset);
 
         let mut new_regs = regs.clone();
         new_regs.set_sp(cfa);
@@ -98,7 +96,7 @@ impl<'a> Backtrace<'a> {
                     continue;
                 }
                 RegisterRule::Offset(offset) => {
-                    let addr = crate::klibc::util::wrapping_add_signed(cfa, *offset);
+                    let addr = klib::util::wrapping_add_signed(cfa, *offset);
                     ValidatedPtr::<usize>::from_trusted(addr as *const usize).read()
                 }
             };

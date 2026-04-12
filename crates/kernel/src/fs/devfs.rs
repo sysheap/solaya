@@ -2,7 +2,7 @@ use alloc::{collections::BTreeMap, string::String, sync::Arc, vec::Vec};
 use driver_api::{BlockDevice, CharDevice, DisplayDevice, InputDevice, RngDevice};
 use headers::errno::Errno;
 
-use crate::klibc::Spinlock;
+use hal::spinlock::Spinlock;
 
 use super::vfs::{DirEntry, NodeType, VfsNode, VfsNodeRef, alloc_ino};
 

@@ -11,7 +11,8 @@ use alloc::{
     vec::Vec,
 };
 
-use crate::{debug, klibc::Spinlock};
+use crate::debug;
+use hal::spinlock::Spinlock;
 
 static SOCKET_DATA_COUNTER: AtomicU64 = AtomicU64::new(0);
 static SOCKET_WAITERS: Spinlock<Vec<Waker>> = Spinlock::new(Vec::new());

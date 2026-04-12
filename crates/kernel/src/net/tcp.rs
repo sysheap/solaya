@@ -2,11 +2,10 @@ use alloc::vec::Vec;
 use core::net::Ipv4Addr;
 
 use crate::{
-    assert::static_assert_size,
-    debug,
-    klibc::{big_endian::BigEndian, util::ByteInterpretable},
+    assert::static_assert_size, byte_interpretable::ByteInterpretable, debug,
     net::ethernet::EthernetHeader,
 };
+use klib::big_endian::BigEndian;
 
 use super::{ipv4::IpV4Header, mac::MacAddress};
 
@@ -179,8 +178,9 @@ pub enum TcpParseError {
 
 #[cfg(test)]
 mod tests {
-    use crate::{klibc::big_endian::BigEndian, net::ipv4::IpV4Header};
+    use crate::net::ipv4::IpV4Header;
     use core::net::Ipv4Addr;
+    use klib::big_endian::BigEndian;
 
     use super::TcpHeader;
 

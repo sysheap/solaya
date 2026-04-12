@@ -6,9 +6,9 @@ use core::{
 use headers::errno::Errno;
 
 use crate::{
+    byte_interpretable::ByteInterpretable,
     cpu::Cpu,
     drivers::RngDeviceRegistry,
-    klibc::util::ByteInterpretable,
     memory::{self, PAGE_SIZE},
     processes::{process_table, timer},
     syscalls::linux_validator::LinuxUserspaceArg,

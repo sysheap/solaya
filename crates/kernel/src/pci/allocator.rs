@@ -1,6 +1,6 @@
 use core::ops::Range;
 
-use crate::klibc::util;
+use klib::util;
 
 use super::{PCIRange, PciAddr, PciCpuAddr};
 

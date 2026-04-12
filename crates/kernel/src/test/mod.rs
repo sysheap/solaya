@@ -1,7 +1,10 @@
 use crate::{print, println};
 
 mod array_vec;
+mod big_endian;
 mod leb128;
+mod parser;
+mod util;
 
 pub mod qemu_exit;
 
@@ -27,7 +30,7 @@ pub fn test_runner(tests: &[&dyn Testable]) {
     println!("Running {} tests", tests.len());
     crate::memory::initialize_runtime_mappings(&[]);
     crate::io::tty_device::CONSOLE_TTY.initialize(alloc::sync::Arc::new(
-        crate::klibc::Spinlock::new(crate::io::tty_device::TtyDeviceInner::new()),
+        hal::spinlock::Spinlock::new(crate::io::tty_device::TtyDeviceInner::new()),
     ));
     // #[cfg(miri)]
     // {

@@ -1,10 +1,8 @@
-use crate::{
-    klibc::util::align_up_page_size,
-    memory::{
-        Pages, PhysAddr, PinnedHeapPages, VirtAddr,
-        page_tables::{RootPageTableHolder, XWRMode},
-    },
+use crate::memory::{
+    Pages, PhysAddr, PinnedHeapPages, VirtAddr,
+    page_tables::{RootPageTableHolder, XWRMode},
 };
+use mm::util::align_up_page_size;
 
 const BRK_SIZE: Pages = Pages::new(4);
 

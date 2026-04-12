@@ -1,6 +1,6 @@
 use crate::{
+    byte_interpretable::ByteInterpretable,
     debug,
-    klibc::util::ByteInterpretable,
     memory::VirtAddr,
     processes::{thread::Thread, userspace_ptr::UserspacePtr},
 };

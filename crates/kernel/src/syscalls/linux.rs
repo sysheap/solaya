@@ -1,7 +1,7 @@
 use crate::{
+    byte_interpretable::ByteInterpretable,
     cpu::Cpu,
     debug, fs,
-    klibc::util::{ByteInterpretable, UsizeExt},
     memory::{PAGE_SIZE, VirtAddr},
     processes::{
         fd_table::{FdFlags, FileDescriptor},
@@ -21,6 +21,7 @@ use headers::{
     socket::sockaddr_in,
     syscall_types::{CLONE_THREAD, iovec, pollfd, sigaction, sigset_t, stack_t, timespec},
 };
+use klib::util::UsizeExt;
 
 impl ByteInterpretable for sockaddr_in {}
 impl ByteInterpretable for headers::fs::stat {}

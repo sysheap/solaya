@@ -1,4 +1,3 @@
-use crate::klibc::Spinlock;
 use alloc::{collections::VecDeque, sync::Arc, vec::Vec};
 use core::{
     cmp::min,
@@ -6,6 +5,7 @@ use core::{
     pin::Pin,
     task::{Context, Poll, Waker},
 };
+use hal::spinlock::Spinlock;
 use headers::errno::Errno;
 
 pub type SharedPipeBuffer = Arc<Spinlock<PipeInner>>;

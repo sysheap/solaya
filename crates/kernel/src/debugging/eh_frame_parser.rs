@@ -1,9 +1,6 @@
-use crate::klibc::{
-    consumable_buffer::ConsumableBuffer,
-    leb128::{SignedLEB128, UnsignedLEB128},
-    util::UsizeExt,
-};
+use crate::debugging::leb128::{SignedLEB128, UnsignedLEB128};
 use alloc::{collections::BTreeMap, sync::Arc, vec::Vec};
+use klib::{parser::ConsumableBuffer, util::UsizeExt};
 
 /// This parser is far from complete (nor compliant probably)
 /// The documentation of the eh_frame is very sparse and I did
@@ -357,7 +354,6 @@ mod tests {
             eh_frame_parser::EhFrameParser,
             unwinder::{Row, Unwinder},
         },
-        klibc::util::UsizeExt,
     };
     use elf::ElfBytes;
     use gimli::{
@@ -365,6 +361,7 @@ mod tests {
         EhFrame, EndianSlice, FrameDescriptionEntry, LittleEndian, ReaderOffset, StoreOnHeap,
         UnwindContext, UnwindSection, UnwindTableRow, constants,
     };
+    use klib::util::UsizeExt;
 
     const KERNEL_ELF_TEST_BINARY: &[u8] = include_bytes!("../test/test_data/elf/kernel");
 
