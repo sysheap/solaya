@@ -6,7 +6,7 @@ use alloc::{
 };
 use headers::errno::Errno;
 
-use crate::klibc::Spinlock;
+use hal::spinlock::Spinlock;
 
 use super::vfs::{DirEntry, NodeType, VfsNode, VfsNodeRef, alloc_ino};
 

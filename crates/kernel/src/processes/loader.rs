@@ -2,20 +2,20 @@ use abi::errors::LoaderError;
 use alloc::{collections::BTreeMap, string::ToString, vec::Vec};
 use headers::syscall_types::{AT_NULL, AT_PAGESZ, AT_PHDR, AT_PHENT, AT_PHNUM, AT_RANDOM};
 
-use crate::klibc::{util::align_up, writable_buffer::WritableBuffer};
-
 use crate::{
     debug,
-    klibc::{
-        elf::{ElfFile, ProgramHeaderType},
-        util::{InBytes, UsizeExt, minimum_amount_of_pages},
-    },
     memory::{
         PAGE_SIZE, PagesAsSlice, PhysAddr, PinnedHeapPages, VirtAddr,
         page_tables::{RootPageTableHolder, XWRMode},
     },
-    processes::brk::Brk,
+    processes::{
+        brk::Brk,
+        elf::{ElfFile, ProgramHeaderType},
+        writable_buffer::WritableBuffer,
+    },
 };
+use klib::util::{InBytes, UsizeExt, align_up};
+use mm::util::minimum_amount_of_pages;
 
 pub const STACK_START: VirtAddr = VirtAddr::new(usize::MAX);
 

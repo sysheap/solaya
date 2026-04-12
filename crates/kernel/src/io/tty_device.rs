@@ -13,10 +13,9 @@ use headers::{
     },
 };
 
-use crate::{
-    klibc::{Spinlock, array_vec::ArrayVec, runtime_initialized::RuntimeInitializedData},
-    processes::{process::ProcessRef, process_table},
-};
+use crate::processes::{process::ProcessRef, process_table};
+use hal::spinlock::Spinlock;
+use klib::{array_vec::ArrayVec, runtime_initialized::RuntimeInitializedData};
 
 pub static CONSOLE_TTY: RuntimeInitializedData<TtyDevice> = RuntimeInitializedData::new();
 

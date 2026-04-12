@@ -11,7 +11,7 @@
 use alloc::{sync::Arc, vec::Vec};
 use driver_api::{BlockDevice, CharDevice, DisplayDevice, InputDevice, NetDevice, RngDevice};
 
-use crate::klibc::Spinlock;
+use hal::spinlock::Spinlock;
 
 pub struct BlockDeviceRegistry {
     devices: Spinlock<Vec<Arc<dyn BlockDevice>>>,

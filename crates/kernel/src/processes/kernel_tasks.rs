@@ -10,10 +10,10 @@ use core::{
 };
 
 use crate::{
-    klibc::Spinlock,
     memory::{VirtAddr, page_tables::RootPageTableHolder},
     processes::brk::Brk,
 };
+use hal::spinlock::Spinlock;
 
 use super::{
     process::POWERSAVE_TID,

@@ -1,16 +1,14 @@
-use crate::{
-    debug, device_tree,
-    klibc::{
-        Spinlock, big_endian::BigEndian, btreemap::SplitOffLowerThan,
-        runtime_initialized::RuntimeInitializedData,
-    },
-};
+use crate::{debug, device_tree};
 use alloc::collections::BTreeMap;
 use core::{
     pin::Pin,
     task::{Context, Poll, Waker},
 };
+use hal::spinlock::Spinlock;
 use headers::{errno::Errno, syscall_types::timespec};
+use klib::{
+    big_endian::BigEndian, btreemap::SplitOffLowerThan, runtime_initialized::RuntimeInitializedData,
+};
 
 static CLINT_REGION: Spinlock<Option<(usize, usize)>> = Spinlock::new(None);
 static TIMEBASE_FREQ: RuntimeInitializedData<u64> = RuntimeInitializedData::new();

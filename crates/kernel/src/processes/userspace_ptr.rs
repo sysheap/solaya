@@ -1,7 +1,8 @@
 use abi::pointer::Pointer;
 use headers::errno::Errno;
 
-use crate::{klibc::SpinlockGuard, processes::process::Process};
+use crate::processes::process::Process;
+use hal::spinlock::SpinlockGuard;
 use klib::send_sync::UnsafeSendSync;
 
 #[derive(Debug)]

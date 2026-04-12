@@ -1,7 +1,6 @@
-use crate::{
-    device_tree, info,
-    klibc::{MMIO, big_endian::BigEndian},
-};
+use crate::{device_tree, info};
+use hal::mmio::MMIO;
+use klib::big_endian::BigEndian;
 
 /// Trigger a system reset using the best available mechanism:
 /// 1. Device tree `syscon-reboot` node (QEMU + generic boards)

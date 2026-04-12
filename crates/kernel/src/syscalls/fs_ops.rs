@@ -6,7 +6,7 @@ use headers::{
 };
 
 use crate::{
-    fs, klibc::util::ByteInterpretable, processes::fd_table::FileDescriptor,
+    byte_interpretable::ByteInterpretable, fs, processes::fd_table::FileDescriptor,
     syscalls::linux_validator::LinuxUserspaceArg,
 };
 

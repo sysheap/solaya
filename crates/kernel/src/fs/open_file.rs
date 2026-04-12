@@ -1,7 +1,7 @@
 use alloc::sync::Arc;
 use headers::errno::Errno;
 
-use crate::klibc::Spinlock;
+use hal::spinlock::Spinlock;
 
 use super::vfs::{NodeType, VfsNodeRef};
 

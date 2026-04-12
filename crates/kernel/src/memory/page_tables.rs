@@ -3,7 +3,6 @@ use core::{
     ops::Range,
 };
 
-use crate::klibc::util::align_up;
 use abi::{pointer::Pointer, unwrap_or_return};
 use alloc::{
     boxed::Box,
@@ -11,14 +10,12 @@ use alloc::{
     vec::Vec,
 };
 use headers::errno::Errno;
+use klib::util::align_up;
 
-use crate::{
-    debug, debugging,
-    klibc::{
-        sizes::{GiB, MiB},
-        util::is_aligned,
-    },
-    memory::PAGE_SIZE,
+use crate::{debug, debugging, memory::PAGE_SIZE};
+use klib::{
+    sizes::{GiB, MiB},
+    util::is_aligned,
 };
 
 use super::{PhysAddr, VirtAddr, heap_size, linker_information::LinkerInformation};

@@ -1,4 +1,4 @@
-use super::util::copy_slice;
+use klib::util::copy_slice;
 
 pub struct WritableBuffer<'a> {
     buf: &'a mut [u8],

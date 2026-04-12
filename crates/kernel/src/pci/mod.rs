@@ -1,9 +1,6 @@
-use crate::{
-    debug, info,
-    klibc::{MMIO, Spinlock, mmio_struct},
-    pci,
-};
+use crate::{debug, info, pci};
 use alloc::{collections::BTreeMap, vec::Vec};
+use hal::{mmio::MMIO, mmio_struct, spinlock::Spinlock};
 
 pub mod address;
 mod allocator;

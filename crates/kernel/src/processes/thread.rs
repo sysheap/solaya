@@ -1,10 +1,10 @@
 use super::process::ProcessRef;
 use crate::{
     debug,
-    klibc::elf::ElfFile,
     memory::{PinnedHeapPages, VirtAddr, page_tables::RootPageTableHolder},
     processes::{
         brk::Brk,
+        elf::ElfFile,
         loader::{self, LoadedElf},
         process::{POWERSAVE_TID, Process},
         task::Task,
@@ -33,7 +33,7 @@ use headers::{
 };
 use klib::send_sync::UnsafeSendSync;
 
-use crate::klibc::Spinlock;
+use hal::spinlock::Spinlock;
 
 pub type ThreadRef = Arc<Spinlock<Thread>>;
 pub type ThreadWeakRef = Weak<Spinlock<Thread>>;

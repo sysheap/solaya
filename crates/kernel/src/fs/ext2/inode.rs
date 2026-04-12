@@ -1,7 +1,7 @@
 use alloc::{vec, vec::Vec};
 use driver_api::BlockDevice;
 
-use crate::klibc::util::BufferExtension;
+use klib::util::BufferExtension;
 
 use super::structures::{
     EXT2_DIND_BLOCK, EXT2_IND_BLOCK, EXT2_NDIR_BLOCKS, EXT2_TIND_BLOCK, Ext2BlockGroupDescriptor,

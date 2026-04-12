@@ -1,12 +1,7 @@
 use core::net::Ipv4Addr;
 
-use crate::{
-    assert::static_assert_size,
-    klibc::{
-        big_endian::BigEndian,
-        util::{BufferExtension, ByteInterpretable},
-    },
-};
+use crate::{assert::static_assert_size, byte_interpretable::ByteInterpretable};
+use klib::{big_endian::BigEndian, util::BufferExtension};
 
 #[derive(Debug, Clone)]
 #[repr(C)]
@@ -110,7 +105,7 @@ impl IpV4Header {
 mod tests {
     use core::net::Ipv4Addr;
 
-    use crate::klibc::big_endian::BigEndian;
+    use klib::big_endian::BigEndian;
 
     use super::IpV4Header;
 

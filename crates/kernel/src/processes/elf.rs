@@ -1,5 +1,5 @@
-use super::big_endian::BigEndian;
-use crate::{assert::static_assert_size, debug, klibc::util::UsizeExt};
+use crate::{assert::static_assert_size, debug};
+use klib::{big_endian::BigEndian, util::UsizeExt};
 
 const ELF_MAGIC_NUMBER: u32 = 0x7f454c46;
 
@@ -454,7 +454,7 @@ impl<'a> ElfFile<'a> {
 mod tests {
     use abi::include_bytes_align_as;
 
-    use crate::klibc::elf::ProgramHeaderType;
+    use crate::processes::elf::ProgramHeaderType;
 
     use super::{ElfFile, ElfProgramHeaderEntry, ProgramHeaderFlags};
 

@@ -1,13 +1,7 @@
 use core::fmt::Display;
 
-use crate::{
-    assert::static_assert_size,
-    debug,
-    klibc::{
-        big_endian::BigEndian,
-        util::{BufferExtension, ByteInterpretable},
-    },
-};
+use crate::{assert::static_assert_size, byte_interpretable::ByteInterpretable, debug};
+use klib::{big_endian::BigEndian, util::BufferExtension};
 
 use super::{current_mac_address, mac::MacAddress};
 

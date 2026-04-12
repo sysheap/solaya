@@ -1,7 +1,5 @@
-use crate::{
-    io::TEST_DEVICE_ADDRESS,
-    klibc::{MMIO, Spinlock},
-};
+use crate::io::TEST_DEVICE_ADDRESS;
+use hal::{mmio::MMIO, spinlock::Spinlock};
 
 const EXIT_SUCCESS_CODE: u32 = 0x5555;
 #[allow(dead_code)]

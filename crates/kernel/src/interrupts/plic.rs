@@ -1,11 +1,9 @@
-use crate::{
-    device_tree, info,
-    klibc::{MMIO, Spinlock, big_endian::BigEndian, runtime_initialized::RuntimeInitializedData},
-};
+use crate::{device_tree, info};
 use alloc::{sync::Arc, vec::Vec};
 use core::sync::atomic::{AtomicU64, Ordering};
 use driver_api::{IrqController, IrqHandler, IrqRegistration};
-use hal::CpuId;
+use hal::{CpuId, mmio::MMIO, spinlock::Spinlock};
+use klib::{big_endian::BigEndian, runtime_initialized::RuntimeInitializedData};
 
 struct InterruptHandler {
     irq: u32,

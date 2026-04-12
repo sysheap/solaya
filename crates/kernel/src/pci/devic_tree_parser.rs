@@ -1,10 +1,8 @@
 use core::fmt::Debug;
 
-use crate::{
-    device_tree::{self},
-    klibc::{big_endian::BigEndian, util::UsizeExt},
-};
+use crate::device_tree::{self};
 use alloc::vec::Vec;
+use klib::{big_endian::BigEndian, util::UsizeExt};
 
 use super::{PciAddr, PciCpuAddr};
 

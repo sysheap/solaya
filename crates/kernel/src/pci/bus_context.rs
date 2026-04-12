@@ -14,9 +14,9 @@ use hal::mmio::MMIO;
 
 use crate::{
     interrupts::plic,
-    klibc::Spinlock,
     pci::{GeneralDevicePciHeaderExt, PCIDevice},
 };
+use hal::spinlock::Spinlock;
 
 /// Wraps a `PCIDevice` behind a `Spinlock` so `BusContext`'s `&self` methods
 /// can mutate the device (BAR init and command-register writes both take

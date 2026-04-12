@@ -8,10 +8,9 @@ use driver_api::BlockDevice;
 
 use crate::{
     fs::vfs::{self, VfsNodeRef, alloc_ino},
-    info,
-    klibc::util::BufferExtension,
-    warn,
+    info, warn,
 };
+use klib::util::BufferExtension;
 
 use dir::Ext2Dir;
 use file::Ext2File;

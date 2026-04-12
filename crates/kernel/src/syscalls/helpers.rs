@@ -1,9 +1,8 @@
 use alloc::string::String;
 use headers::{errno::Errno, syscall_types::timespec};
 
-use crate::{
-    fs, klibc::consumable_buffer::ConsumableBuffer, syscalls::linux_validator::LinuxUserspaceArg,
-};
+use crate::{fs, syscalls::linux_validator::LinuxUserspaceArg};
+use klib::parser::ConsumableBuffer;
 
 use super::linux::LinuxSyscallHandler;
 

@@ -2,20 +2,17 @@ pub mod bus_context;
 
 pub use bus_context::DtBusContext;
 
-use crate::{
-    assert::static_assert_size,
-    debug, info,
-    klibc::{
-        big_endian::BigEndian, consumable_buffer::ConsumableBuffer,
-        runtime_initialized::RuntimeInitializedData, util::UsizeExt,
-    },
-};
+use crate::{assert::static_assert_size, debug, info};
 use core::{
     fmt::{Debug, Display},
     mem::size_of,
     ops::Range,
 };
 use hal::validated_ptr::ValidatedPtr;
+use klib::{
+    big_endian::BigEndian, parser::ConsumableBuffer, runtime_initialized::RuntimeInitializedData,
+    util::UsizeExt,
+};
 
 const FDT_MAGIC: u32 = 0xd00dfeed;
 const FDT_VERSION: u32 = 17;
@@ -452,9 +449,9 @@ mod tests {
     use crate::{
         device_tree::{DeviceTree, Header},
         info,
-        klibc::big_endian::BigEndian,
     };
     use abi::include_bytes_align_as;
+    use klib::big_endian::BigEndian;
 
     const DTB: &[u8] = include_bytes_align_as!(Header, "../test/test_data/dtb");
 

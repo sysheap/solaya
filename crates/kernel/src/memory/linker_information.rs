@@ -32,7 +32,7 @@ macro_rules! sections {
         use hal::memory::page_table::XWRMode;
         use $crate::memory::PAGE_SIZE;
         use $crate::debugging;
-        use $crate::klibc::util::align_up;
+        use klib::util::align_up;
 
         pub struct LinkerInformation;
 

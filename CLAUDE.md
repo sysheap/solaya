@@ -302,8 +302,8 @@ Solaya is licensed under **MIT**. To keep it that way:
 **No bloated comments.** Add comments only when explaining invariants or non-obvious logic. Never add comments that restate what the code does, separators, or decorative formatting.
 
 **Use existing utilities.** Before implementing helper functions, check for existing utilities:
-- `ByteInterpretable::as_slice()` (kernel/src/klibc/util.rs) - Convert any struct to &[u8]
-- `is_power_of_2_or_zero()`, `is_aligned()` (kernel/src/klibc/util.rs) - Common checks
+- `ByteInterpretable::as_slice()` (crates/kernel/src/byte_interpretable.rs, delegates to `klib::util::as_byte_slice`) - Convert any struct to &[u8]
+- `is_power_of_2_or_zero()`, `is_aligned()` (crates/klib/src/util.rs) - Common checks
 
 **Reuse Linux/musl header definitions.** Constants and structs from Linux UAPI or musl libc headers must be auto-generated via bindgen in the `headers` crate, not defined manually. Only define types manually when they are not available in any header (e.g., kernel-internal structs like `linux_dirent64`).
 

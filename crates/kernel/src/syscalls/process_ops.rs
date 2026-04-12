@@ -1,5 +1,6 @@
 use alloc::{collections::BTreeMap, string::String, sync::Arc};
 use core::ffi::{c_int, c_ulong};
+use hal::spinlock::Spinlock;
 use headers::{
     errno::Errno,
     syscall_types::{CLONE_CHILD_CLEARTID, CLONE_PARENT_SETTID, CLONE_SETTLS},
@@ -7,7 +8,6 @@ use headers::{
 
 use crate::{
     cpu::Cpu,
-    klibc::Spinlock,
     memory::VirtAddr,
     processes::{
         process::Process,

@@ -8,7 +8,8 @@ use core::{
 
 use headers::errno::Errno;
 
-use crate::{klibc::Spinlock, processes::process::ProcessRef};
+use crate::processes::process::ProcessRef;
+use hal::spinlock::Spinlock;
 
 use super::userspace_ptr::UserspacePtr;
 

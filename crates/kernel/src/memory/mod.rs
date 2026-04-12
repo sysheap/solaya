@@ -1,4 +1,5 @@
-use crate::{device_tree, info, klibc::Spinlock};
+use crate::{device_tree, info};
+use hal::spinlock::Spinlock;
 
 use core::{ops::Range, ptr::NonNull};
 use linker_information::LinkerInformation;
