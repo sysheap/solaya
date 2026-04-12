@@ -78,17 +78,18 @@ fn handle_timer_interrupt() {
 
 ### handle_external_interrupt()
 
-Called on external interrupt (UART or VirtIO network):
+Called on external interrupt. The PLIC claims the next pending IRQ and
+dispatches through the typed `Arc<dyn driver_api::IrqHandler>` registered for
+that source (see `crates/kernel/src/interrupts/plic.rs`). Each driver's
+`IrqHandler::handle()` acknowledges the device-specific ISR and wakes the
+bottom-half task; the worker thread polls the readied tasks outside interrupt
+context.
+
 ```rust
 fn handle_external_interrupt() {
-    let plic_interrupt = PLIC.lock().get_next_pending()?;
-    match plic_interrupt {
-        Uart => { /* read bytes, route through TtyDevice line discipline, echo to UART, deliver signals to fg pgrp */ }
-        VirtioNet => {
-            net::on_network_interrupt();  // Wakes network task wakers
-            // Worker thread polls ready tasks (not done in interrupt context)
-        }
-    }
+    let irq = PLIC.lock().claim()?;
+    plic::dispatch_interrupt(irq);  // Arc<dyn IrqHandler>::handle()
+    PLIC.lock().complete(irq);
 }
 ```
 
