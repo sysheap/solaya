@@ -33,7 +33,8 @@ add_custom_target(clippy
     COMMAND ${CMAKE_COMMAND} -E env ${_solaya_cargo_env}
             ${SOLAYA_CARGO} clippy -p solaya --tests -- -D warnings
     # driver-api host tests (different target so the trait tests compile)
-    COMMAND ${SOLAYA_CARGO} clippy -p driver-api --tests
+    COMMAND ${CMAKE_COMMAND} -E env ${_solaya_cargo_env}
+            ${SOLAYA_CARGO} clippy -p driver-api --tests
             --target x86_64-unknown-linux-gnu -- -D warnings
     DEPENDS headers-generated
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
@@ -54,7 +55,8 @@ add_custom_target(test-unit
             --target x86_64-unknown-linux-gnu
     COMMAND ${SOLAYA_CARGO} test --release -p hal --lib
             --target x86_64-unknown-linux-gnu --no-default-features
-    COMMAND ${SOLAYA_CARGO} test --release -p driver-api
+    COMMAND ${CMAKE_COMMAND} -E env ${_solaya_cargo_env}
+            ${SOLAYA_CARGO} test --release -p driver-api
             --target x86_64-unknown-linux-gnu
     DEPENDS userspace-all headers-generated
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
