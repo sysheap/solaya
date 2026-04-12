@@ -857,3 +857,38 @@ Do not paper over disagreement.
   - Acceptance grep
     `grep -rn '^use (solaya|crate::(fs|net|processes|syscalls|interrupts|pci|device_tree|cpu|klibc))' crates/drivers/`
     returns **empty**. 69/69 system tests green.
+
+- v8 (post-Phase-8): Policy/mechanism split landed.
+  `kernel/src/init/mod.rs` is a new top-level module that owns system
+  bring-up policy. `kernel_init` now calls `drivers::init_all_pci_devices`
+  + `drivers::init_dwmac_devices` (mechanism — enumerate, initialize,
+  register into the typed registries), then `init::bring_up_system()`
+  (policy — expose devices in devfs, mount ext2 on the first block
+  device, spawn the network RX task if any net device is present).
+  Adjustments:
+  - Scope kept to a single `init/mod.rs` file — under the 150-line
+    guideline, no sub-module split yet.
+  - `fs::devfs::register_*` calls also moved out of `drivers/mod.rs`
+    into `bring_up_system`. The task scope flagged `fs::ext2` and
+    `net::network_rx_task` explicitly, but the same "no `fs::*` in
+    drivers/" rule applies to the devfs-node registrations, so they
+    moved too. `CharDeviceRegistry` stays hands-off: the console UART
+    registers itself via `io::uart::register_console_char_device()` at
+    init time, outside the generic driver enumeration loop — that's
+    boot-level infrastructure, not policy worth centralizing.
+  - `init_dwmac_devices`'s early-out and per-child guard switched from
+    `net::has_network_device()` to `NetDeviceRegistry::global().len()`.
+    Both check the same underlying registry today; the new form avoids
+    leaning on `crate::net::*` from `drivers/mod.rs`.
+  - `init_all_pci_devices` + `init_dwmac_devices` remain on the kernel
+    side (not in `crates/drivers/`) since they wire up kernel-specific
+    bus contexts (`PciBusContext`, `DtBusContext`) and parse the
+    kernel-owned device tree. They qualify as "kernel mechanism" vs
+    "driver code that lives in `crates/drivers/`".
+  - Acceptance grep
+    `grep -rn 'fs::ext2::\|net::network_rx_task\|kernel_tasks::spawn'
+    crates/kernel/src/drivers/ crates/drivers/` returns **empty**.
+    `drivers/mod.rs` imports only `device_tree`, `info!`, `klibc`,
+    `net::mac::MacAddress`, `pci`, plus `driver_api` — no `fs`, no
+    `net::{self}`, no `processes::kernel_tasks`. 69/69 system tests
+    green.
