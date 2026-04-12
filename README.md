@@ -43,7 +43,7 @@ See `plans/` for the roadmap and strategy.
 - **GDB MCP server** — Programmatic GDB debugging (breakpoints, stepping, register inspection) exposed as MCP tools
 - **System tests** — Integration tests that boot the OS in QEMU and interact via stdin/stdout, covering networking, processes, signals, stress, and shell behavior
 - **Unit tests** — Kernel unit tests with a custom `#[test_case]` framework, plus Miri for undefined behavior detection
-- **CI** — Build, fmt, clippy, unit tests, Miri, and system tests on self-hosted Nix runners
+- **CI** — Build, fmt, clippy, unit tests, Miri, and system tests on Ubuntu via CMake
 - **AI-assisted development** — Issues and PRs may be created by [Claude Code](https://claude.ai/code) under the maintainer's GitHub account
 
 ### Not Yet Implemented
@@ -57,34 +57,67 @@ See `plans/` for the roadmap and strategy.
 
 ## How Do I Run It?
 
-This project uses a Nix develop shell that provides all required tools.
+The build system is CMake + Kconfig, driven through a thin `Makefile`
+passthrough.  Three steps on a fresh clone:
 
 ```bash
-# Install nix
-sh <(curl -L https://nixos.org/nix/install) --daemon
-
-# Enable nix-command and flakes
-echo -e '\nexperimental-features = nix-command flakes\n' | sudo tee -a /etc/nix/nix.conf
-
-# Restart nix daemon
-sudo systemctl restart nix-daemon
-
-# Install direnv
-sudo apt install direnv
-
-# Add direnv hook to your shell (see https://direnv.net/docs/hook.html for non-bash shells)
-echo -e 'eval "$(direnv hook bash)"\n' >> ~/.bashrc
-
-# In the Solaya repository
-direnv allow
-# Re-enter the directory — nix will pull all dependencies automatically
+make configure    # cmake --preset riscv64-virt (seeds build/.config)
+make toolchain    # builds binutils/gcc/musl/linux-headers (~1h, cached)
+make              # builds the kernel binary (build/kernel/solaya.bin)
+make run          # boot the kernel in QEMU
 ```
 
-Then run the OS:
+The cross-toolchain builds from pinned source tarballs into
+`build/toolchain/riscv64/`, so the only host deps are the packages that
+bootstrap binutils/gcc/musl, drive the Rust build, and provide
+`qemu-system-riscv64` for running the kernel.
 
+### Host prerequisites
+
+**Rust toolchain.**  The repo pins a specific nightly via
+`rust-toolchain.toml`; install rustup and it will fetch the right
+toolchain automatically on first `cargo` invocation:
+
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+    | sh -s -- -y --default-toolchain none --profile minimal
 ```
-just run
+
+**Ubuntu / Debian.**  Exactly the set CI installs:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y --no-install-recommends \
+    build-essential \
+    cmake ninja-build \
+    python3 \
+    libclang-dev clang \
+    tmux \
+    flex bison bc \
+    texinfo gawk \
+    pkg-config \
+    rsync \
+    qemu-system-misc
 ```
+
+**Fedora.**  Same tools, Fedora package names:
+
+```bash
+sudo dnf install -y \
+    gcc gcc-c++ make \
+    cmake ninja-build \
+    python3 \
+    clang-devel clang \
+    tmux \
+    flex bison bc \
+    texinfo gawk \
+    pkgconf-pkg-config \
+    rsync \
+    qemu-system-riscv
+```
+
+Optional, but recommended for running the system tests:
+`cargo install cargo-nextest --locked`.
 
 ## What Can I Do?
 
@@ -107,14 +140,19 @@ plans/            Roadmap and strategy documents
 
 ## Useful Commands
 
-The project uses [just](https://github.com/casey/just) as a command runner. Run `just -l` for a full list.
+The `Makefile` at the root is a one-line passthrough to
+`cmake --build build --target ...`; use whichever form you prefer.
 
 ```bash
-just run            # Build and run in QEMU
-just build          # Build kernel with userspace
-just test           # Run all tests (unit + system)
-just ci             # Run full CI pipeline (clippy, fmt, tests, miri)
-just clippy         # Run linter
-just debug          # Start QEMU with GDB in tmux
-just addr2line ADDR # Resolve kernel address to source location
+make                # Build kernel binary
+make run            # Build and run in QEMU
+make run-fb         # Run with framebuffer
+make debug          # QEMU (paused) + GDB attached in tmux
+make attach         # Attach GDB to an already-running QEMU
+make test           # Run all tests (unit + system)
+make clippy         # Run linter across every workspace
+make fmt-check      # cargo fmt --check across every workspace
+make miri           # Undefined-behavior detector
+make ci             # Full pre-merge gate (fmt + clippy + tests + miri + system)
+make menuconfig     # Kconfig TUI to edit build/.config
 ```
