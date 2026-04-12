@@ -5,7 +5,7 @@
       "cwd": "."
     },
     "gdb": {
-      "command": "python",
+      "command": ".venv/bin/python",
       "args": ["-m", "gdb_mcp_server"],
       "cwd": "."
     },

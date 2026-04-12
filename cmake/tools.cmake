@@ -11,6 +11,27 @@ add_custom_target(mcp-server
     COMMENT "Building MCP server"
 )
 
+# gdb-mcp-server — create project-local venv at ${CMAKE_SOURCE_DIR}/.venv
+# and install Python deps from requirements.txt. Idempotent: re-running is
+# a fast no-op when the venv exists and deps are up-to-date.
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+
+add_custom_target(gdb-mcp-server
+    COMMAND ${Python3_EXECUTABLE} -m venv ${CMAKE_SOURCE_DIR}/.venv
+    COMMAND ${CMAKE_SOURCE_DIR}/.venv/bin/pip install --disable-pip-version-check
+            -r ${CMAKE_SOURCE_DIR}/gdb_mcp_server/requirements.txt
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    USES_TERMINAL
+    VERBATIM
+    COMMENT "Preparing gdb_mcp_server venv + deps"
+)
+
+# mcp-servers — umbrella: build both MCP servers in one shot.
+add_custom_target(mcp-servers
+    DEPENDS mcp-server gdb-mcp-server
+    COMMENT "Building/preparing both MCP servers"
+)
+
 # fetch-deps — cargo fetch across every workspace, for offline/CI prewarm.
 add_custom_target(fetch-deps
     COMMAND ${SOLAYA_CARGO} fetch

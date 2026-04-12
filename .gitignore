@@ -15,6 +15,7 @@ tools/bindgen-driver/Cargo.lock
 /symbols
 /.gdb_sources
 /.direnv
+/.venv
 
 __pycache__/
 disk.img

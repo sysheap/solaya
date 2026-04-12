@@ -266,13 +266,18 @@ Run `regenerate_index` to keep INDEX.md current.
 
 ## MCP Server
 
-The MCP server (`mcp-server/`) lets AI agents interact with Solaya running in QEMU over the Model Context Protocol.
+The MCP server (`mcp-server/`) lets AI agents interact with Solaya running in QEMU over the Model Context Protocol. A second server (`gdb_mcp_server/`, Python) exposes GDB as tools — see the GDB MCP Server section above.
 
 ### Build & Run
 ```bash
-cmake --build build --target mcp-server                         # Build
-./mcp-server/target/x86_64-unknown-linux-gnu/release/mcp-server  # Run (stdio transport)
+cmake --build build --target mcp-servers                        # Build both (Rust + Python venv)
+cmake --build build --target mcp-server                         # Rust only
+cmake --build build --target gdb-mcp-server                     # Python venv only
+./mcp-server/target/x86_64-unknown-linux-gnu/release/mcp-server  # Run solaya server (stdio transport)
+./.venv/bin/python -m gdb_mcp_server                             # Run gdb server (stdio transport)
 ```
+
+The `gdb-mcp-server` target creates a project-local venv at `./.venv/` and installs pinned Python deps from `gdb_mcp_server/requirements.txt`. `.mcp.json` points the `gdb` server at `.venv/bin/python`.
 
 ### Available Tools
 
