@@ -81,6 +81,12 @@ set(_EP_COMMON
 ExternalProject_Add(binutils
     URL       "${SOLAYA_BINUTILS_URL}"
     URL_HASH  SHA256=${SOLAYA_BINUTILS_SHA256}
+    # STAMP_DIR lives under the install prefix (cached in CI) so step-done
+    # markers survive across builds with a fresh ${CMAKE_BINARY_DIR}; without
+    # this, a cache-restored install dir still triggers a full rebuild because
+    # the default stamps in build/toolchain/<pkg>-prefix/src/<pkg>-stamp/ are
+    # missing. Same rationale for the other ExternalProject_Add blocks below.
+    STAMP_DIR "${SOLAYA_TC_ROOT}/_stamp/binutils"
     ${_EP_COMMON}
     CONFIGURE_COMMAND
         <SOURCE_DIR>/configure
@@ -108,6 +114,7 @@ ExternalProject_Add(binutils
 ExternalProject_Add(gcc-stage1
     URL       "${SOLAYA_GCC_URL}"
     URL_HASH  SHA256=${SOLAYA_GCC_SHA256}
+    STAMP_DIR "${SOLAYA_TC_ROOT}/_stamp/gcc-stage1"
     ${_EP_COMMON}
     DEPENDS   binutils
     # gcc's own `contrib/download_prerequisites` fetches gmp/mpfr/mpc/isl
@@ -150,6 +157,7 @@ set(_linux_arch "riscv")
 ExternalProject_Add(linux-headers
     URL       "${SOLAYA_LINUX_HEADERS_URL}"
     URL_HASH  SHA256=${SOLAYA_LINUX_HEADERS_SHA256}
+    STAMP_DIR "${SOLAYA_TC_ROOT}/_stamp/linux-headers"
     ${_EP_COMMON}
     DEPENDS   gcc-stage1
     CONFIGURE_COMMAND ""
@@ -177,6 +185,7 @@ set(_musl_cc "${SOLAYA_TC_PREFIX}/bin/${SOLAYA_TC_TRIPLE}-gcc")
 ExternalProject_Add(musl
     URL       "${SOLAYA_MUSL_URL}"
     URL_HASH  SHA256=${SOLAYA_MUSL_SHA256}
+    STAMP_DIR "${SOLAYA_TC_ROOT}/_stamp/musl"
     ${_EP_COMMON}
     DEPENDS   gcc-stage1 linux-headers
     CONFIGURE_COMMAND
@@ -223,6 +232,7 @@ ExternalProject_Add(musl
 ExternalProject_Add(gcc-stage2
     URL       "${SOLAYA_GCC_URL}"
     URL_HASH  SHA256=${SOLAYA_GCC_SHA256}
+    STAMP_DIR "${SOLAYA_TC_ROOT}/_stamp/gcc-stage2"
     ${_EP_COMMON}
     DEPENDS   binutils musl linux-headers
     PATCH_COMMAND
