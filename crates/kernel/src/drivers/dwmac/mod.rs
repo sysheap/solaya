@@ -742,7 +742,7 @@ impl driver_api::IrqHandler for DwmacHandle {
         let mut isr = MMIO::<u32>::new(self.isr_status.addr());
         let status = isr.read();
         isr.write(status);
-        crate::net::notify_packet_arrival();
+        driver_api::net_notifier::notify();
     }
 }
 

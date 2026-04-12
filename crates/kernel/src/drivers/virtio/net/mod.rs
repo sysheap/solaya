@@ -22,7 +22,10 @@ use crate::{
 use alloc::{string::String, vec::Vec};
 use driver_api::{BarIndex, BusContext, MmioRegion, PciCapabilityHeaderExt, bus::pci_command};
 
-use crate::net::DRIVER_HEADER_RESERVE;
+/// Size of `virtio_net_hdr` (12 bytes for the legacy / no-mrg_rxbuf layout).
+/// The network stack reserves this many bytes at the start of every outbound
+/// packet buffer so the driver can fill the header without reallocating.
+const VIRTIO_NET_HDR_LEN: usize = core::mem::size_of::<virtio_net_hdr>();
 const EXPECTED_QUEUE_SIZE: usize = 0x100;
 
 const VIRTIO_NET_F_MAC: u64 = 1 << 5;
@@ -315,7 +318,7 @@ impl NetworkDevice {
 
     fn fill_net_header(mut data: Vec<u8>) -> Vec<u8> {
         assert!(
-            data.len() >= DRIVER_HEADER_RESERVE,
+            data.len() >= VIRTIO_NET_HDR_LEN,
             "Packet must have pre-reserved driver header space"
         );
         let header = virtio_net_hdr {
@@ -327,7 +330,7 @@ impl NetworkDevice {
             csum_offset: 0,
             num_buffers: 0,
         };
-        data[..DRIVER_HEADER_RESERVE].copy_from_slice(header.as_slice());
+        data[..VIRTIO_NET_HDR_LEN].copy_from_slice(header.as_slice());
         data
     }
 }
@@ -413,7 +416,7 @@ impl driver_api::IrqHandler for VirtioNetHandle {
     fn handle(&self) {
         // VirtIO ISR status is read-to-clear.
         let _status = self.isr_status.read();
-        crate::net::notify_packet_arrival();
+        driver_api::net_notifier::notify();
     }
 }
 
