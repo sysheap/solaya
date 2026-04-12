@@ -1,8 +1,10 @@
 [workspace]
 members = [
     "boot",
-    "crates/hal",
     "crates/abi",
+    "crates/console",
+    "crates/driver-api",
+    "crates/hal",
     "crates/headers",
     "crates/kernel",
     "crates/klib",
