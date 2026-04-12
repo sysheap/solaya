@@ -1,26 +1,23 @@
-use crate::{
-    assert::static_assert_size,
-    debug,
-    drivers::virtio::{
-        capability::{
-            DEVICE_STATUS_ACKNOWLEDGE, DEVICE_STATUS_DRIVER, DEVICE_STATUS_DRIVER_OK,
-            DEVICE_STATUS_FAILED, DEVICE_STATUS_FEATURES_OK, VIRTIO_F_VERSION_1,
-            VIRTIO_PCI_CAP_COMMON_CFG, VIRTIO_PCI_CAP_DEVICE_CFG, VIRTIO_PCI_CAP_ISR_CFG,
-            VIRTIO_PCI_CAP_NOTIFY_CFG, VIRTIO_VENDOR_SPECIFIC_CAPABILITY_ID, virtio_pci_cap,
-            virtio_pci_capFields, virtio_pci_common_cfg, virtio_pci_common_cfgFields,
-            virtio_pci_notify_cap, virtio_pci_notify_capFields,
-        },
-        virtqueue::{BufferDirection, VirtQueue},
-    },
-    info,
-    klibc::{
-        MMIO, Spinlock, mmio_struct,
-        util::{BufferExtension, ByteInterpretable, is_power_of_2_or_zero},
-    },
-    net::mac::MacAddress,
+use abi::static_assert_size;
+use alloc::{string::String, vec, vec::Vec};
+use console::{debug, info};
+use driver_api::{
+    BarIndex, BusContext, MacAddress, MmioRegion, PciCapabilityHeaderExt, bus::pci_command,
 };
-use alloc::{string::String, vec::Vec};
-use driver_api::{BarIndex, BusContext, MmioRegion, PciCapabilityHeaderExt, bus::pci_command};
+use hal::{mmio::MMIO, mmio_struct, spinlock::Spinlock};
+use klib::util::{BufferExtension, ByteInterpretable, is_power_of_2_or_zero};
+
+use crate::virtio::{
+    capability::{
+        DEVICE_STATUS_ACKNOWLEDGE, DEVICE_STATUS_DRIVER, DEVICE_STATUS_DRIVER_OK,
+        DEVICE_STATUS_FAILED, DEVICE_STATUS_FEATURES_OK, VIRTIO_F_VERSION_1,
+        VIRTIO_PCI_CAP_COMMON_CFG, VIRTIO_PCI_CAP_DEVICE_CFG, VIRTIO_PCI_CAP_ISR_CFG,
+        VIRTIO_PCI_CAP_NOTIFY_CFG, VIRTIO_VENDOR_SPECIFIC_CAPABILITY_ID, virtio_pci_cap,
+        virtio_pci_capFields, virtio_pci_common_cfg, virtio_pci_common_cfgFields,
+        virtio_pci_notify_cap, virtio_pci_notify_capFields,
+    },
+    virtqueue::{BufferDirection, VirtQueue},
+};
 
 /// Size of `virtio_net_hdr` (12 bytes for the legacy / no-mrg_rxbuf layout).
 /// The network stack reserves this many bytes at the start of every outbound
@@ -49,10 +46,7 @@ pub struct InitializedNetworkDevice {
 
 impl NetworkDevice {
     pub fn is_virtio_net(bus: &dyn BusContext) -> bool {
-        crate::drivers::virtio::capability::is_virtio_with_subsystem(
-            bus,
-            VIRTIO_NETWORK_SUBSYSTEM_ID,
-        )
+        crate::virtio::capability::is_virtio_with_subsystem(bus, VIRTIO_NETWORK_SUBSYSTEM_ID)
     }
 
     pub fn initialize(bus: &dyn BusContext) -> Result<InitializedNetworkDevice, &'static str> {
@@ -455,7 +449,7 @@ impl Drop for NetworkDevice {
 mmio_struct! {
     #[repr(C)]
     struct virtio_net_config {
-        mac: crate::net::mac::MacAddress,
+        mac: MacAddress,
         status: u16,
         max_virtqueue_pairs: u16,
         mtu: u16,
