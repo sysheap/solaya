@@ -4,9 +4,9 @@ pub mod jh7110;
 pub mod registry;
 pub mod virtio;
 
-pub use registry::BlockDeviceRegistry;
+pub use registry::{BlockDeviceRegistry, NetDeviceRegistry};
 
-use alloc::{boxed::Box, sync::Arc, vec::Vec};
+use alloc::{sync::Arc, vec::Vec};
 use core::sync::atomic::{AtomicBool, Ordering};
 
 use crate::{
@@ -35,7 +35,9 @@ fn init_network_device(pci_devices: &mut Vec<PCIDevice>) {
         let plic_irq = device.plic_interrupt_id();
         let init =
             virtio::net::NetworkDevice::initialize(device).expect("Initialization must work.");
-        net::assign_network_device(Box::new(init.device));
+        let handle: Arc<dyn driver_api::NetDevice> =
+            Arc::new(virtio::net::VirtioNetHandle::new(init.device));
+        NetDeviceRegistry::global().register(handle);
         net::init_isr_status(init.interrupt_status);
         plic::register_interrupt(plic_irq, net::on_network_interrupt);
         kernel_tasks::spawn(net::network_rx_task());
@@ -179,7 +181,8 @@ pub fn init_dwmac_devices() {
         let isr_status = device.isr_status_mmio();
 
         if !net::has_network_device() {
-            net::assign_network_device(Box::new(device));
+            let handle: Arc<dyn driver_api::NetDevice> = Arc::new(dwmac::DwmacHandle::new(device));
+            NetDeviceRegistry::global().register(handle);
             net::init_isr_status(isr_status);
             plic::register_interrupt(plic_irq, net::on_network_interrupt);
             kernel_tasks::spawn(net::network_rx_task());
