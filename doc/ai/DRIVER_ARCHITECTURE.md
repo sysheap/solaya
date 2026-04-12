@@ -655,3 +655,42 @@ Do not paper over disagreement.
   - Per-driver `RuntimeInitializedData<...>` globals (`virtio::rng::DEVICE`,
     `virtio::input::DEVICE`, `bochs_display` statics) are gone; the
     registries are the source of truth.
+- v4 (post-Phase-4): `IrqHandler` trait + RAII `IrqRegistration` landed.
+  Every driver now goes through `Arc<dyn IrqHandler>`; no `fn()`-pointer
+  interrupt handlers remain. Adjustments:
+  - `IrqRegistration` lives in `crates/kernel/src/interrupts/plic.rs`, not
+    in `driver-api` (option (c) in the plan). The concrete teardown path
+    needs kernel-private state (`INTERRUPT_HANDLERS`, `PLIC`), so keeping
+    the type there avoids a second `IrqController` trait in `driver-api`
+    just to make `Drop` work. Drivers hold the opaque token and don't see
+    the PLIC.
+  - Slot identifier is a monotonic `u64` counter instead of a Vec index —
+    `swap_remove` during unregister would otherwise invalidate other
+    outstanding tokens. Slots are compared for equality; the lookup is
+    linear, which is fine for a few dozen IRQs.
+  - `unregister` disables the IRQ at the PLIC when the last handler for
+    that line goes away. For shared lines (none today, but block I/O could
+    grow multiple devices on one irq later) it just removes the entry.
+  - Every `NetDevice` impl (`VirtioNetHandle`, `DwmacHandle`) also impls
+    `IrqHandler` on the same struct. The handler body reads the
+    device-specific ISR (read-to-clear on VirtIO, write-1-to-clear on
+    DWMAC4) and calls `net::notify_packet_arrival()` — a new short helper
+    that owns the shared `NETWORK_INTERRUPT_COUNTER` + wakers drain. The
+    global `ISR_STATUS` / `init_isr_status` / `on_network_interrupt` in
+    `net/mod.rs` are gone.
+  - Each driver handle stores `Spinlock<Option<IrqRegistration>>` (rather
+    than `IrqRegistration` directly) because the registration requires
+    `Arc<dyn IrqHandler>` pointing at the handle itself, so the handle
+    must exist first. A `set_irq_registration` setter is called right
+    after `plic::register` at init time. `BlockDeviceHandle` is the one
+    exception — its `BlockIrqHandler` is a separate struct, so it can
+    take the `IrqRegistration` by value.
+  - `virtio::input::HANDLE: Spinlock<Option<Arc<...>>>` (the Phase 3 shim)
+    is deleted. The PLIC now holds the `Arc<dyn IrqHandler>` directly.
+  - UART's `IrqRegistration` is `mem::forget`ed in `kernel_init` — the
+    console lives forever and there's no graceful shutdown path.
+  - `cargo test -p driver-api --target x86_64-unknown-linux-gnu` grows a
+    new `irq_handler` suite (two cases) proving trait-object dispatch.
+    The `IrqRegistration::Drop` plumbing can only be exercised on-target
+    (needs the PLIC MMIO machinery), so it's covered indirectly via the
+    69 system tests.
