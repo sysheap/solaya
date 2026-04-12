@@ -297,6 +297,7 @@ dependencies = [
  "abi",
  "console",
  "driver-api",
+ "drivers",
  "elf",
  "gimli 0.33.1",
  "hal",
