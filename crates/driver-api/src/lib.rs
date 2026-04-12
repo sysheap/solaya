@@ -200,3 +200,21 @@ pub trait RngDevice: Send + Sync {
     /// (typically `buf.len()`).
     fn fill(&self, buf: &mut [u8]) -> Result<usize, IoError>;
 }
+
+/// Interrupt handler — invoked from the trap handler when the driver's IRQ
+/// fires.
+///
+/// Implementations must be short and non-blocking: the typical body reads the
+/// device's ISR register to acknowledge the interrupt, then wakes a bottom-half
+/// async task via a stored `Waker`. Do not allocate, do not take locks held
+/// elsewhere across a long critical section, do not sleep.
+///
+/// The IRQ controller holds an `Arc<dyn IrqHandler>` and calls `handle()`
+/// through the trait object from the trap handler. Drivers therefore typically
+/// store their MMIO / wake state inside the implementor itself, not in a
+/// module-local static.
+pub trait IrqHandler: Send + Sync {
+    /// Called in interrupt context. Acknowledge the device, wake the
+    /// bottom-half task, return.
+    fn handle(&self);
+}
