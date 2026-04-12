@@ -31,13 +31,12 @@ jobs:
             texinfo gawk \
             pkg-config \
             rsync \
-            git \
             e2fsprogs \
-            qemu-system-misc qemu-system-data seabios \
-            mtools xorriso
+            qemu-system-misc qemu-system-data
           # qemu-system-data provides /usr/share/qemu/vgabios-bochs-display.bin
           # (needed by the framebuffer + doom tests which use -device
           # bochs-display). e2fsprogs provides mkfs.ext2 for the ext2 tests.
+          # Keep this list in sync with README.md's host-prereq section.
 
       - name: Install Rust toolchain from rust-toolchain.toml
         run: |
