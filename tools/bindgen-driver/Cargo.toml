@@ -1,0 +1,9 @@
+[package]
+name = "bindgen-driver"
+edition = "2024"
+description = "Standalone bindgen driver for the Solaya headers crate. Replaces the inline bindgen invocation previously in the headers crate's build.rs."
+
+[workspace]
+
+[dependencies]
+bindgen = "0.72"
