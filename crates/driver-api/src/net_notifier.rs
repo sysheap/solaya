@@ -5,31 +5,27 @@
 //! The driver crate can't import kernel internals, and the network stack
 //! can't spawn per-driver wakers from inside an IrqHandler, so we route
 //! through a single function pointer stored here. The kernel installs it
-//! once at init; drivers call `notify()` from IRQ context.
+//! once during init; drivers call `notify()` from IRQ context afterwards.
+//!
+//! Backed by `klib::runtime_initialized::RuntimeInitializedData<fn()>`,
+//! which is lock-free (AtomicBool + UnsafeCell) and therefore IRQ-safe:
+//! the read path is a single acquire load plus a function-pointer call.
 
-use core::sync::atomic::{AtomicUsize, Ordering};
+use klib::runtime_initialized::RuntimeInitializedData;
 
-/// Holds the `fn()` pointer cast to `usize`. `0` means "no notifier
-/// installed yet" — `fn` pointers are never null. `AtomicUsize` is used
-/// for lock-free, allocation-free access from IRQ context.
-static NOTIFIER: AtomicUsize = AtomicUsize::new(0);
+static NOTIFIER: RuntimeInitializedData<fn()> = RuntimeInitializedData::new();
 
 /// Install the RX-arrival callback. Called once by the kernel during net
-/// stack init. Subsequent calls overwrite the previous notifier.
+/// stack init, before any `NetDevice` driver is registered with the IRQ
+/// controller — so `notify()` is guaranteed to see an initialized value.
 pub fn set_notifier(notifier: fn()) {
-    NOTIFIER.store(notifier as usize, Ordering::Release);
+    NOTIFIER.initialize(notifier);
 }
 
-/// Called by driver IRQ handlers after they ack the device's ISR. No-op
-/// if no notifier has been installed yet.
+/// Called by driver IRQ handlers after they ack the device's ISR.
+/// Panics if no notifier has been installed — that would mean a driver
+/// fired an RX IRQ before the net stack finished init, which is an
+/// ordering bug, not a runtime condition.
 pub fn notify() {
-    let addr = NOTIFIER.load(Ordering::Acquire);
-    if addr == 0 {
-        return;
-    }
-    // SAFETY: `addr` was produced by casting a `fn()` via `set_notifier`.
-    // fn pointers round-trip losslessly through `usize` on all supported
-    // targets (RISC-V + host for tests). `addr != 0` is checked above.
-    let f: fn() = unsafe { core::mem::transmute(addr) };
-    f();
+    (*NOTIFIER)();
 }
