@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
 set -e
 
+repo_root=$(git rev-parse --show-toplevel)
+
+# Clippy on the main workspace needs bindgen outputs + userspace artifacts.
+# CMake writes them at these canonical paths; surface them so plain `cargo`
+# invocations (outside the CMake wrappers) succeed.
+export SOLAYA_HEADERS_GENERATED="$repo_root/build/headers/generated"
+export SOLAYA_USERSPACE_ARTIFACT_DIR="$repo_root/build/userspace/artifacts"
+
 # Format only staged Rust files to avoid touching unstaged work
 staged_rs_files=$(git diff --name-only --cached --diff-filter=d -- '*.rs')
 if [ -n "$staged_rs_files" ]; then
