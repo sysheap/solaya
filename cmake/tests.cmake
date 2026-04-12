@@ -21,7 +21,8 @@ add_custom_target(clippy
     # boot + solaya + driver-api — main workspace
     COMMAND ${CMAKE_COMMAND} -E env ${_solaya_cargo_env}
             ${SOLAYA_CARGO} clippy -p boot -p solaya -p driver-api -- -D warnings
-    # system-tests — separate workspace, x86_64 host
+    # system-tests — separate workspace, x86_64 host (self-contained, no
+    # dep on the main workspace, so no headers env needed)
     COMMAND ${SOLAYA_CARGO} clippy --release
             --manifest-path ${CMAKE_SOURCE_DIR}/system-tests/Cargo.toml
             --target x86_64-unknown-linux-gnu --no-deps -- -D warnings
@@ -51,9 +52,11 @@ add_custom_target(clippy
 add_custom_target(test-unit
     COMMAND ${CMAKE_COMMAND} -E env ${_solaya_cargo_env}
             ${SOLAYA_CARGO} test --release -p solaya
-    COMMAND ${SOLAYA_CARGO} test --release -p klib --lib
+    COMMAND ${CMAKE_COMMAND} -E env ${_solaya_cargo_env}
+            ${SOLAYA_CARGO} test --release -p klib --lib
             --target x86_64-unknown-linux-gnu
-    COMMAND ${SOLAYA_CARGO} test --release -p hal --lib
+    COMMAND ${CMAKE_COMMAND} -E env ${_solaya_cargo_env}
+            ${SOLAYA_CARGO} test --release -p hal --lib
             --target x86_64-unknown-linux-gnu --no-default-features
     COMMAND ${CMAKE_COMMAND} -E env ${_solaya_cargo_env}
             ${SOLAYA_CARGO} test --release -p driver-api
