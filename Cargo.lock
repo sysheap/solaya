@@ -91,6 +91,7 @@ dependencies = [
  "hal",
  "headers",
  "klib",
+ "mm",
 ]
 
 [[package]]
