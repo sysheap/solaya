@@ -1,4 +1,5 @@
-use alloc::vec;
+use alloc::{string::String, vec};
+use driver_api::{IoError, RngDevice as RngTrait};
 
 use crate::{
     drivers::virtio::{
@@ -27,62 +28,32 @@ pub struct RngDevice {
     request_queue: VirtQueue<QUEUE_SIZE>,
 }
 
-static RNG_DEVICE: Spinlock<Option<RngDevice>> = Spinlock::new(None);
-
-pub fn set_device(device: RngDevice) {
-    *RNG_DEVICE.lock() = Some(device);
+/// `driver_api::RngDevice` adapter for the virtio-rng driver. Holds the
+/// underlying device behind a `Spinlock` so `fill` can take `&self` while
+/// mutating the virtqueue.
+pub struct VirtioRngHandle {
+    inner: Spinlock<RngDevice>,
+    name: String,
 }
 
-pub fn read_random(buf: &mut [u8]) {
-    let mut guard = RNG_DEVICE.lock();
-    let dev = guard.as_mut().expect("RNG device not initialized");
-    dev.read(buf);
-}
-
-pub fn is_available() -> bool {
-    RNG_DEVICE.lock().is_some()
-}
-
-pub fn register_devfs_node() {
-    use crate::fs::{
-        devfs,
-        vfs::{NodeType, VfsNode},
-    };
-    use alloc::sync::Arc;
-    use headers::errno::Errno;
-
-    struct DevRandom {
-        ino: u64,
-    }
-
-    impl VfsNode for DevRandom {
-        fn node_type(&self) -> NodeType {
-            NodeType::File
-        }
-        fn ino(&self) -> u64 {
-            self.ino
-        }
-        fn size(&self) -> usize {
-            0
-        }
-        fn read(&self, _offset: usize, buf: &mut [u8]) -> Result<usize, Errno> {
-            read_random(buf);
-            Ok(buf.len())
-        }
-        fn write(&self, _offset: usize, data: &[u8]) -> Result<usize, Errno> {
-            Ok(data.len())
-        }
-        fn truncate(&self, _length: usize) -> Result<(), Errno> {
-            Ok(())
+impl VirtioRngHandle {
+    pub fn new(device: RngDevice) -> Self {
+        Self {
+            inner: Spinlock::new(device),
+            name: String::from("random"),
         }
     }
+}
 
-    devfs::register_device(
-        "random",
-        Arc::new(DevRandom {
-            ino: devfs::alloc_dev_ino(),
-        }),
-    );
+impl RngTrait for VirtioRngHandle {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn fill(&self, buf: &mut [u8]) -> Result<usize, IoError> {
+        self.inner.lock().read(buf);
+        Ok(buf.len())
+    }
 }
 
 impl RngDevice {

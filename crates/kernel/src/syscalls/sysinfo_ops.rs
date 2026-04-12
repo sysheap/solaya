@@ -7,7 +7,7 @@ use headers::errno::Errno;
 
 use crate::{
     cpu::Cpu,
-    drivers::virtio::rng,
+    drivers::RngDeviceRegistry,
     klibc::util::ByteInterpretable,
     memory::{self, PAGE_SIZE},
     processes::{process_table, timer},
@@ -138,8 +138,8 @@ impl LinuxSyscallHandler {
         let len = buflen.min(256);
         let mut data = vec![0u8; len];
 
-        if rng::is_available() {
-            rng::read_random(&mut data);
+        if let Some(rng) = RngDeviceRegistry::global().primary() {
+            let _ = rng.fill(&mut data);
         } else {
             xorshift_fill(&mut data);
         }

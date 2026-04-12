@@ -3,7 +3,10 @@ use crate::{
     klibc::{MMIO, mmio},
     pci::{GeneralDevicePciHeaderExt, GeneralDevicePciHeaderFields, PCIDevice, PciCpuAddr},
 };
+use alloc::sync::Arc;
 use core::sync::atomic::{AtomicUsize, Ordering};
+use driver_api::{DisplayDevice, FramebufferInfo, IoError};
+use headers::errno::Errno;
 #[allow(unused_imports)]
 use mmio::write_bytes;
 
@@ -46,7 +49,7 @@ fn write_vbe_reg(dispi_base: usize, index: u16, value: u16) {
     reg.write(value);
 }
 
-pub fn initialize(mut pci_device: PCIDevice) {
+pub fn initialize(mut pci_device: PCIDevice) -> Arc<dyn DisplayDevice> {
     let bar0 = pci_device.get_or_initialize_bar(0);
     let bar2 = pci_device.get_or_initialize_bar(2);
 
@@ -75,63 +78,51 @@ pub fn initialize(mut pci_device: PCIDevice) {
         "bochs-display: framebuffer at {:#x}, {}x{}x{}",
         fb_addr, FB_WIDTH, FB_HEIGHT, FB_BPP
     );
+
+    Arc::new(BochsDisplay {
+        phys_addr: fb_addr as u64,
+    })
 }
 
-pub fn register_devfs_node() {
-    use crate::{
-        fs::{
-            devfs,
-            vfs::{NodeType, VfsNode},
-        },
-        klibc::mmio,
-    };
-    use alloc::sync::Arc;
-    use headers::errno::Errno;
+struct BochsDisplay {
+    phys_addr: u64,
+}
 
-    struct DevFramebuffer {
-        ino: u64,
+impl DisplayDevice for BochsDisplay {
+    fn name(&self) -> &str {
+        "fb0"
     }
 
-    impl VfsNode for DevFramebuffer {
-        fn node_type(&self) -> NodeType {
-            NodeType::File
-        }
-        fn ino(&self) -> u64 {
-            self.ino
-        }
-        fn size(&self) -> usize {
-            FB_SIZE
-        }
-        fn read(&self, offset: usize, buf: &mut [u8]) -> Result<usize, Errno> {
-            let base = fb_base().ok_or(Errno::ENODEV)?;
-            let end = offset.saturating_add(buf.len()).min(FB_SIZE);
-            if offset >= end {
-                return Ok(0);
-            }
-            let len = end - offset;
-            mmio::read_bytes(base.as_usize() + offset, &mut buf[..len]);
-            Ok(len)
-        }
-        fn write(&self, offset: usize, data: &[u8]) -> Result<usize, Errno> {
-            let base = fb_base().ok_or(Errno::ENODEV)?;
-            let end = offset.saturating_add(data.len()).min(FB_SIZE);
-            if offset >= end {
-                return Ok(0);
-            }
-            let len = end - offset;
-            mmio::write_bytes(base.as_usize() + offset, &data[..len]);
-            hal::cpu::memory_fence();
-            Ok(len)
-        }
-        fn truncate(&self, _length: usize) -> Result<(), Errno> {
-            Ok(())
+    fn framebuffer(&self) -> FramebufferInfo {
+        FramebufferInfo {
+            width: FB_WIDTH as u32,
+            height: FB_HEIGHT as u32,
+            stride: FB_STRIDE as u32,
+            bpp: FB_BPP as u8,
+            phys_addr: self.phys_addr,
         }
     }
 
-    devfs::register_device(
-        "fb0",
-        Arc::new(DevFramebuffer {
-            ino: devfs::alloc_dev_ino(),
-        }),
-    );
+    fn read_at(&self, offset: usize, buf: &mut [u8]) -> Result<usize, IoError> {
+        let base = fb_base().ok_or(Errno::ENODEV)?;
+        let end = offset.saturating_add(buf.len()).min(FB_SIZE);
+        if offset >= end {
+            return Ok(0);
+        }
+        let len = end - offset;
+        mmio::read_bytes(base.as_usize() + offset, &mut buf[..len]);
+        Ok(len)
+    }
+
+    fn write_at(&self, offset: usize, data: &[u8]) -> Result<usize, IoError> {
+        let base = fb_base().ok_or(Errno::ENODEV)?;
+        let end = offset.saturating_add(data.len()).min(FB_SIZE);
+        if offset >= end {
+            return Ok(0);
+        }
+        let len = end - offset;
+        mmio::write_bytes(base.as_usize() + offset, &data[..len]);
+        hal::cpu::memory_fence();
+        Ok(len)
+    }
 }

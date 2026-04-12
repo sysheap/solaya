@@ -55,8 +55,8 @@ fn set_up_arguments(
     let mut envp = vec![0usize; env.len() + 1]; // env entries + NULL
 
     let mut random_bytes = [0u8; AT_RANDOM_SIZE];
-    if crate::drivers::virtio::rng::is_available() {
-        crate::drivers::virtio::rng::read_random(&mut random_bytes);
+    if let Some(rng) = crate::drivers::RngDeviceRegistry::global().primary() {
+        let _ = rng.fill(&mut random_bytes);
     }
 
     let mut auxv = [
