@@ -22,10 +22,7 @@ set(_kernel_bin    "${CMAKE_BINARY_DIR}/kernel/solaya.bin")
 set(_symbols_file  "${CMAKE_BINARY_DIR}/kernel/symbols")
 
 add_custom_target(solaya-kernel-elf
-    COMMAND ${CMAKE_COMMAND} -E env
-        "SOLAYA_USERSPACE_ARTIFACT_DIR=${SOLAYA_USERSPACE_ARTIFACT_DIR}"
-        "SOLAYA_HEADERS_GENERATED=${SOLAYA_HEADERS_GENERATED}"
-        ${SOLAYA_CARGO} build --release
+    COMMAND ${SOLAYA_CARGO} build --release
             --manifest-path "${CMAKE_SOURCE_DIR}/Cargo.toml"
             --target        "${_kernel_target}"
             -p              boot

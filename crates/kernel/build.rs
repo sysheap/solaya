@@ -13,7 +13,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     let arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_else(|_| "riscv64".into());
     println!("cargo:rerun-if-changed={arch}.ld");
     println!("cargo:rerun-if-changed=../../userspace/");
-    println!("cargo:rerun-if-env-changed=SOLAYA_USERSPACE_ARTIFACT_DIR");
     println!("cargo:rerun-if-env-changed=CARGO_CFG_TARGET_ARCH");
     // For unit tests (which produce a binary from this library crate)
     println!("cargo:rustc-link-arg=-Tcrates/kernel/{arch}.ld");
@@ -30,17 +29,13 @@ fn main() -> Result<(), Box<dyn Error>> {
 
 /// Where to look for compiled userspace binaries.
 ///
-/// CMake sets `SOLAYA_USERSPACE_ARTIFACT_DIR` to point at the canonical
-/// artifact dir (build/userspace/artifacts).  Bare `cargo build` would not
-/// have it set; we fall back to `compiled_userspace` (relative to this
-/// crate's manifest dir) so legacy / IDE invocations keep picking up whatever
-/// a prior build left there.
-fn userspace_artifact_dirs() -> Vec<PathBuf> {
-    if let Some(dir) = env::var_os("SOLAYA_USERSPACE_ARTIFACT_DIR") {
-        vec![PathBuf::from(dir)]
-    } else {
-        vec![PathBuf::from("compiled_userspace")]
-    }
+/// Hardcoded to `<repo>/build/userspace/artifacts`, matching the
+/// `binaryDir` pinned by CMakePresets.json. CMake populates this dir via
+/// the `userspace-all` target; bare `cargo build` / rust-analyzer pick up
+/// whatever a prior CMake build left behind.
+fn userspace_artifact_dir() -> PathBuf {
+    let manifest = env!("CARGO_MANIFEST_DIR");
+    PathBuf::from(manifest).join("../../build/userspace/artifacts")
 }
 
 fn is_miri_execution() -> bool {
@@ -59,11 +54,9 @@ fn generate_userspace_programs_include() -> Result<(), Box<dyn Error>> {
 
     let mut canonical_to_static: BTreeMap<PathBuf, String> = BTreeMap::new();
 
-    for dir in userspace_artifact_dirs() {
-        println!("cargo:rerun-if-changed={}", dir.display());
-        if !dir.exists() {
-            continue;
-        }
+    let dir = userspace_artifact_dir();
+    println!("cargo:rerun-if-changed={}", dir.display());
+    if dir.exists() {
         for entry in read_dir(&dir)? {
             let entry = entry?;
             let path = entry.path();

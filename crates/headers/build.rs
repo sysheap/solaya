@@ -3,7 +3,11 @@
 //! ("OUT_DIR"), "/X.rs"))` calls in src/lib.rs keep working.
 //!
 //! The real bindgen logic lives in tools/bindgen-driver and runs once per
-//! CMake configure/build via the `headers-generated` custom target.
+//! CMake configure/build via the `headers-generated` custom target. The
+//! source path is hardcoded relative to this crate's manifest dir
+//! (`<repo>/build/headers/generated`) — matching the `binaryDir` pinned
+//! by CMakePresets.json — so bare `cargo check` / rust-analyzer keep
+//! working as long as a prior CMake build populated the files.
 
 use std::{env, fs, path::Path};
 
@@ -17,18 +21,9 @@ const GENERATED: &[&str] = &[
 ];
 
 fn main() {
-    println!("cargo:rerun-if-env-changed=SOLAYA_HEADERS_GENERATED");
-
-    let src_dir = env::var("SOLAYA_HEADERS_GENERATED").unwrap_or_else(|_| {
-        panic!(
-            "SOLAYA_HEADERS_GENERATED must be set. Build via \
-             `make build` or `cmake --build build --target solaya-bin`; \
-             the headers crate needs files produced by tools/bindgen-driver \
-             and cargo on its own does not run it."
-        )
-    });
+    let manifest = env!("CARGO_MANIFEST_DIR");
+    let src = Path::new(manifest).join("../../build/headers/generated");
     let out_dir = env::var("OUT_DIR").unwrap();
-    let src = Path::new(&src_dir);
     let out = Path::new(&out_dir);
 
     for name in GENERATED {

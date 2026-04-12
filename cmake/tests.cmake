@@ -3,26 +3,16 @@
 # Each target shells out to the same cargo invocations the justfile used,
 # so semantics stay identical to what developers running `just` saw.
 
-# Common env for cargo invocations that touch the headers crate (which needs
-# $SOLAYA_HEADERS_GENERATED because its build.rs copies files from there).
-set(_solaya_cargo_env
-    "SOLAYA_HEADERS_GENERATED=${SOLAYA_HEADERS_GENERATED}"
-    "SOLAYA_USERSPACE_ARTIFACT_DIR=${SOLAYA_USERSPACE_ARTIFACT_DIR}"
-)
-
 # -----------------------------------------------------------------------------
 # clippy: lint the whole workspace tree.
 # -----------------------------------------------------------------------------
 add_custom_target(clippy
     # userspace — lives in its own workspace so run from userspace/
-    COMMAND ${CMAKE_COMMAND} -E env ${_solaya_cargo_env}
-            ${CMAKE_COMMAND} -E chdir ${CMAKE_SOURCE_DIR}/userspace
+    COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_SOURCE_DIR}/userspace
             ${SOLAYA_CARGO} clippy -- -D warnings
     # boot + solaya + driver-api — main workspace
-    COMMAND ${CMAKE_COMMAND} -E env ${_solaya_cargo_env}
-            ${SOLAYA_CARGO} clippy -p boot -p solaya -p driver-api -- -D warnings
-    # system-tests — separate workspace, x86_64 host (self-contained, no
-    # dep on the main workspace, so no headers env needed)
+    COMMAND ${SOLAYA_CARGO} clippy -p boot -p solaya -p driver-api -- -D warnings
+    # system-tests — separate workspace, x86_64 host
     COMMAND ${SOLAYA_CARGO} clippy --release
             --manifest-path ${CMAKE_SOURCE_DIR}/system-tests/Cargo.toml
             --target x86_64-unknown-linux-gnu --no-deps -- -D warnings
@@ -31,11 +21,9 @@ add_custom_target(clippy
             --manifest-path ${CMAKE_SOURCE_DIR}/mcp-server/Cargo.toml
             --target x86_64-unknown-linux-gnu --no-deps -- -D warnings
     # solaya tests (separate feature set)
-    COMMAND ${CMAKE_COMMAND} -E env ${_solaya_cargo_env}
-            ${SOLAYA_CARGO} clippy -p solaya --tests -- -D warnings
+    COMMAND ${SOLAYA_CARGO} clippy -p solaya --tests -- -D warnings
     # driver-api host tests (different target so the trait tests compile)
-    COMMAND ${CMAKE_COMMAND} -E env ${_solaya_cargo_env}
-            ${SOLAYA_CARGO} clippy -p driver-api --tests
+    COMMAND ${SOLAYA_CARGO} clippy -p driver-api --tests
             --target x86_64-unknown-linux-gnu -- -D warnings
     DEPENDS headers-generated
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
@@ -50,16 +38,12 @@ add_custom_target(clippy
 # riscv-specific code doesn't compile).
 # -----------------------------------------------------------------------------
 add_custom_target(test-unit
-    COMMAND ${CMAKE_COMMAND} -E env ${_solaya_cargo_env}
-            ${SOLAYA_CARGO} test --release -p solaya
-    COMMAND ${CMAKE_COMMAND} -E env ${_solaya_cargo_env}
-            ${SOLAYA_CARGO} test --release -p klib --lib
+    COMMAND ${SOLAYA_CARGO} test --release -p solaya
+    COMMAND ${SOLAYA_CARGO} test --release -p klib --lib
             --target x86_64-unknown-linux-gnu
-    COMMAND ${CMAKE_COMMAND} -E env ${_solaya_cargo_env}
-            ${SOLAYA_CARGO} test --release -p hal --lib
+    COMMAND ${SOLAYA_CARGO} test --release -p hal --lib
             --target x86_64-unknown-linux-gnu --no-default-features
-    COMMAND ${CMAKE_COMMAND} -E env ${_solaya_cargo_env}
-            ${SOLAYA_CARGO} test --release -p driver-api
+    COMMAND ${SOLAYA_CARGO} test --release -p driver-api
             --target x86_64-unknown-linux-gnu
     DEPENDS userspace-all headers-generated
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
@@ -89,7 +73,6 @@ add_custom_target(test-system
 # -----------------------------------------------------------------------------
 add_custom_target(miri
     COMMAND ${CMAKE_COMMAND} -E env
-        ${_solaya_cargo_env}
         "MIRIFLAGS=-Zmiri-env-forward=RUST_BACKTRACE -Zmiri-strict-provenance"
         "RUST_BACKTRACE=1"
         ${SOLAYA_CARGO} miri test -p solaya

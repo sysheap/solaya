@@ -10,8 +10,10 @@
 #   ${SOLAYA_HEADERS_GENERATED}/fs_types.rs
 #   ${SOLAYA_HEADERS_GENERATED}/sysinfo_types.rs
 #
-# crates/headers/src/lib.rs consumes the outputs via
-# $SOLAYA_HEADERS_GENERATED; crates/headers/build.rs is a thin copy-shim.
+# crates/headers/build.rs is a thin copy-shim that reads from this dir
+# (hardcoded relative to its CARGO_MANIFEST_DIR, matching the binaryDir
+# pinned by CMakePresets.json) and stages the files into OUT_DIR so
+# crates/headers/src/lib.rs can include! them.
 
 set(SOLAYA_HEADERS_GENERATED "${CMAKE_BINARY_DIR}/headers/generated"
     CACHE PATH "Output directory for bindgen-generated Rust bindings."

@@ -1,9 +1,9 @@
 # userspace/CMakeLists.txt — build userspace rust binaries + coreutils.
 #
 # Outputs land in ${SOLAYA_USERSPACE_ARTIFACT_DIR} (build/userspace/artifacts
-# by default). kernel/build.rs reads this dir via the
-# SOLAYA_USERSPACE_ARTIFACT_DIR env var and include_bytes!'s the contents
-# into the kernel ELF.
+# by default). kernel/build.rs reads the same path (hardcoded relative to
+# its CARGO_MANIFEST_DIR, matching the binaryDir pinned by CMakePresets.json)
+# and include_bytes!'s the contents into the kernel ELF.
 
 cmake_minimum_required(VERSION 3.25)
 project(solaya_userspace LANGUAGES NONE)
@@ -33,7 +33,6 @@ add_custom_target(userspace-rust
     COMMAND ${CMAKE_COMMAND} -E make_directory "${SOLAYA_USERSPACE_ARTIFACT_DIR}"
     COMMAND sh -c "PATH=\"${SOLAYA_TC_BIN}:$PATH\" \
 CARGO_TARGET_DIR=\"${CMAKE_BINARY_DIR}/userspace/target\" \
-SOLAYA_HEADERS_GENERATED=\"${SOLAYA_HEADERS_GENERATED}\" \
 exec ${SOLAYA_CARGO} build \
 --bins --release \
 --target ${_rust_target} \
