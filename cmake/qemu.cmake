@@ -31,7 +31,9 @@ add_custom_target(run-fb
 )
 
 add_custom_target(debug
-    COMMAND ${CMAKE_SOURCE_DIR}/scripts/debug.sh
+    COMMAND ${CMAKE_COMMAND} -E env
+        "SOLAYA_USERSPACE_ARTIFACT_DIR=${SOLAYA_USERSPACE_ARTIFACT_DIR}"
+        ${CMAKE_SOURCE_DIR}/scripts/debug.sh
     DEPENDS solaya-bin
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     USES_TERMINAL
@@ -48,7 +50,7 @@ add_custom_target(attach
 )
 
 add_custom_target(disasm
-    COMMAND riscv64-unknown-linux-musl-objdump
+    COMMAND ${SOLAYA_TC_BIN}/${SOLAYA_TC_TRIPLE}-objdump
         -d --demangle
         --disassembler-color=on --visualize-jumps=extended-color
         ${CMAKE_SOURCE_DIR}/target/riscv64gc-unknown-none-elf/release/boot
