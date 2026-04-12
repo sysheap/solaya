@@ -1,19 +1,20 @@
 /target
 /target-userspace
 /target-coreutils
+/build
 qemu-infra/target/
 qemu-infra/Cargo.lock
 mcp-server/target/
+tools/bindgen-driver/target/
+tools/bindgen-driver/Cargo.lock
 /log.txt
 /network.pcap
 /src/kernel/network.pcap
 /.gdb_history
 /.gdb-port
 /symbols
-/.direnv
 /.gdb_sources
-/musl
-/crates/headers/musl_headers
+/.direnv
 
 __pycache__/
 disk.img

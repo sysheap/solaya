@@ -10,13 +10,13 @@ use std::{
 };
 
 fn main() -> Result<(), Box<dyn Error>> {
-    println!("cargo:rerun-if-changed=solaya.ld");
+    let arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_else(|_| "riscv64".into());
+    println!("cargo:rerun-if-changed={arch}.ld");
     println!("cargo:rerun-if-changed=../../userspace/");
-    println!("cargo:rerun-if-changed=../common/");
-    println!("cargo:rerun-if-changed=../../flake.nix");
-    println!("cargo:rerun-if-changed=../../flake.lock");
+    println!("cargo:rerun-if-env-changed=SOLAYA_USERSPACE_ARTIFACT_DIR");
+    println!("cargo:rerun-if-env-changed=CARGO_CFG_TARGET_ARCH");
     // For unit tests (which produce a binary from this library crate)
-    println!("cargo:rustc-link-arg=-Tcrates/kernel/solaya.ld");
+    println!("cargo:rustc-link-arg=-Tcrates/kernel/{arch}.ld");
 
     if is_miri_execution() {
         // Under Miri, the file already exists from a prior `just build`.
@@ -26,6 +26,21 @@ fn main() -> Result<(), Box<dyn Error>> {
     generate_userspace_programs_include()?;
 
     Ok(())
+}
+
+/// Where to look for compiled userspace binaries.
+///
+/// CMake sets `SOLAYA_USERSPACE_ARTIFACT_DIR` to point at the canonical
+/// artifact dir (build/userspace/artifacts).  Bare `cargo build` would not
+/// have it set; we fall back to `compiled_userspace` (relative to this
+/// crate's manifest dir) so legacy / IDE invocations keep picking up whatever
+/// a prior build left there.
+fn userspace_artifact_dirs() -> Vec<PathBuf> {
+    if let Some(dir) = env::var_os("SOLAYA_USERSPACE_ARTIFACT_DIR") {
+        vec![PathBuf::from(dir)]
+    } else {
+        vec![PathBuf::from("compiled_userspace")]
+    }
 }
 
 fn is_miri_execution() -> bool {
@@ -42,30 +57,32 @@ fn generate_userspace_programs_include() -> Result<(), Box<dyn Error>> {
     // Use BTreeMap to have the program names in a sorted order
     let mut programs: BTreeMap<String, String> = BTreeMap::new();
 
-    let compiled_userspace = read_dir("compiled_userspace")?;
-    let compiled_userspace_nix = read_dir("compiled_userspace_nix")?;
-    let entries = compiled_userspace.chain(compiled_userspace_nix);
-
     let mut canonical_to_static: BTreeMap<PathBuf, String> = BTreeMap::new();
 
-    for entry in entries {
-        let entry = entry?;
-        let path = entry.path();
-        let absolute_path = std::fs::canonicalize(&path)?;
-        let original_file_name = path.file_name().unwrap().to_str().unwrap();
-        let file_name = original_file_name.to_uppercase().replace('-', "_");
+    for dir in userspace_artifact_dirs() {
+        println!("cargo:rerun-if-changed={}", dir.display());
+        if !dir.exists() {
+            continue;
+        }
+        for entry in read_dir(&dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            let absolute_path = std::fs::canonicalize(&path)?;
+            let original_file_name = path.file_name().unwrap().to_str().unwrap();
+            let file_name = original_file_name.to_uppercase().replace('-', "_");
 
-        programs.insert(original_file_name.to_owned(), file_name.clone());
+            programs.insert(original_file_name.to_owned(), file_name.clone());
 
-        if let Some(first_static) = canonical_to_static.get(&absolute_path) {
-            writeln!(content, "pub static {file_name}: &[u8] = {first_static};")?;
-        } else {
-            writeln!(
-                content,
-                "pub static {file_name}: &[u8] = include_bytes_align_as!(u64, \"{}\");",
-                absolute_path.to_string_lossy()
-            )?;
-            canonical_to_static.insert(absolute_path, file_name);
+            if let Some(first_static) = canonical_to_static.get(&absolute_path) {
+                writeln!(content, "pub static {file_name}: &[u8] = {first_static};")?;
+            } else {
+                writeln!(
+                    content,
+                    "pub static {file_name}: &[u8] = include_bytes_align_as!(u64, \"{}\");",
+                    absolute_path.to_string_lossy()
+                )?;
+                canonical_to_static.insert(absolute_path, file_name);
+            }
         }
     }
 

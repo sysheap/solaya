@@ -1,12 +1,9 @@
-cargo-features = ["per-package-target"]
-
 [package]
 name = "userspace"
 edition = "2024"
 version.workspace = true
 authors.workspace = true
 description.workspace = true
-forced-target = "riscv64gc-unknown-linux-musl"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
