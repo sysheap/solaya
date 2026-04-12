@@ -183,4 +183,18 @@ impl LinuxSyscallHandler {
 
         Ok(child_tid.as_isize())
     }
+
+    pub(super) fn do_exit(&self, status: c_int) -> Result<isize, Errno> {
+        let exit_status = crate::processes::signal::ExitStatus::Exited(status.to_le_bytes()[0]);
+        Cpu::with_scheduler(|mut s| s.kill_current_thread(exit_status));
+        crate::debug!("Exit thread with status: {status}\n");
+        Ok(0)
+    }
+
+    pub(super) fn do_exit_group(&self, status: c_int) -> Result<isize, Errno> {
+        let exit_status = crate::processes::signal::ExitStatus::Exited(status.to_le_bytes()[0]);
+        Cpu::with_scheduler(|mut s| s.kill_current_process(exit_status));
+        crate::debug!("Exit process with status: {status}\n");
+        Ok(0)
+    }
 }

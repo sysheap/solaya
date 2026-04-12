@@ -295,4 +295,16 @@ impl LinuxSyscallHandler {
             _ => Err(Errno::ENOSYS),
         }
     }
+
+    pub(super) fn do_setsid(&self) -> Result<isize, Errno> {
+        self.current_process.with_lock(|mut p| {
+            let main_tid = p.main_tid();
+            if p.pgid() == main_tid {
+                return Err(Errno::EPERM);
+            }
+            p.set_pgid(main_tid);
+            p.set_sid(main_tid);
+            Ok(main_tid.as_isize())
+        })
+    }
 }
