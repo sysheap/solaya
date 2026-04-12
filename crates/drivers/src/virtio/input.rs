@@ -1,7 +1,7 @@
-use alloc::{collections::VecDeque, string::String, vec};
+use alloc::{collections::VecDeque, string::String, sync::Arc, vec};
 use driver_api::{
-    BarIndex, BusContext, InputDevice as InputTrait, InputEvent, IrqHandler,
-    PciCapabilityHeaderExt, bus::pci_command,
+    BarIndex, BusContext, DriverFactory, DriverInstance, InputDevice as InputTrait, InputEvent,
+    IrqHandler, PciCapabilityHeaderExt, ProbeError, bus::pci_command,
 };
 
 use console::info;
@@ -283,5 +283,33 @@ impl Drop for InputDevice {
     fn drop(&mut self) {
         info!("Reset input device because of drop");
         self.common_cfg.device_status().write(0x0);
+    }
+}
+
+/// Catalog entry for the virtio-input driver.
+pub struct VirtioInputFactory;
+
+impl DriverFactory for VirtioInputFactory {
+    fn name(&self) -> &'static str {
+        "virtio-input"
+    }
+
+    fn probe(&self, bus: &dyn BusContext) -> bool {
+        InputDevice::is_virtio_input(bus)
+    }
+
+    fn attach(&self, bus: &dyn BusContext) -> Result<DriverInstance, ProbeError> {
+        let plic_irq = bus
+            .as_pci()
+            .expect("virtio-input requires a PCI bus")
+            .plic_irq();
+        let init = InputDevice::initialize(bus).map_err(ProbeError::InitializationFailed)?;
+        let handle = Arc::new(VirtioInputHandle::new(init.device, init.interrupt_status));
+        let irq_handler: Arc<dyn driver_api::IrqHandler> = handle.clone();
+        let registration = bus
+            .register_irq(plic_irq, irq_handler)
+            .expect("register irq");
+        handle.set_irq_registration(registration);
+        Ok(DriverInstance::Input(handle))
     }
 }

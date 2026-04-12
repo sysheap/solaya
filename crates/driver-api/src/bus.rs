@@ -140,6 +140,11 @@ pub trait PciBusContextExt {
     /// Read a raw `u32` from PCI configuration space at `byte_offset`.
     /// Returns 0 if the offset is out of range.
     fn read_config_u32(&self, byte_offset: u16) -> u32;
+
+    /// PLIC IRQ assigned to this PCI device (the interrupt source ID
+    /// `register_irq` expects). Computed by the bus from device-number +
+    /// INTx pin.
+    fn plic_irq(&self) -> IrqId;
 }
 
 /// Operations a device-tree-bound driver needs on its bus: the base address

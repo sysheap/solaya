@@ -98,4 +98,8 @@ impl PciBusContextExt for PciBusContext<'_> {
         let base = self.device.lock().configuration_space().addr();
         MMIO::<u32>::new(base + byte_offset as usize).read()
     }
+
+    fn plic_irq(&self) -> IrqId {
+        IrqId(self.device.lock().plic_interrupt_id())
+    }
 }

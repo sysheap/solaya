@@ -1,7 +1,10 @@
 use alloc::sync::Arc;
 use console::info;
 use core::sync::atomic::{AtomicUsize, Ordering};
-use driver_api::{BarIndex, BusContext, DisplayDevice, FramebufferInfo, IoError, bus::pci_command};
+use driver_api::{
+    BarIndex, BusContext, DisplayDevice, DriverFactory, DriverInstance, FramebufferInfo, IoError,
+    ProbeError, bus::pci_command,
+};
 use hal::mmio::{self, MMIO};
 use headers::errno::Errno;
 #[allow(unused_imports)]
@@ -119,5 +122,22 @@ impl DisplayDevice for BochsDisplay {
         mmio::write_bytes(base + offset, &data[..len]);
         hal::cpu::memory_fence();
         Ok(len)
+    }
+}
+
+/// Catalog entry for the QEMU Bochs VBE display driver.
+pub struct BochsDisplayFactory;
+
+impl DriverFactory for BochsDisplayFactory {
+    fn name(&self) -> &'static str {
+        "bochs-display"
+    }
+
+    fn probe(&self, bus: &dyn BusContext) -> bool {
+        is_bochs_display(bus)
+    }
+
+    fn attach(&self, bus: &dyn BusContext) -> Result<DriverInstance, ProbeError> {
+        Ok(DriverInstance::Display(initialize(bus)))
     }
 }

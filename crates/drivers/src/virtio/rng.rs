@@ -1,6 +1,7 @@
-use alloc::{string::String, vec};
+use alloc::{string::String, sync::Arc, vec};
 use driver_api::{
-    BarIndex, BusContext, IoError, PciCapabilityHeaderExt, RngDevice as RngTrait, bus::pci_command,
+    BarIndex, BusContext, DriverFactory, DriverInstance, IoError, PciCapabilityHeaderExt,
+    ProbeError, RngDevice as RngTrait, bus::pci_command,
 };
 
 use console::info;
@@ -223,5 +224,24 @@ impl Drop for RngDevice {
     fn drop(&mut self) {
         info!("Reset RNG device because of drop");
         self.common_cfg.device_status().write(0x0);
+    }
+}
+
+/// Catalog entry for the virtio-rng driver.
+pub struct VirtioRngFactory;
+
+impl DriverFactory for VirtioRngFactory {
+    fn name(&self) -> &'static str {
+        "virtio-rng"
+    }
+
+    fn probe(&self, bus: &dyn BusContext) -> bool {
+        RngDevice::is_virtio_rng(bus)
+    }
+
+    fn attach(&self, bus: &dyn BusContext) -> Result<DriverInstance, ProbeError> {
+        let rng = RngDevice::initialize(bus).map_err(ProbeError::InitializationFailed)?;
+        let handle: Arc<dyn driver_api::RngDevice> = Arc::new(VirtioRngHandle::new(rng));
+        Ok(DriverInstance::Rng(handle))
     }
 }
