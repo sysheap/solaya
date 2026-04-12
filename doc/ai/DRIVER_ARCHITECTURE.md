@@ -736,3 +736,93 @@ Do not paper over disagreement.
     The `IrqRegistration::Drop` plumbing can only be exercised on-target
     (needs the PLIC MMIO machinery), so it's covered indirectly via the
     69 system tests.
+
+- v6 (post-Phase-6): `BusContext` + `PciBusContextExt` + `DtBusContextExt`
+  landed in `driver-api`; every driver's `initialize` / matcher now takes
+  `&dyn BusContext`. Adjustments to the design:
+  - **PCI-specific surface lives on a trait extension**, not behind a
+    downcast (`as_any()`) or a sealed method. Scope considered both; the
+    extension-trait path won because virtio drivers genuinely need full
+    capability-walking access — hiding that behind `read_config_u32(offset)`
+    would have meant reimplementing the capability linked-list walk inside
+    every driver. `BusContext::as_pci() -> Option<&dyn PciBusContextExt>`
+    is the explicit hop drivers take once, at the top of `initialize`.
+    `DtBusContextExt` mirrors the shape for DT-bound drivers (today: none
+    — DWMAC works from just `BusContext`'s DMA + IRQ surface).
+  - **`IrqRegistration` moved to `driver-api`** via a new `trait
+    IrqController { fn unregister(&self, slot: u64); }`. Phase 4's v4
+    changelog chose the option (c) "keep it in kernel" path; Phase 6
+    reverses to option (a) because `BusContext::register_irq` must return
+    it from the trait. The PLIC now impls `IrqController` on a ZST
+    `PlicController`, held as `Arc<dyn IrqController>` inside every
+    outstanding `IrqRegistration`. The slot identifier collapsed from a
+    newtype (`SlotId(u64)`) to a plain `u64` at the trait boundary.
+  - **Capability iteration goes through `MMIO<PciCapabilityHeader>`**, a
+    two-byte `{id, next}` struct in driver-api plus a
+    `PciCapabilityHeaderExt` trait providing `.id()`, `.next_offset()`,
+    and `.as_type::<T>()`. Drivers reinterpret the returned MMIO handle
+    as their driver-specific capability layout. Moving the kernel's
+    `mmio_struct!` macro into driver-api would have dragged the whole
+    `Fields`-trait pattern along; the manual two-method helper is
+    lighter and sufficient for the one caller pattern today.
+  - **BAR mapping returns an `MmioRegion { virt_base, len }`** — not an
+    `MMIO<T>` directly, because BARs almost always hold multiple
+    driver-defined register blocks at different offsets. Drivers compute
+    `MMIO::new(region.virt_base + offset)` or call
+    `region.typed_at::<T>(offset)`.
+  - **Matchers take `&dyn BusContext` too**, not `&PCIDevice`. The
+    previous pattern (`pci_devices.iter().position(is_virtio_*)`)
+    couldn't survive — matchers needed `crate::pci::*` just to read
+    vendor/device IDs. `drivers/mod.rs` now has a small
+    `find_pci_device(&mut [PCIDevice], impl Fn(&dyn BusContext) -> bool)`
+    that builds a `PciBusContext` around each candidate before handing
+    it to the predicate. Matching is read-only (config-space reads), so
+    the interior-mutable `Spinlock<&mut PCIDevice>` inside
+    `PciBusContext` is fine even for immutable-feeling probes.
+  - **`PciBusContext::new` takes `&mut PCIDevice`**, not by value. BAR
+    initialization and command-register writes both require `&mut` on
+    the underlying MMIO, but the `PCIDevice` itself still lives in
+    `drivers/mod.rs::init_*_device` — the bus context borrows it for
+    the duration of probe/init only.
+  - **No `DriverCatalog` / `DriverFactory`** in this phase. Section 3.6
+    of the design doc sketches them; scope explicitly deferred them so
+    this phase's diff stays focused on the bus surface. The existing
+    `init_network_device` / `init_block_devices` / etc. keep their
+    shape. Catalog dispatch is a future phase.
+  - **`read_config_u32(byte_offset)` vs named DT properties.** Scope
+    flagged this as a design question. Resolution: `BusContext` does
+    **not** carry `read_config_u32`; it moved to `PciBusContextExt`
+    where the `u16` byte offset is natural. The equivalent DT surface
+    is `DtBusContextExt::reg_base()` / `reg_size()` only — drivers
+    that need specific DT properties would add another extension trait
+    method later. For DWMAC today, `reg_base`/`reg_size` is everything
+    the driver needs; clocks/resets/mac-addr parsing remain in the
+    `drivers/mod.rs` orchestrator and the `jh7110` SoC helpers, which
+    are allowed to import `device_tree::*` since they sit above the
+    driver layer.
+  - **`enable_dma()` / command-register bits** split: `set_command_bits`
+    and `clear_command_bits` live on `PciBusContextExt` with a
+    `pci_command` constants module (`BUS_MASTER`, `INTERRUPT_DISABLE`,
+    `MEMORY_SPACE`, `IO_SPACE`) in `driver-api::bus`. The scope's
+    proposed bus-agnostic `enable_dma()` was redundant: DT drivers on
+    this target have nothing to do here, and the PCI drivers always
+    want both BUS_MASTER set and INTERRUPT_DISABLE cleared, which they
+    already accomplish with two named calls.
+  - **IRQ registration flows through `bus.register_irq`** uniformly —
+    PCI drivers and DWMAC alike. `plic::register` is still the concrete
+    implementation both bus contexts call through to; it's no longer
+    referenced from any driver file.
+  - **`bochs_display::fb_base()` returns `Option<usize>`** instead of
+    `Option<PciCpuAddr>`. The PCI-specific newtype leaked out of the
+    driver only for the devfs read/write path — downgrading to `usize`
+    makes the display driver consume `crate::pci::*`-free.
+  - `cargo test -p driver-api --target x86_64-unknown-linux-gnu` grows
+    a new `bus_context` suite proving object-safety and trait-extension
+    dispatch on a `MockPciBus`. Two cases.
+  - Acceptance grep
+    `grep -rn 'use crate::pci\|use crate::interrupts::plic\|use crate::device_tree' crates/kernel/src/drivers/`
+    returns **empty**. The matching `crate::*::` reference grep also
+    returns empty for driver files (virtio/, dwmac/, bochs_display.rs).
+    Only `drivers/mod.rs` still reaches these — scope treats it as the
+    orchestrator layer, not a driver file, and it stays that way until
+    the Phase 8 policy/mechanism split.
