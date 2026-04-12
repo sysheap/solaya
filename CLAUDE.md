@@ -27,33 +27,49 @@ just deadlock-hunt            # Run system tests in loop with GDB enabled
 ```
 boot/             # Entry point wrapper (#[no_mangle] fns, calls into kernel)
 kernel/           # Main kernel logic (RISC-V 64-bit, no_std, #![forbid(unsafe_code)])
-sys/              # Self-contained system library (page allocator, heap, spinlock, MMIO, logging)
-arch/             # Hardware abstraction (CSR, SBI, timer, trap causes, backtrace, linker symbols)
-userspace/        # Userspace programs (musl libc)
-common/           # Shared no_std library
-system-tests/     # Integration tests (run on x86, test via QEMU)
-qemu-infra/       # Shared QEMU communication library (used by system-tests + mcp-server)
-mcp-server/       # MCP server for AI agent interaction with QEMU
-headers/          # Linux C header bindings via bindgen
-doc/ai/           # Detailed AI documentation (see OVERVIEW.md)
+crates/abi/        # Shared no_std ABI types (was "common")
+crates/headers/    # Linux/musl UAPI bindgen bindings
+crates/klib/       # Hardware-free utilities (array_vec, runtime_initialized, util, ...)
+crates/hal/        # Hardware abstraction: CSR/SBI/timer, MMIO, Spinlock, page_table, PhysAddr/VirtAddr
+crates/mm/         # Page allocator + heap allocator (generic, host-testable)
+crates/console/    # UART driver + log macros
+crates/driver-api/ # Trait-only driver API (Block/Net/Char/Display/Input/Rng/IrqHandler/DmaBuffer/BusContext)
+crates/drivers/    # Concrete drivers (virtio/*, dwmac, bochs). Never depends on `solaya`.
+crates/kernel/     # Main kernel logic. Crate name is `solaya`. #![forbid(unsafe_code)].
+boot/              # Entry point wrapper (calls into `solaya`)
+userspace/         # Userspace programs (musl libc)
+system-tests/      # Integration tests (run on x86, test via QEMU)
+qemu-infra/        # Shared QEMU communication library (used by system-tests + mcp-server)
+mcp-server/        # MCP server for AI agent interaction with QEMU
+doc/ai/            # Detailed AI documentation (see OVERVIEW.md, DRIVER_ARCHITECTURE.md)
 ```
 
 ## Key Kernel Subsystems
 
 | Directory | Purpose |
 |-----------|---------|
-| sys/src/memory/ | Core types: PhysAddr, VirtAddr, Page, PageTable, page allocator, heap |
-| sys/src/klibc/ | Spinlock, MMIO, ValidatedPtr, utility functions |
-| sys/src/logging/ | Log macros and per-module configuration |
-| sys/src/cpu.rs | CpuBase struct, per-CPU access via sscratch |
-| kernel/src/memory/ | RootPageTableHolder, kernel mappings, linker info |
-| kernel/src/processes/ | Process, thread, scheduler, signals |
-| kernel/src/syscalls/ | Syscall handlers |
-| kernel/src/interrupts/ | Trap handling, PLIC, timer |
-| kernel/src/fs/ | VFS layer (tmpfs, procfs, devfs) |
-| kernel/src/net/ | Network stack (UDP, TCP) |
-| kernel/src/drivers/ | VirtIO drivers, consolidated init_all_pci_devices() |
-| kernel/src/io/ | UART, TtyDevice (terminal subsystem) |
+| crates/hal/src/memory/ | PhysAddr, VirtAddr, Page, PageTable types |
+| crates/hal/src/mmio.rs + spinlock.rs | MMIO, Spinlock primitives |
+| crates/hal/src/validated_ptr.rs | ValidatedPtr for userspace pointer checks |
+| crates/mm/src/ | Page allocator, heap allocator (generic) |
+| crates/console/src/ | Log macros and UART driver |
+| crates/klib/src/ | Utility functions, non_empty_vec, runtime_initialized, sizes |
+| crates/driver-api/src/ | Driver traits (Block/Net/Char/Display/Input/Rng/Irq/DMA/BusContext) |
+| crates/drivers/src/virtio/ | virtio-blk, virtio-net, virtio-input, virtio-rng, virtqueue |
+| crates/drivers/src/dwmac/ | Synopsys DWMAC + StarFive JH7110 init |
+| crates/drivers/src/bochs_display.rs | QEMU Bochs VBE framebuffer |
+| crates/kernel/src/memory/ | RootPageTableHolder, kernel mappings |
+| crates/kernel/src/processes/ | Process, thread, scheduler, signals |
+| crates/kernel/src/syscalls/ | Syscall handlers |
+| crates/kernel/src/interrupts/ | Trap handling, PLIC (+ IrqController impl) |
+| crates/kernel/src/fs/ | VFS layer (tmpfs, procfs, devfs, ext2) |
+| crates/kernel/src/net/ | Network stack (UDP, TCP) |
+| crates/kernel/src/drivers/ | Thin orchestrator: PCI/DT enumeration, typed registries. No policy. |
+| crates/kernel/src/init/ | Policy layer: mount ext2, spawn network_rx_task |
+| crates/kernel/src/pci/ | PCI enumeration + PciBusContext |
+| crates/kernel/src/device_tree.rs | Device-tree parser + DtBusContext |
+| crates/kernel/src/platform/ | Emergency reset (JH7110 syscon, SBI fallback) |
+| crates/kernel/src/io/ | UART extensions, TtyDevice |
 
 ## Debugging
 
@@ -63,7 +79,7 @@ doc/ai/           # Detailed AI documentation (see OVERVIEW.md)
 - `warn!()` - Always printed.
 
 ### Enable Debug Output for a Module
-Edit `sys/src/logging/configuration.rs`:
+Edit `crates/console/src/logging/configuration.rs`:
 ```rust
 // Add to LOG_FOLLOWING_MODULES to enable:
 const LOG_FOLLOWING_MODULES: &[&str] = &["kernel::processes::scheduler"];
@@ -136,32 +152,37 @@ Kernel unit tests use `#[test_case]` macro (custom test framework).
 | Purpose | File |
 |---------|------|
 | Boot entry points | boot/src/main.rs |
-| Kernel init | kernel/src/lib.rs |
-| CPU struct (base) | sys/src/cpu.rs |
-| CPU struct (full) | kernel/src/cpu.rs |
-| CSR access | arch/src/riscv64/cpu.rs |
-| SBI calls | arch/src/riscv64/sbi/ |
-| Assembly (boot, trap) | sys/src/asm/ |
-| Syscall dispatch | kernel/src/syscalls/linux.rs (thin trait methods) |
-| Syscall impls | kernel/src/syscalls/*_ops.rs (io, ioctl, fs, mm, signal, net, time, id, process, exec) |
-| Process struct | kernel/src/processes/process.rs |
-| Scheduler | kernel/src/processes/scheduler.rs |
-| Page table types | sys/src/memory/page_table.rs |
-| Page table mapping | kernel/src/memory/page_tables.rs |
-| Address types | sys/src/memory/address.rs, kernel/src/pci/address.rs |
-| Page allocator | sys/src/memory/page_allocator.rs |
-| Heap allocator | sys/src/memory/heap.rs |
-| Trap handler | kernel/src/interrupts/trap.rs |
-| Driver init | kernel/src/drivers/mod.rs |
-| MMIO type | sys/src/klibc/mmio.rs |
-| Spinlock | sys/src/klibc/spinlock.rs |
-| ValidatedPtr | sys/src/klibc/validated_ptr.rs |
-| Logging | sys/src/logging/mod.rs |
-| Log config | sys/src/logging/configuration.rs |
+| Kernel init | crates/kernel/src/lib.rs |
+| CPU struct (base) | crates/hal/src/cpu.rs |
+| CPU struct (full) | crates/kernel/src/cpu.rs |
+| CSR access | crates/hal/src/riscv64/cpu.rs |
+| SBI calls | crates/hal/src/riscv64/sbi/ |
+| Assembly (boot, trap) | crates/hal/src/riscv64/asm/ |
+| Syscall dispatch | crates/kernel/src/syscalls/linux.rs (thin trait methods) |
+| Syscall impls | crates/kernel/src/syscalls/*_ops.rs |
+| Process struct | crates/kernel/src/processes/process.rs |
+| Scheduler | crates/kernel/src/processes/scheduler.rs |
+| Page table types | crates/hal/src/memory/page_table.rs |
+| Page table mapping | crates/kernel/src/memory/page_tables.rs |
+| Address types | crates/hal/src/memory/address.rs, crates/kernel/src/pci/address.rs |
+| Page allocator | crates/mm/src/page_allocator.rs |
+| Heap allocator | crates/mm/src/heap.rs |
+| Trap handler | crates/kernel/src/interrupts/trap.rs |
+| Driver API traits | crates/driver-api/src/lib.rs (+ bus.rs, dma.rs) |
+| Driver enumeration | crates/kernel/src/drivers/mod.rs |
+| Driver registries | crates/kernel/src/drivers/registry.rs |
+| Policy layer (mount/spawn) | crates/kernel/src/init/mod.rs |
+| VirtIO drivers | crates/drivers/src/virtio/ |
+| DWMAC driver | crates/drivers/src/dwmac/ |
+| MMIO type | crates/hal/src/mmio.rs |
+| Spinlock | crates/hal/src/spinlock.rs |
+| ValidatedPtr | crates/hal/src/validated_ptr.rs |
+| Logging | crates/console/src/ |
+| Log config | crates/console/src/logging/configuration.rs |
 | QEMU infra | qemu-infra/src/qemu.rs |
 | MCP server | mcp-server/src/server.rs |
-| Signals | kernel/src/processes/signal.rs |
-| Syscall tracer config | kernel/src/syscalls/trace_config.rs |
+| Signals | crates/kernel/src/processes/signal.rs |
+| Syscall tracer config | crates/kernel/src/syscalls/trace_config.rs |
 
 ## Detailed Documentation
 
