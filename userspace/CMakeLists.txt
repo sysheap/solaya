@@ -12,15 +12,7 @@ set(SOLAYA_USERSPACE_ARTIFACT_DIR "${CMAKE_BINARY_DIR}/userspace/artifacts"
     CACHE PATH "Where userspace binaries are deposited for kernel embedding."
 )
 
-solaya_read_kconfig_features(_us_features userspace)
-set(_us_features_arg "")
-if(_us_features)
-    set(_us_features_arg "--features=${_us_features}")
-endif()
-
-# Rust target for userspace binaries. Hardcoded today (riscv64 only); when
-# aarch64 / x86_64 land this moves to CONFIG_RUST_TARGET_USERSPACE derived
-# from Kconfig.
+# Rust target for userspace binaries. Hardcoded today (riscv64 only).
 set(_rust_target "riscv64gc-unknown-linux-musl")
 
 # The userspace linker resolves `riscv64-unknown-linux-musl-gcc` by name (via
@@ -46,7 +38,7 @@ exec ${SOLAYA_CARGO} build \
 --bins --release \
 --target ${_rust_target} \
 --artifact-dir \"${SOLAYA_USERSPACE_ARTIFACT_DIR}\" \
--Z unstable-options ${_us_features_arg}"
+-Z unstable-options"
     # Run from userspace/ so cargo picks up userspace/.cargo/config.toml
     # (which sets the riscv64 linker).  With --manifest-path from a parent
     # dir cargo finds only the parent's .cargo/config.toml and the linker

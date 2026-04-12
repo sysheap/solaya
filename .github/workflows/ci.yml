@@ -51,6 +51,22 @@ jobs:
         with:
           tool: cargo-nextest
 
+      # Cache cargo's registry + per-workspace target dirs. Key derives from
+      # Cargo.lock hashes and rust-toolchain.toml automatically. Saves minutes
+      # per run — the kernel, userspace, system-tests, mcp-server, and
+      # bindgen-driver all have large crate graphs that the old Nix-based CI
+      # cached via a separate mechanism.
+      - name: Cache cargo registry + target dirs
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            . -> target
+            userspace -> ../build/userspace/target
+            system-tests -> target
+            mcp-server -> target
+            tools/bindgen-driver -> target
+          shared-key: solaya-riscv64
+
       # The cross-toolchain build is reproducible from the SHA256-pinned
       # tarballs declared in cmake/checksums.cmake; cache the installed
       # output keyed on the hash of those pins plus the bootstrap script.

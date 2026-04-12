@@ -21,12 +21,6 @@ set(_kernel_elf    "${CMAKE_SOURCE_DIR}/target/${_kernel_target}/release/boot")
 set(_kernel_bin    "${CMAKE_BINARY_DIR}/kernel/solaya.bin")
 set(_symbols_file  "${CMAKE_BINARY_DIR}/kernel/symbols")
 
-solaya_read_kconfig_features(_kernel_features kernel)
-set(_features_arg "")
-if(_kernel_features)
-    set(_features_arg "--features=${_kernel_features}")
-endif()
-
 add_custom_target(solaya-kernel-elf
     COMMAND ${CMAKE_COMMAND} -E env
         "SOLAYA_USERSPACE_ARTIFACT_DIR=${SOLAYA_USERSPACE_ARTIFACT_DIR}"
@@ -35,7 +29,6 @@ add_custom_target(solaya-kernel-elf
             --manifest-path "${CMAKE_SOURCE_DIR}/Cargo.toml"
             --target        "${_kernel_target}"
             -p              boot
-            ${_features_arg}
     DEPENDS userspace-all headers-generated
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
     USES_TERMINAL
@@ -43,11 +36,23 @@ add_custom_target(solaya-kernel-elf
     COMMENT "Building solaya kernel ELF"
 )
 
+# patch-symbols is phony (cargo owns the ELF's mtime) but we only want to
+# rewrite the `symbols` section when the nm output actually changed —
+# otherwise every no-op rebuild bumps the ELF mtime and invalidates
+# downstream targets (e.g. test-system) for no reason.
 add_custom_target(patch-symbols
     COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/kernel"
     COMMAND bash -c
-        "${SOLAYA_NM} --demangle --numeric-sort --line-numbers ${_kernel_elf} | grep -e ' t ' -e ' T ' > ${_symbols_file} && printf '\\0' >> ${_symbols_file}"
-    COMMAND ${SOLAYA_OBJCOPY} --update-section symbols=${_symbols_file} ${_kernel_elf}
+        "set -e; \
+         ${SOLAYA_NM} --demangle --numeric-sort --line-numbers ${_kernel_elf} \
+            | grep -e ' t ' -e ' T ' > ${_symbols_file}.new; \
+         printf '\\0' >> ${_symbols_file}.new; \
+         if cmp -s ${_symbols_file}.new ${_symbols_file}; then \
+             rm ${_symbols_file}.new; \
+         else \
+             mv ${_symbols_file}.new ${_symbols_file}; \
+             ${SOLAYA_OBJCOPY} --update-section symbols=${_symbols_file} ${_kernel_elf}; \
+         fi"
     DEPENDS solaya-kernel-elf
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
     USES_TERMINAL

@@ -1,64 +1,24 @@
 # Solaya Kernel Configuration
 #
-# This is the root Kconfig file. It defines the arch choice and sources
-# per-subsystem fragments. Run `cmake --build build --target menuconfig`
-# to configure interactively, or copy a defconfig from configs/ as a
-# starting point.
+# Root Kconfig. Today only the target architecture is configurable; other
+# knobs were removed because no Rust code consumed them. Run
+# `cmake --build build --target menuconfig` to configure interactively, or
+# copy a defconfig from configs/ as a starting point.
 
 mainmenu "Solaya Kernel Configuration"
-
-config BROKEN
-	bool
-	help
-	  Selected by options that cannot currently be chosen. Never user-visible.
 
 choice
 	prompt "Target architecture"
 	default ARCH_RISCV64
 	help
 	  Select the target architecture. Only RISC-V 64 is implemented
-	  today; the other entries exist so that aarch64 / x86_64 support
-	  is additive rather than a refactor when added.
+	  today.
 
 config ARCH_RISCV64
 	bool "RISC-V 64-bit"
-	select ARCH_HAS_SBI
-	select ARCH_HAS_FDT
-
-config ARCH_AARCH64
-	bool "AArch64 (not yet supported)"
-	depends on BROKEN
-
-config ARCH_X86_64
-	bool "x86_64 (not yet supported)"
-	depends on BROKEN
 
 endchoice
 
 config ARCH
 	string
 	default "riscv64" if ARCH_RISCV64
-	default "aarch64" if ARCH_AARCH64
-	default "x86_64"  if ARCH_X86_64
-
-config RUST_TARGET_KERNEL
-	string
-	default "riscv64gc-unknown-none-elf" if ARCH_RISCV64
-
-config RUST_TARGET_USERSPACE
-	string
-	default "riscv64gc-unknown-linux-musl" if ARCH_RISCV64
-
-config ARCH_HAS_SBI
-	bool
-	help
-	  Selected by architectures whose firmware exposes SBI.
-
-config ARCH_HAS_FDT
-	bool
-	help
-	  Selected by architectures that use a flattened device tree.
-
-source "arch/Kconfig"
-source "crates/kernel/Kconfig"
-source "userspace/Kconfig"

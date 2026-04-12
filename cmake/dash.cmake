@@ -49,8 +49,8 @@ ExternalProject_Add(dash-build
             --host=${SOLAYA_TC_TRIPLE}
             --prefix=${_dash_install}
             --enable-static
-    BUILD_COMMAND     make
-    INSTALL_COMMAND   make install
+    BUILD_COMMAND     make -j${SOLAYA_BUILD_PARALLEL}
+    INSTALL_COMMAND   make -j${SOLAYA_BUILD_PARALLEL} install
 )
 
 # Stage the binary into the userspace artifact dir (where crates/kernel/

@@ -5,8 +5,8 @@
 # Runs after kconfig.cmake (which materialises ${CMAKE_BINARY_DIR}/.config).
 # Outputs, visible in every subdirectory:
 #
-#   SOLAYA_ARCH        riscv64 / aarch64 / x86_64
-#   SOLAYA_TC_TRIPLE   e.g. riscv64-unknown-linux-musl
+#   SOLAYA_ARCH        riscv64 (only arch supported today)
+#   SOLAYA_TC_TRIPLE   riscv64-unknown-linux-musl
 #   SOLAYA_TC_PREFIX   ${CMAKE_BINARY_DIR}/toolchain/${SOLAYA_ARCH}
 #   SOLAYA_TC_BIN      ${SOLAYA_TC_PREFIX}/bin
 #   SOLAYA_RUST_CHANNEL  channel string from rust-toolchain.toml
@@ -31,10 +31,6 @@ else()
     file(STRINGS "${_dotconfig}" _arch_bool REGEX "^CONFIG_ARCH_[A-Z0-9_]+=y")
     if(_arch_bool MATCHES "CONFIG_ARCH_RISCV64=y")
         set(SOLAYA_ARCH "riscv64")
-    elseif(_arch_bool MATCHES "CONFIG_ARCH_AARCH64=y")
-        set(SOLAYA_ARCH "aarch64")
-    elseif(_arch_bool MATCHES "CONFIG_ARCH_X86_64=y")
-        set(SOLAYA_ARCH "x86_64")
     else()
         message(FATAL_ERROR
             "cmake/arch.cmake: no CONFIG_ARCH selection found in ${_dotconfig}."
@@ -42,14 +38,13 @@ else()
     endif()
 endif()
 
-if(SOLAYA_ARCH STREQUAL "riscv64")
-    set(SOLAYA_TC_TRIPLE "riscv64-unknown-linux-musl")
-else()
+if(NOT SOLAYA_ARCH STREQUAL "riscv64")
     message(FATAL_ERROR
         "cmake/arch.cmake: only SOLAYA_ARCH=riscv64 is wired up today "
         "(got '${SOLAYA_ARCH}')."
     )
 endif()
+set(SOLAYA_TC_TRIPLE "riscv64-unknown-linux-musl")
 
 set(SOLAYA_TC_PREFIX "${CMAKE_BINARY_DIR}/toolchain/${SOLAYA_ARCH}")
 set(SOLAYA_TC_BIN    "${SOLAYA_TC_PREFIX}/bin")

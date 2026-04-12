@@ -38,8 +38,7 @@ endif()
 if(NOT SOLAYA_ARCH STREQUAL "riscv64")
     message(FATAL_ERROR
         "toolchain_bootstrap.cmake: only SOLAYA_ARCH=riscv64 is supported "
-        "today (got '${SOLAYA_ARCH}').  aarch64 / x86_64 bootstrap is "
-        "planned for stage-3 of drifting-gliding-eclipse.md."
+        "today (got '${SOLAYA_ARCH}')."
     )
 endif()
 

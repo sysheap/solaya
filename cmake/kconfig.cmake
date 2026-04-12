@@ -2,8 +2,7 @@
 #
 # Behaviour:
 #   * On first configure (no build/.config), seed .config from configs/${SOLAYA_DEFCONFIG}.
-#   * Always (re)run mkconfig.py to regenerate cargo-features.txt, rustc-cfg.txt, kconfig.h.
-#   * Load rustc-cfg.txt into SOLAYA_RUSTC_CFG_FLAGS (semicolon-separated list).
+#   * Always (re)run mkconfig.py to regenerate kconfig.h (future C consumers).
 #   * Re-run CMake configure when any Kconfig input or .config changes.
 #   * Expose menuconfig / savedefconfig / olddefconfig custom targets.
 
@@ -46,17 +45,11 @@ if(NOT _mk_rc EQUAL 0)
     message(FATAL_ERROR "mkconfig.py failed:\n${_mk_err}")
 endif()
 
-# Load --cfg flags for consumers.
-file(STRINGS "${SOLAYA_KCONFIG_OUTPUT}/rustc-cfg.txt" SOLAYA_RUSTC_CFG_FLAGS)
-
 # Rerun CMake configure when inputs change.
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${SOLAYA_KCONFIG_ROOT}"
     "${SOLAYA_KCONFIG_DOTCONFIG}"
     "${SOLAYA_MKCONFIG}"
-    "${CMAKE_SOURCE_DIR}/arch/Kconfig"
-    "${CMAKE_SOURCE_DIR}/crates/kernel/Kconfig"
-    "${CMAKE_SOURCE_DIR}/userspace/Kconfig"
 )
 
 # Interactive Kconfig targets. All inherit KCONFIG_CONFIG so build/.config is
