@@ -158,13 +158,6 @@ pub fn assign_block_device(device: BlockDevice) -> usize {
     index
 }
 
-pub fn capacity(index: usize) -> u64 {
-    BLOCK_DEVICES
-        .lock()
-        .get(index)
-        .map_or(0, |d| d.capacity_bytes())
-}
-
 /// Adapter that lets the virtio block driver be consumed through the
 /// `driver_api::BlockDevice` trait. Records the device's index into the
 /// global `BLOCK_DEVICES` and delegates to the existing free functions.
@@ -224,48 +217,6 @@ impl driver_api::BlockDevice for BlockDeviceHandle {
         let index = self.index;
         Box::pin(async move { write(index, offset_bytes as usize, data).await })
     }
-}
-
-pub fn register_devfs_node(index: usize) {
-    use crate::fs::{
-        devfs,
-        vfs::{NodeType, VfsNode},
-    };
-    use alloc::sync::Arc;
-
-    struct DevBlock {
-        ino: u64,
-        index: usize,
-    }
-
-    impl VfsNode for DevBlock {
-        fn node_type(&self) -> NodeType {
-            NodeType::File
-        }
-        fn ino(&self) -> u64 {
-            self.ino
-        }
-        fn size(&self) -> usize {
-            capacity(self.index) as usize
-        }
-        fn truncate(&self, _length: usize) -> Result<(), headers::errno::Errno> {
-            Err(headers::errno::Errno::EINVAL)
-        }
-        fn block_device_index(&self) -> Option<usize> {
-            Some(self.index)
-        }
-    }
-
-    assert!(index < 26, "block device index must be < 26 (a-z)");
-    let suffix = (b'a' + index as u8) as char;
-    let name = alloc::format!("vd{suffix}");
-    devfs::register_device(
-        &name,
-        Arc::new(DevBlock {
-            ino: devfs::alloc_dev_ino(),
-            index,
-        }),
-    );
 }
 
 pub async fn read(index: usize, offset: usize, buf: &mut [u8]) -> Result<usize, Errno> {

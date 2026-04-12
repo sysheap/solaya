@@ -60,7 +60,7 @@ fn init_block_devices(pci_devices: &mut Vec<PCIDevice>) {
             registered_idx == idx,
             "registry index must match virtio BLOCK_DEVICES index during Phase 1"
         );
-        virtio::block::register_devfs_node(idx);
+        fs::devfs::register_block_device(handle);
         plic::register_interrupt(plic_irq, virtio::block::on_block_interrupt);
     }
 
