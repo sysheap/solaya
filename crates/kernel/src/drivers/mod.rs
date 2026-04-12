@@ -2,13 +2,15 @@ pub mod registry;
 
 pub use drivers::dwmac;
 
-pub use registry::{
-    BlockDeviceRegistry, CharDeviceRegistry, DisplayDeviceRegistry, InputDeviceRegistry,
-    NetDeviceRegistry, RngDeviceRegistry,
-};
+pub use registry::{Registry, registry};
 
 use alloc::{sync::Arc, vec::Vec};
 use core::sync::atomic::{AtomicBool, Ordering};
+
+use driver_api::{
+    BlockDevice, BusContext, CharDevice, DisplayDevice, DriverCatalog, DriverInstance, InputDevice,
+    IrqId, NetDevice, ProbeError, RngDevice,
+};
 
 use crate::{
     device_tree::{self, DtBusContext},
@@ -16,7 +18,6 @@ use crate::{
     net::mac::MacAddress,
     pci::{PCIDevice, PciBusContext},
 };
-use driver_api::{BusContext, DriverCatalog, DriverInstance, IrqId, ProbeError};
 use klib::big_endian::BigEndian;
 
 /// Enumerate every discovered PCI device through the driver catalog. For
@@ -58,22 +59,22 @@ fn attach_one(
 fn route_instance(instance: DriverInstance) {
     match instance {
         DriverInstance::Block(d) => {
-            BlockDeviceRegistry::global().register(d);
+            registry::<dyn BlockDevice>().register(d);
         }
         DriverInstance::Net(d) => {
-            NetDeviceRegistry::global().register(d);
+            registry::<dyn NetDevice>().register(d);
         }
         DriverInstance::Char(d) => {
-            CharDeviceRegistry::global().register(d);
+            registry::<dyn CharDevice>().register(d);
         }
         DriverInstance::Display(d) => {
-            DisplayDeviceRegistry::global().register(d);
+            registry::<dyn DisplayDevice>().register(d);
         }
         DriverInstance::Input(d) => {
-            InputDeviceRegistry::global().register(d);
+            registry::<dyn InputDevice>().register(d);
         }
         DriverInstance::Rng(d) => {
-            RngDeviceRegistry::global().register(d);
+            registry::<dyn RngDevice>().register(d);
         }
     }
 }
@@ -81,7 +82,7 @@ fn route_instance(instance: DriverInstance) {
 /// Discover and initialize DWMAC ethernet controllers from the device tree.
 /// Only registers the first successfully initialized port with the network stack.
 pub fn init_dwmac_devices() {
-    if NetDeviceRegistry::global().len() > 0 {
+    if registry::<dyn NetDevice>().len() > 0 {
         return;
     }
 
@@ -163,7 +164,7 @@ pub fn init_dwmac_devices() {
             continue;
         };
 
-        if NetDeviceRegistry::global().len() == 0 {
+        if registry::<dyn NetDevice>().len() == 0 {
             let handle = Arc::new(dwmac::DwmacHandle::new(device));
             let irq_handler: Arc<dyn driver_api::IrqHandler> = handle.clone();
             let bus = DtBusContext::new(reg.address, reg.size);
@@ -172,7 +173,7 @@ pub fn init_dwmac_devices() {
                 .expect("register irq");
             handle.set_irq_registration(registration);
             let net_device: Arc<dyn driver_api::NetDevice> = handle;
-            NetDeviceRegistry::global().register(net_device);
+            registry::<dyn NetDevice>().register(net_device);
             info!("DWMAC: GMAC{} registered as network device", gmac_index);
         }
     }

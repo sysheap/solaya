@@ -55,7 +55,7 @@ fn set_up_arguments(
     let mut envp = vec![0usize; env.len() + 1]; // env entries + NULL
 
     let mut random_bytes = [0u8; AT_RANDOM_SIZE];
-    if let Some(rng) = crate::drivers::RngDeviceRegistry::global().primary() {
+    if let Some(rng) = crate::drivers::Registry::<dyn driver_api::RngDevice>::primary() {
         let _ = rng.fill(&mut random_bytes);
     }
 

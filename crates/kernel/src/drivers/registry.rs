@@ -5,39 +5,36 @@
 //! read from the registry to discover devices without reaching into
 //! driver-specific modules.
 //!
-//! `BlockDeviceRegistry` landed in Phase 1, `NetDeviceRegistry` in Phase 2.
-//! Additional registries (`CharDeviceRegistry`, ...) land in later phases.
+//! The registry is a single generic `Registry<T>` parameterised over the
+//! device trait object. Per-trait statics are wired via `RegistryKind`; call
+//! sites use `<dyn BlockDevice as RegistryKind>::registry()` (or the thin
+//! helper [`registry`]).
 
 use alloc::{sync::Arc, vec::Vec};
 use driver_api::{BlockDevice, CharDevice, DisplayDevice, InputDevice, NetDevice, RngDevice};
 
 use hal::spinlock::Spinlock;
 
-pub struct BlockDeviceRegistry {
-    devices: Spinlock<Vec<Arc<dyn BlockDevice>>>,
+pub struct Registry<T: ?Sized + Send + Sync> {
+    devices: Spinlock<Vec<Arc<T>>>,
 }
 
-impl BlockDeviceRegistry {
-    const fn new() -> Self {
+impl<T: ?Sized + Send + Sync> Registry<T> {
+    pub const fn new() -> Self {
         Self {
             devices: Spinlock::new(Vec::new()),
         }
     }
 
-    pub fn global() -> &'static Self {
-        static REGISTRY: BlockDeviceRegistry = BlockDeviceRegistry::new();
-        &REGISTRY
-    }
-
-    /// Register a block device and return its assigned index.
-    pub fn register(&self, device: Arc<dyn BlockDevice>) -> usize {
+    /// Append a device and return its assigned index.
+    pub fn register(&self, device: Arc<T>) -> usize {
         let mut guard = self.devices.lock();
         let index = guard.len();
         guard.push(device);
         index
     }
 
-    pub fn get(&self, index: usize) -> Option<Arc<dyn BlockDevice>> {
+    pub fn get(&self, index: usize) -> Option<Arc<T>> {
         self.devices.lock().get(index).cloned()
     }
 
@@ -46,175 +43,63 @@ impl BlockDeviceRegistry {
     }
 }
 
-pub struct CharDeviceRegistry {
-    devices: Spinlock<Vec<Arc<dyn CharDevice>>>,
+/// Marker trait for device trait objects that have a global `Registry`.
+/// One impl per device subsystem supplies the backing static.
+pub trait RegistryKind: Send + Sync {
+    fn registry() -> &'static Registry<Self>;
 }
 
-impl CharDeviceRegistry {
-    const fn new() -> Self {
-        Self {
-            devices: Spinlock::new(Vec::new()),
-        }
-    }
+/// Convenience: `registry::<dyn BlockDevice>()` instead of the angle-bracket
+/// `<dyn BlockDevice as RegistryKind>::registry()`.
+pub fn registry<T: ?Sized + RegistryKind>() -> &'static Registry<T> {
+    T::registry()
+}
 
-    pub fn global() -> &'static Self {
-        static REGISTRY: CharDeviceRegistry = CharDeviceRegistry::new();
-        &REGISTRY
-    }
-
-    pub fn register(&self, device: Arc<dyn CharDevice>) -> usize {
-        let mut guard = self.devices.lock();
-        let index = guard.len();
-        guard.push(device);
-        index
-    }
-
-    #[allow(dead_code)]
-    pub fn get(&self, index: usize) -> Option<Arc<dyn CharDevice>> {
-        self.devices.lock().get(index).cloned()
-    }
-
-    #[allow(dead_code)]
-    pub fn len(&self) -> usize {
-        self.devices.lock().len()
+impl RegistryKind for dyn BlockDevice {
+    fn registry() -> &'static Registry<Self> {
+        static R: Registry<dyn BlockDevice> = Registry::new();
+        &R
     }
 }
 
-pub struct DisplayDeviceRegistry {
-    devices: Spinlock<Vec<Arc<dyn DisplayDevice>>>,
-}
-
-impl DisplayDeviceRegistry {
-    const fn new() -> Self {
-        Self {
-            devices: Spinlock::new(Vec::new()),
-        }
-    }
-
-    pub fn global() -> &'static Self {
-        static REGISTRY: DisplayDeviceRegistry = DisplayDeviceRegistry::new();
-        &REGISTRY
-    }
-
-    pub fn register(&self, device: Arc<dyn DisplayDevice>) -> usize {
-        let mut guard = self.devices.lock();
-        let index = guard.len();
-        guard.push(device);
-        index
-    }
-
-    #[allow(dead_code)]
-    pub fn get(&self, index: usize) -> Option<Arc<dyn DisplayDevice>> {
-        self.devices.lock().get(index).cloned()
-    }
-
-    #[allow(dead_code)]
-    pub fn len(&self) -> usize {
-        self.devices.lock().len()
+impl RegistryKind for dyn CharDevice {
+    fn registry() -> &'static Registry<Self> {
+        static R: Registry<dyn CharDevice> = Registry::new();
+        &R
     }
 }
 
-pub struct InputDeviceRegistry {
-    devices: Spinlock<Vec<Arc<dyn InputDevice>>>,
-}
-
-impl InputDeviceRegistry {
-    const fn new() -> Self {
-        Self {
-            devices: Spinlock::new(Vec::new()),
-        }
-    }
-
-    pub fn global() -> &'static Self {
-        static REGISTRY: InputDeviceRegistry = InputDeviceRegistry::new();
-        &REGISTRY
-    }
-
-    pub fn register(&self, device: Arc<dyn InputDevice>) -> usize {
-        let mut guard = self.devices.lock();
-        let index = guard.len();
-        guard.push(device);
-        index
-    }
-
-    #[allow(dead_code)]
-    pub fn get(&self, index: usize) -> Option<Arc<dyn InputDevice>> {
-        self.devices.lock().get(index).cloned()
-    }
-
-    #[allow(dead_code)]
-    pub fn len(&self) -> usize {
-        self.devices.lock().len()
+impl RegistryKind for dyn DisplayDevice {
+    fn registry() -> &'static Registry<Self> {
+        static R: Registry<dyn DisplayDevice> = Registry::new();
+        &R
     }
 }
 
-pub struct RngDeviceRegistry {
-    devices: Spinlock<Vec<Arc<dyn RngDevice>>>,
-}
-
-impl RngDeviceRegistry {
-    const fn new() -> Self {
-        Self {
-            devices: Spinlock::new(Vec::new()),
-        }
-    }
-
-    pub fn global() -> &'static Self {
-        static REGISTRY: RngDeviceRegistry = RngDeviceRegistry::new();
-        &REGISTRY
-    }
-
-    pub fn register(&self, device: Arc<dyn RngDevice>) -> usize {
-        let mut guard = self.devices.lock();
-        let index = guard.len();
-        guard.push(device);
-        index
-    }
-
-    #[allow(dead_code)]
-    pub fn get(&self, index: usize) -> Option<Arc<dyn RngDevice>> {
-        self.devices.lock().get(index).cloned()
-    }
-
-    #[allow(dead_code)]
-    pub fn len(&self) -> usize {
-        self.devices.lock().len()
-    }
-
-    pub fn primary(&self) -> Option<Arc<dyn RngDevice>> {
-        self.devices.lock().first().cloned()
+impl RegistryKind for dyn InputDevice {
+    fn registry() -> &'static Registry<Self> {
+        static R: Registry<dyn InputDevice> = Registry::new();
+        &R
     }
 }
 
-pub struct NetDeviceRegistry {
-    devices: Spinlock<Vec<Arc<dyn NetDevice>>>,
+impl RegistryKind for dyn RngDevice {
+    fn registry() -> &'static Registry<Self> {
+        static R: Registry<dyn RngDevice> = Registry::new();
+        &R
+    }
 }
 
-impl NetDeviceRegistry {
-    const fn new() -> Self {
-        Self {
-            devices: Spinlock::new(Vec::new()),
-        }
+impl RegistryKind for dyn NetDevice {
+    fn registry() -> &'static Registry<Self> {
+        static R: Registry<dyn NetDevice> = Registry::new();
+        &R
     }
+}
 
-    pub fn global() -> &'static Self {
-        static REGISTRY: NetDeviceRegistry = NetDeviceRegistry::new();
-        &REGISTRY
-    }
-
-    /// Register a network device and return its assigned index.
-    pub fn register(&self, device: Arc<dyn NetDevice>) -> usize {
-        let mut guard = self.devices.lock();
-        let index = guard.len();
-        guard.push(device);
-        index
-    }
-
-    pub fn get(&self, index: usize) -> Option<Arc<dyn NetDevice>> {
-        self.devices.lock().get(index).cloned()
-    }
-
-    pub fn len(&self) -> usize {
-        self.devices.lock().len()
+impl Registry<dyn RngDevice> {
+    /// Convenience accessor: first registered RNG, if any.
+    pub fn primary() -> Option<Arc<dyn RngDevice>> {
+        <dyn RngDevice as RegistryKind>::registry().get(0)
     }
 }

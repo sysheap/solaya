@@ -5,10 +5,12 @@ use core::{
 };
 use headers::errno::Errno;
 
+use driver_api::RngDevice;
+
 use crate::{
     byte_interpretable::ByteInterpretable,
     cpu::Cpu,
-    drivers::RngDeviceRegistry,
+    drivers::Registry,
     memory::{self, PAGE_SIZE},
     processes::{process_table, timer},
     syscalls::linux_validator::LinuxUserspaceArg,
@@ -138,7 +140,7 @@ impl LinuxSyscallHandler {
         let len = buflen.min(256);
         let mut data = vec![0u8; len];
 
-        if let Some(rng) = RngDeviceRegistry::global().primary() {
+        if let Some(rng) = Registry::<dyn RngDevice>::primary() {
             let _ = rng.fill(&mut data);
         } else {
             xorshift_fill(&mut data);

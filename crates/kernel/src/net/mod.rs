@@ -11,7 +11,6 @@ use driver_api::NetDevice;
 
 use crate::{
     debug,
-    drivers::NetDeviceRegistry,
     net::{ipv4::IpV4Header, udp::UdpHeader},
 };
 use hal::spinlock::Spinlock;
@@ -52,7 +51,7 @@ static NETWORK_STACK: NetworkStack = NetworkStack {
 /// by the driver layer. The `NetDeviceRegistry` holds all devices, this is
 /// just the one the stack binds to.
 fn primary_device() -> Option<Arc<dyn NetDevice>> {
-    NetDeviceRegistry::global().get(0)
+    crate::drivers::registry::<dyn NetDevice>().get(0)
 }
 
 static NETWORK_INTERRUPT_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -124,7 +123,7 @@ pub fn set_ip_addr(addr: Ipv4Addr) {
 }
 
 pub fn has_network_device() -> bool {
-    NetDeviceRegistry::global().len() > 0
+    crate::drivers::registry::<dyn NetDevice>().len() > 0
 }
 
 pub fn open_sockets() -> &'static Spinlock<LazyCell<OpenSockets>> {

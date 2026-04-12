@@ -53,7 +53,7 @@ impl CharDevice for ConsoleCharDevice {
 /// devfs. Called once during kernel init.
 pub fn register_console_char_device() {
     let device: Arc<dyn CharDevice> = Arc::new(ConsoleCharDevice);
-    crate::drivers::CharDeviceRegistry::global().register(device.clone());
+    crate::drivers::registry::<dyn CharDevice>().register(device.clone());
     crate::fs::devfs::register_char_device("console", device);
 }
 
