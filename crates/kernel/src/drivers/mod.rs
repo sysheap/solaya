@@ -1,9 +1,12 @@
 pub mod bochs_display;
 pub mod dwmac;
 pub mod jh7110;
+pub mod registry;
 pub mod virtio;
 
-use alloc::{boxed::Box, vec::Vec};
+pub use registry::BlockDeviceRegistry;
+
+use alloc::{boxed::Box, sync::Arc, vec::Vec};
 use core::sync::atomic::{AtomicBool, Ordering};
 
 use crate::{
@@ -50,12 +53,21 @@ fn init_block_devices(pci_devices: &mut Vec<PCIDevice>) {
             .expect("Block device initialization must work.");
         virtio::block::register_isr_status(init.interrupt_status);
         let idx = virtio::block::assign_block_device(init.device);
+        let handle: Arc<dyn driver_api::BlockDevice> =
+            Arc::new(virtio::block::BlockDeviceHandle::new(idx));
+        let registered_idx = BlockDeviceRegistry::global().register(handle.clone());
+        assert!(
+            registered_idx == idx,
+            "registry index must match virtio BLOCK_DEVICES index during Phase 1"
+        );
         virtio::block::register_devfs_node(idx);
         plic::register_interrupt(plic_irq, virtio::block::on_block_interrupt);
     }
 
-    if virtio::block::device_count() > 0 {
-        kernel_tasks::spawn(fs::ext2::mount_ext2(0));
+    if BlockDeviceRegistry::global().len() > 0
+        && let Some(primary) = BlockDeviceRegistry::global().get(0)
+    {
+        kernel_tasks::spawn(fs::ext2::mount_ext2(primary));
     }
 }
 

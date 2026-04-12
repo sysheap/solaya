@@ -1,5 +1,6 @@
-use alloc::{collections::BTreeMap, vec::Vec};
+use alloc::{boxed::Box, collections::BTreeMap, string::String, vec::Vec};
 use core::{
+    future::Future,
     pin::Pin,
     sync::atomic::{AtomicU64, Ordering},
     task::{Context, Poll, Waker},
@@ -157,15 +158,72 @@ pub fn assign_block_device(device: BlockDevice) -> usize {
     index
 }
 
-pub fn device_count() -> usize {
-    BLOCK_DEVICES.lock().len()
-}
-
 pub fn capacity(index: usize) -> u64 {
     BLOCK_DEVICES
         .lock()
         .get(index)
         .map_or(0, |d| d.capacity_bytes())
+}
+
+/// Adapter that lets the virtio block driver be consumed through the
+/// `driver_api::BlockDevice` trait. Records the device's index into the
+/// global `BLOCK_DEVICES` and delegates to the existing free functions.
+///
+/// Phase 1 keeps the global table intact; eliminating it is a later phase.
+pub struct BlockDeviceHandle {
+    index: usize,
+    name: String,
+    capacity_sectors: u64,
+}
+
+impl BlockDeviceHandle {
+    pub fn new(index: usize) -> Self {
+        assert!(index < 26, "block device index must be < 26 (a-z)");
+        let suffix = (b'a' + index as u8) as char;
+        let name = alloc::format!("vd{suffix}");
+        let capacity_sectors = BLOCK_DEVICES
+            .lock()
+            .get(index)
+            .expect("BlockDeviceHandle created for registered device")
+            .capacity_sectors;
+        Self {
+            index,
+            name,
+            capacity_sectors,
+        }
+    }
+}
+
+impl driver_api::BlockDevice for BlockDeviceHandle {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn num_blocks(&self) -> u64 {
+        self.capacity_sectors
+    }
+
+    fn block_size(&self) -> usize {
+        SECTOR_SIZE
+    }
+
+    fn read<'a>(
+        &'a self,
+        offset_bytes: u64,
+        buf: &'a mut [u8],
+    ) -> Pin<Box<dyn Future<Output = Result<usize, driver_api::IoError>> + Send + 'a>> {
+        let index = self.index;
+        Box::pin(async move { read(index, offset_bytes as usize, buf).await })
+    }
+
+    fn write<'a>(
+        &'a self,
+        offset_bytes: u64,
+        data: &'a [u8],
+    ) -> Pin<Box<dyn Future<Output = Result<usize, driver_api::IoError>> + Send + 'a>> {
+        let index = self.index;
+        Box::pin(async move { write(index, offset_bytes as usize, data).await })
+    }
 }
 
 pub fn register_devfs_node(index: usize) {

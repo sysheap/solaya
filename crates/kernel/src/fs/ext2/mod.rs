@@ -3,10 +3,10 @@ mod file;
 mod inode;
 pub mod structures;
 
-use alloc::{boxed::Box, collections::BTreeMap, string::String, vec};
+use alloc::{boxed::Box, collections::BTreeMap, string::String, sync::Arc, vec};
+use driver_api::BlockDevice;
 
 use crate::{
-    drivers::virtio::block,
     fs::vfs::{self, VfsNodeRef, alloc_ino},
     info,
     klibc::util::BufferExtension,
@@ -21,14 +21,15 @@ use structures::{
     Ext2DirEntry, Ext2Superblock,
 };
 
-pub async fn mount_ext2(dev: usize) {
-    info!("ext2: mounting block device {}", dev);
+pub async fn mount_ext2(dev: Arc<dyn BlockDevice>) {
+    info!("ext2: mounting block device {}", dev.name());
 
-    let sb = read_superblock(dev).await;
+    let sb = read_superblock(&*dev).await;
     if sb.s_magic != EXT2_MAGIC {
         warn!(
             "ext2: block device {} is not ext2 (magic 0x{:04X}), skipping",
-            dev, sb.s_magic
+            dev.name(),
+            sb.s_magic
         );
         info!("ext2: init complete");
         return;
@@ -40,18 +41,19 @@ pub async fn mount_ext2(dev: usize) {
         block_size, sb.s_inodes_count, sb.s_blocks_count
     );
 
-    let bgds = read_block_group_descriptors(dev, &sb).await;
+    let bgds = read_block_group_descriptors(&*dev, &sb).await;
 
-    let root = build_tree(dev, &sb, &bgds, EXT2_ROOT_INODE).await;
+    let root = build_tree(&*dev, &sb, &bgds, EXT2_ROOT_INODE).await;
     vfs::mount("/mnt", root);
     info!("ext2: mounted at /mnt");
     info!("ext2: init complete");
 }
 
-async fn read_superblock(dev: usize) -> Ext2Superblock {
+async fn read_superblock(dev: &dyn BlockDevice) -> Ext2Superblock {
     let sb_size = core::mem::size_of::<Ext2Superblock>();
     let mut buf = vec![0u8; sb_size];
-    let n = block::read(dev, 1024, &mut buf)
+    let n = dev
+        .read(1024, &mut buf)
         .await
         .expect("superblock read must succeed");
     assert!(n == sb_size, "short superblock read");
@@ -60,7 +62,7 @@ async fn read_superblock(dev: usize) -> Ext2Superblock {
 }
 
 async fn read_block_group_descriptors(
-    dev: usize,
+    dev: &dyn BlockDevice,
     sb: &Ext2Superblock,
 ) -> alloc::vec::Vec<Ext2BlockGroupDescriptor> {
     let block_size = sb.block_size();
@@ -72,7 +74,8 @@ async fn read_block_group_descriptors(
     let bgd_offset = if block_size == 1024 { 2048 } else { block_size };
 
     let mut buf = vec![0u8; total_size];
-    let n = block::read(dev, bgd_offset, &mut buf)
+    let n = dev
+        .read(bgd_offset as u64, &mut buf)
         .await
         .expect("BGD read must succeed");
     assert!(n == total_size, "short BGD read");
@@ -85,7 +88,7 @@ async fn read_block_group_descriptors(
 }
 
 fn build_tree<'a>(
-    dev: usize,
+    dev: &'a dyn BlockDevice,
     sb: &'a Ext2Superblock,
     bgds: &'a [Ext2BlockGroupDescriptor],
     inode_number: u32,

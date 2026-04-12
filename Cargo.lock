@@ -282,6 +282,7 @@ version = "0.1.0"
 dependencies = [
  "abi",
  "console",
+ "driver-api",
  "elf",
  "gimli 0.33.1",
  "hal",
