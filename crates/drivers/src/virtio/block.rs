@@ -1,4 +1,4 @@
-use alloc::{boxed::Box, collections::BTreeMap, string::String, vec, vec::Vec};
+use alloc::{boxed::Box, collections::BTreeMap, string::String, sync::Arc, vec, vec::Vec};
 use core::{
     future::Future,
     pin::Pin,
@@ -7,7 +7,10 @@ use core::{
 };
 use headers::errno::Errno;
 
-use driver_api::{BarIndex, BusContext, PciCapabilityHeaderExt, bus::pci_command};
+use driver_api::{
+    BarIndex, BusContext, DriverFactory, DriverInstance, PciCapabilityHeaderExt, ProbeError,
+    bus::pci_command,
+};
 
 use console::info;
 use hal::{mmio::MMIO, mmio_struct, spinlock::Spinlock};
@@ -587,5 +590,34 @@ impl Drop for BlockDevice {
     fn drop(&mut self) {
         info!("Reset block device because of drop");
         self.common_cfg.device_status().write(0x0);
+    }
+}
+
+/// Catalog entry for the virtio-blk driver.
+pub struct VirtioBlockFactory;
+
+impl DriverFactory for VirtioBlockFactory {
+    fn name(&self) -> &'static str {
+        "virtio-blk"
+    }
+
+    fn probe(&self, bus: &dyn BusContext) -> bool {
+        BlockDevice::is_virtio_block(bus)
+    }
+
+    fn attach(&self, bus: &dyn BusContext) -> Result<DriverInstance, ProbeError> {
+        let plic_irq = bus
+            .as_pci()
+            .expect("virtio-blk requires a PCI bus")
+            .plic_irq();
+        let init = BlockDevice::initialize(bus).map_err(ProbeError::InitializationFailed)?;
+        let irq_handler: Arc<dyn driver_api::IrqHandler> =
+            Arc::new(BlockIrqHandler::new(init.interrupt_status));
+        let irq = bus
+            .register_irq(plic_irq, irq_handler)
+            .expect("register irq");
+        let idx = assign_block_device(init.device);
+        let handle: Arc<dyn driver_api::BlockDevice> = Arc::new(BlockDeviceHandle::new(idx, irq));
+        Ok(DriverInstance::Block(handle))
     }
 }

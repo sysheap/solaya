@@ -892,3 +892,31 @@ Do not paper over disagreement.
     `net::mac::MacAddress`, `pci`, plus `driver_api` — no `fs`, no
     `net::{self}`, no `processes::kernel_tasks`. 69/69 system tests
     green.
+
+- v9 (post-issue-#250-item-10): `DriverCatalog` / `DriverFactory` landed.
+  `driver-api` now exposes a `catalog` module with `DriverFactory`,
+  `DriverCatalog`, and a `DriverInstance` enum covering every device
+  class. Each concrete PCI driver ships a factory (`VirtioBlockFactory`,
+  `VirtioNetFactory`, `VirtioInputFactory`, `VirtioRngFactory`,
+  `BochsDisplayFactory`) co-located with its driver in
+  `crates/drivers/`. `drivers::register_builtin(&mut catalog)` wires all
+  five into the catalog. `kernel/src/drivers/mod.rs::init_all_pci_devices`
+  is now a generic loop that asks the catalog to attach the first
+  matching factory per remaining PCI device and routes the returned
+  `DriverInstance` into the typed registry. The previous five per-driver
+  `init_*` helpers and `find_pci_device` are gone. Adjustments:
+  - `PciBusContextExt` gained `plic_irq() -> IrqId` so factories stop
+    needing `crate::pci::PCIDevice::plic_interrupt_id()` out-of-band.
+    Implemented in `kernel/src/pci/bus_context.rs` and in the host-test
+    `MockPciBus`.
+  - The `BlockDeviceHandle::new(idx, irq)` invariant is preserved inside
+    `VirtioBlockFactory::attach`: `assign_block_device` → handle
+    construction → `DriverInstance::Block(handle)`. The kernel's
+    `route_instance` calls `.register(d)` which appends in attach order,
+    so registry index and virtio-internal `BLOCK_DEVICES` index still
+    match by construction.
+  - DWMAC stays out of the catalog: it's DT-walked (not PCI-enumerated)
+    and needs clock / reset / L2-cache bring-up that doesn't fit the
+    PCI-shaped `probe → attach` contract. `init_dwmac_devices` is
+    untouched.
+  - Acceptance: `just ci` green, 69/69 system tests.

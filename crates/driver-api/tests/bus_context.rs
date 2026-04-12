@@ -96,6 +96,10 @@ impl PciBusContextExt for MockPciBus {
         self.counts.read_cfg.fetch_add(1, Ordering::SeqCst);
         0xDEAD_BEEF
     }
+
+    fn plic_irq(&self) -> driver_api::IrqId {
+        driver_api::IrqId(42)
+    }
 }
 
 #[test]

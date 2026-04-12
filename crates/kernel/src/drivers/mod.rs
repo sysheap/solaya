@@ -1,6 +1,6 @@
 pub mod registry;
 
-pub use drivers::{bochs_display, dwmac, virtio};
+pub use drivers::dwmac;
 
 pub use registry::{
     BlockDeviceRegistry, CharDeviceRegistry, DisplayDeviceRegistry, InputDeviceRegistry,
@@ -16,97 +16,66 @@ use crate::{
     net::mac::MacAddress,
     pci::{PCIDevice, PciBusContext},
 };
-use driver_api::{BusContext, IrqId};
+use driver_api::{BusContext, DriverCatalog, DriverInstance, IrqId, ProbeError};
 use klib::big_endian::BigEndian;
 
+/// Enumerate every discovered PCI device through the driver catalog. For
+/// each device, ask the catalog for the first matching factory; route the
+/// returned `DriverInstance` into the typed registry. Devices that no
+/// factory claims are left behind (logged as unclaimed).
 pub fn init_all_pci_devices(mut pci_devices: Vec<PCIDevice>) {
-    init_network_device(&mut pci_devices);
-    init_block_devices(&mut pci_devices);
-    init_display_device(&mut pci_devices);
-    init_rng_device(&mut pci_devices);
-    init_input_device(&mut pci_devices);
-}
+    let mut catalog = DriverCatalog::new();
+    drivers::register_builtin(&mut catalog);
 
-fn init_network_device(pci_devices: &mut Vec<PCIDevice>) {
-    let Some(i) = find_pci_device(pci_devices, virtio::net::NetworkDevice::is_virtio_net) else {
-        return;
-    };
-    let mut device = pci_devices.swap_remove(i);
-    let plic_irq = IrqId(device.plic_interrupt_id());
-    let bus = PciBusContext::new(&mut device);
-    let init = virtio::net::NetworkDevice::initialize(&bus).expect("Initialization must work.");
-    let handle = Arc::new(virtio::net::VirtioNetHandle::new(
-        init.device,
-        init.interrupt_status,
-    ));
-    let irq_handler: Arc<dyn driver_api::IrqHandler> = handle.clone();
-    let registration = bus
-        .register_irq(plic_irq, irq_handler)
-        .expect("register irq");
-    handle.set_irq_registration(registration);
-    let net_device: Arc<dyn driver_api::NetDevice> = handle;
-    NetDeviceRegistry::global().register(net_device);
-}
-
-fn init_block_devices(pci_devices: &mut Vec<PCIDevice>) {
-    while let Some(i) = find_pci_device(pci_devices, virtio::block::BlockDevice::is_virtio_block) {
-        let mut device = pci_devices.swap_remove(i);
-        let plic_irq = IrqId(device.plic_interrupt_id());
-        let bus = PciBusContext::new(&mut device);
-        let init = virtio::block::BlockDevice::initialize(&bus)
-            .expect("Block device initialization must work.");
-        let irq_handler: Arc<dyn driver_api::IrqHandler> =
-            Arc::new(virtio::block::BlockIrqHandler::new(init.interrupt_status));
-        let irq = bus
-            .register_irq(plic_irq, irq_handler)
-            .expect("register irq");
-        let idx = virtio::block::assign_block_device(init.device);
-        let handle: Arc<dyn driver_api::BlockDevice> =
-            Arc::new(virtio::block::BlockDeviceHandle::new(idx, irq));
-        let registered_idx = BlockDeviceRegistry::global().register(handle);
-        assert!(
-            registered_idx == idx,
-            "registry index must match virtio BLOCK_DEVICES index during Phase 1"
-        );
+    while let Some(result) = attach_one(&catalog, &mut pci_devices) {
+        match result {
+            Ok(instance) => route_instance(instance),
+            Err(ProbeError::InitializationFailed(msg)) => {
+                info!("driver attach failed: {}", msg);
+            }
+            Err(ProbeError::DoesNotMatch) => {}
+        }
     }
 }
 
-fn init_display_device(pci_devices: &mut Vec<PCIDevice>) {
-    let Some(i) = find_pci_device(pci_devices, bochs_display::is_bochs_display) else {
-        return;
-    };
-    let mut device = pci_devices.swap_remove(i);
-    let bus = PciBusContext::new(&mut device);
-    let handle = bochs_display::initialize(&bus);
-    DisplayDeviceRegistry::global().register(handle);
-}
-
-fn init_rng_device(pci_devices: &mut Vec<PCIDevice>) {
-    let Some(i) = find_pci_device(pci_devices, virtio::rng::RngDevice::is_virtio_rng) else {
-        return;
-    };
-    let mut device = pci_devices.swap_remove(i);
-    let bus = PciBusContext::new(&mut device);
-    let rng =
-        virtio::rng::RngDevice::initialize(&bus).expect("RNG device initialization must work.");
-    let handle: Arc<dyn driver_api::RngDevice> = Arc::new(virtio::rng::VirtioRngHandle::new(rng));
-    RngDeviceRegistry::global().register(handle);
-}
-
-/// Find the first PCI device in `pci_devices` matching `predicate`. Builds a
-/// `PciBusContext` around each device in turn so the predicate can inspect
-/// the device through the bus-agnostic surface only.
-fn find_pci_device<F>(pci_devices: &mut [PCIDevice], predicate: F) -> Option<usize>
-where
-    F: Fn(&dyn BusContext) -> bool,
-{
-    for (i, device) in pci_devices.iter_mut().enumerate() {
-        let bus = PciBusContext::new(device);
-        if predicate(&bus) {
-            return Some(i);
+fn attach_one(
+    catalog: &DriverCatalog,
+    pci_devices: &mut Vec<PCIDevice>,
+) -> Option<Result<DriverInstance, ProbeError>> {
+    for i in 0..pci_devices.len() {
+        let result = {
+            let bus = PciBusContext::new(&mut pci_devices[i]);
+            catalog.attach_first_match(&bus)
+        };
+        if let Some(result) = result {
+            pci_devices.swap_remove(i);
+            return Some(result);
         }
     }
     None
+}
+
+fn route_instance(instance: DriverInstance) {
+    match instance {
+        DriverInstance::Block(d) => {
+            BlockDeviceRegistry::global().register(d);
+        }
+        DriverInstance::Net(d) => {
+            NetDeviceRegistry::global().register(d);
+        }
+        DriverInstance::Char(d) => {
+            CharDeviceRegistry::global().register(d);
+        }
+        DriverInstance::Display(d) => {
+            DisplayDeviceRegistry::global().register(d);
+        }
+        DriverInstance::Input(d) => {
+            InputDeviceRegistry::global().register(d);
+        }
+        DriverInstance::Rng(d) => {
+            RngDeviceRegistry::global().register(d);
+        }
+    }
 }
 
 /// Discover and initialize DWMAC ethernet controllers from the device tree.
@@ -234,26 +203,4 @@ fn init_l2_cache_from_device_tree(soc: &device_tree::Node<'_>) {
         hal::cache::init(reg.address);
         info!("L2 cache controller initialized at {:#x}", reg.address);
     }
-}
-
-fn init_input_device(pci_devices: &mut Vec<PCIDevice>) {
-    let Some(i) = find_pci_device(pci_devices, virtio::input::InputDevice::is_virtio_input) else {
-        return;
-    };
-    let mut device = pci_devices.swap_remove(i);
-    let plic_irq = IrqId(device.plic_interrupt_id());
-    let bus = PciBusContext::new(&mut device);
-    let init = virtio::input::InputDevice::initialize(&bus)
-        .expect("Input device initialization must work.");
-    let handle = Arc::new(virtio::input::VirtioInputHandle::new(
-        init.device,
-        init.interrupt_status,
-    ));
-    let irq_handler: Arc<dyn driver_api::IrqHandler> = handle.clone();
-    let registration = bus
-        .register_irq(plic_irq, irq_handler)
-        .expect("register irq");
-    handle.set_irq_registration(registration);
-    let trait_handle: Arc<dyn driver_api::InputDevice> = handle;
-    InputDeviceRegistry::global().register(trait_handle);
 }

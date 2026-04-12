@@ -24,6 +24,7 @@ use alloc::{boxed::Box, sync::Arc, vec::Vec};
 use core::{fmt, future::Future, pin::Pin};
 
 pub mod bus;
+pub mod catalog;
 #[allow(unsafe_code)]
 pub mod dma;
 #[allow(unsafe_code)]
@@ -32,6 +33,7 @@ pub use bus::{
     BarIndex, BusContext, DtBusContextExt, IrqId, MmioRegion, PciBusContextExt,
     PciCapabilityHeader, PciCapabilityHeaderExt,
 };
+pub use catalog::{DriverCatalog, DriverFactory, DriverInstance};
 pub use dma::DmaBuffer;
 
 pub use headers::errno::Errno as IoError;
