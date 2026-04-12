@@ -17,7 +17,8 @@ BUILD_DIR ?= build
         run run-fb debug attach disasm \
         test test-unit test-system \
         clippy miri fmt-check ci \
-        menuconfig savedefconfig olddefconfig
+        menuconfig savedefconfig olddefconfig \
+        mcp-server gdb-mcp-server mcp-servers
 
 all: build
 
@@ -73,6 +74,15 @@ savedefconfig:
 
 olddefconfig:
 	cmake --build $(BUILD_DIR) --target olddefconfig
+
+mcp-server:
+	cmake --build $(BUILD_DIR) --target mcp-server
+
+gdb-mcp-server:
+	cmake --build $(BUILD_DIR) --target gdb-mcp-server
+
+mcp-servers:
+	cmake --build $(BUILD_DIR) --target mcp-servers
 
 clean:
 	rm -rf $(BUILD_DIR)
