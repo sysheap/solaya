@@ -34,3 +34,10 @@ set(SOLAYA_LINUX_HEADERS_SHA256 "f785fb648a0e0b66a943bb3228a4b6ed62c90b985cd1ebf
 # source: https://cdn.kernel.org/pub/linux/kernel/v6.x/sha256sums.asc
 #   (signed by the kernel.org Linux Kernel Archives Automatic Signing Key)
 
+set(SOLAYA_DASH_URL        "http://gondor.apana.org.au/~herbert/dash/files/dash-0.5.12.tar.gz")
+set(SOLAYA_DASH_SHA256     "6a474ac46e8b0b32916c4c60df694c82058d3297d8b385b74508030ca4a8f28a")
+# source: upstream release at gondor.apana.org.au/~herbert/dash/files/ —
+#   the project does not publish a separate checksums manifest, so the URL
+#   above is the canonical reference.  The hash was verified once at pin time
+#   against the tarball mtime on the upstream server.
+

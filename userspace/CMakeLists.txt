@@ -106,6 +106,6 @@ add_custom_target(coreutils
 # Aggregate: everything a kernel build needs from userspace.
 # -----------------------------------------------------------------------------
 add_custom_target(userspace-all
-    DEPENDS userspace-rust coreutils
-    COMMENT "Userspace artifact set (rust bins + coreutils)"
+    DEPENDS userspace-rust coreutils dash
+    COMMENT "Userspace artifact set (rust bins + coreutils + dash/sh)"
 )
