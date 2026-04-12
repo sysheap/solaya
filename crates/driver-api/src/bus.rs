@@ -18,7 +18,7 @@
 //! `crate::device_tree::*`, or `crate::interrupts::plic::*`.
 
 use alloc::{boxed::Box, sync::Arc};
-use hal::mmio::MMIO;
+use hal::{mmio::MMIO, mmio_struct};
 
 use crate::{BusError, DmaBuffer, IrqHandler, IrqRegistration};
 
@@ -53,17 +53,26 @@ impl MmioRegion {
     }
 }
 
-/// Two-field header common to every PCI capability. Drivers receive an
-/// `MMIO<PciCapabilityHeader>` from [`PciBusContextExt::capabilities`] and
-/// reinterpret it as their capability type via [`PciCapabilityHeaderExt::as_type`].
-#[repr(C, packed)]
-pub struct PciCapabilityHeader {
-    pub id: u8,
-    pub next: u8,
+mmio_struct! {
+    /// Two-field header common to every PCI capability. Drivers receive an
+    /// `MMIO<PciCapabilityHeader>` from [`PciBusContextExt::capabilities`]
+    /// and reinterpret it as their capability type via
+    /// [`PciCapabilityHeaderExt::as_type`]. The generated
+    /// `PciCapabilityHeaderFields` trait provides typed `.id()` / `.next()`
+    /// accessors returning `MMIO<u8>`; the thin `PciCapabilityHeaderExt`
+    /// wrapper below surfaces the common `u8`-valued reads and adds
+    /// `as_type<T>`.
+    #[repr(C)]
+    struct PciCapabilityHeader {
+        id: u8,
+        next: u8,
+    }
 }
 
-/// Field-access helpers for `MMIO<PciCapabilityHeader>`. Lives in driver-api
-/// so drivers don't need the kernel's `mmio_struct!` macro.
+/// Ergonomic wrappers over the generated `PciCapabilityHeaderFields`
+/// accessors. Drivers `use PciCapabilityHeaderExt` and get `u8`-valued
+/// reads plus `as_type<T>` for projecting vendor-specific capability
+/// layouts past the two-byte header.
 pub trait PciCapabilityHeaderExt {
     /// Capability ID (vendor-specific, MSI, power-management, ...).
     fn id(&self) -> u8;
@@ -78,11 +87,11 @@ pub trait PciCapabilityHeaderExt {
 
 impl PciCapabilityHeaderExt for MMIO<PciCapabilityHeader> {
     fn id(&self) -> u8 {
-        MMIO::<u8>::new(self.addr()).read()
+        PciCapabilityHeaderFields::id(self).read()
     }
 
     fn next_offset(&self) -> u8 {
-        MMIO::<u8>::new(self.addr() + 1).read()
+        self.next().read()
     }
 
     fn as_type<T>(&self) -> MMIO<T> {
