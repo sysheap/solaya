@@ -9,6 +9,7 @@ pub mod process;
 pub mod process_table;
 pub mod scheduler;
 pub mod signal;
+pub mod syscall_runner;
 pub mod task;
 pub mod thread;
 pub mod timer;
