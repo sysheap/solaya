@@ -21,7 +21,7 @@
 
 extern crate alloc;
 
-use alloc::{boxed::Box, sync::Arc, vec::Vec};
+use alloc::{boxed::Box, vec::Vec};
 use core::{fmt, future::Future, pin::Pin};
 
 pub mod bus;
@@ -250,44 +250,37 @@ pub trait IrqHandler: Send + Sync {
     fn handle(&self);
 }
 
-/// IRQ-controller backend (e.g. PLIC) that tears down a registration when the
-/// driver drops its [`IrqRegistration`] token.
+/// RAII guard handed back by a bus's `register_irq` call. Dropping it runs
+/// the on-drop closure the IRQ controller installed at registration time —
+/// typically tearing down the handler and disabling the line if no other
+/// handlers remain.
 ///
-/// Drivers never implement this trait — the kernel's interrupt controller
-/// does. It exists only so [`IrqRegistration::drop`] can call back into the
-/// concrete controller without `driver-api` depending on any kernel type.
+/// The closure captures both the controller and its opaque slot at
+/// construction, so a (controller, slot) mismatch is syntactically
+/// impossible. The kernel's PLIC is the only implementor today.
 ///
-/// `unregister` receives the opaque `slot` that the controller handed out when
-/// the registration was created; the controller uses it to locate and remove
-/// the handler entry.
-pub trait IrqController: Send + Sync {
-    /// Remove the handler associated with `slot`. Idempotent — calling twice
-    /// with the same slot is a no-op.
-    fn unregister(&self, slot: u64);
-}
-
-/// RAII guard handed back by a bus's `register_irq` call. Dropping it removes
-/// the handler from the underlying IRQ controller (disabling the IRQ line if
-/// no other handlers remain).
-///
-/// Drivers store this token inside their handle struct so interrupt teardown
-/// is automatic when the driver is dropped.
+/// Drivers store this token inside their handle struct so interrupt
+/// teardown is automatic when the driver is dropped.
 #[must_use = "dropping this immediately unregisters the IRQ handler"]
 pub struct IrqRegistration {
-    controller: Arc<dyn IrqController>,
-    slot: u64,
+    on_drop: Option<Box<dyn FnOnce() + Send + Sync + 'static>>,
 }
 
 impl IrqRegistration {
-    /// Construct an `IrqRegistration` from a controller + opaque slot. Only
-    /// IRQ-controller implementations (in the kernel) call this.
-    pub fn new(controller: Arc<dyn IrqController>, slot: u64) -> Self {
-        Self { controller, slot }
+    /// Construct a registration from an arbitrary teardown closure. Only
+    /// IRQ-controller implementations (in the kernel) call this; the
+    /// closure should undo whatever `register_irq` set up.
+    pub fn new<F: FnOnce() + Send + Sync + 'static>(on_drop: F) -> Self {
+        Self {
+            on_drop: Some(Box::new(on_drop)),
+        }
     }
 }
 
 impl Drop for IrqRegistration {
     fn drop(&mut self) {
-        self.controller.unregister(self.slot);
+        if let Some(f) = self.on_drop.take() {
+            f();
+        }
     }
 }
