@@ -113,4 +113,13 @@ impl LinuxSyscallHandler {
         }
         Ok(0)
     }
+
+    pub(super) fn do_rt_sigreturn(&self) -> Result<isize, Errno> {
+        self.current_thread.with_lock(|mut t| {
+            crate::processes::signal::restore_signal_frame(&mut t)?;
+            t.set_registers_replaced(true);
+            Ok::<_, Errno>(())
+        })?;
+        Ok(0)
+    }
 }

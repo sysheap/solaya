@@ -1,7 +1,7 @@
 use crate::{
     byte_interpretable::ByteInterpretable,
     cpu::Cpu,
-    debug, fs,
+    fs,
     memory::{PAGE_SIZE, VirtAddr},
     processes::{
         fd_table::{FdFlags, FileDescriptor},
@@ -445,21 +445,11 @@ impl LinuxSyscalls for LinuxSyscallHandler {
     }
 
     async fn exit(&mut self, status: c_int) -> Result<isize, Errno> {
-        let exit_status = crate::processes::signal::ExitStatus::Exited(status.to_le_bytes()[0]);
-        Cpu::with_scheduler(|mut s| {
-            s.kill_current_thread(exit_status);
-        });
-        debug!("Exit thread with status: {status}\n");
-        Ok(0)
+        self.do_exit(status)
     }
 
     async fn exit_group(&mut self, status: c_int) -> Result<isize, Errno> {
-        let exit_status = crate::processes::signal::ExitStatus::Exited(status.to_le_bytes()[0]);
-        Cpu::with_scheduler(|mut s| {
-            s.kill_current_process(exit_status);
-        });
-        debug!("Exit process with status: {status}\n");
-        Ok(0)
+        self.do_exit_group(status)
     }
 
     async fn wait4(
@@ -512,12 +502,7 @@ impl LinuxSyscalls for LinuxSyscallHandler {
     }
 
     async fn rt_sigreturn(&mut self) -> Result<isize, Errno> {
-        self.current_thread.with_lock(|mut t| {
-            crate::processes::signal::restore_signal_frame(&mut t)?;
-            t.set_registers_replaced(true);
-            Ok::<_, Errno>(())
-        })?;
-        Ok(0)
+        self.do_rt_sigreturn()
     }
 
     async fn sigaltstack(
@@ -726,15 +711,7 @@ impl LinuxSyscalls for LinuxSyscallHandler {
     }
 
     async fn setsid(&mut self) -> Result<isize, Errno> {
-        self.current_process.with_lock(|mut p| {
-            let main_tid = p.main_tid();
-            if p.pgid() == main_tid {
-                return Err(Errno::EPERM);
-            }
-            p.set_pgid(main_tid);
-            p.set_sid(main_tid);
-            Ok(main_tid.as_isize())
-        })
+        self.do_setsid()
     }
 
     async fn set_tid_address(
