@@ -26,6 +26,8 @@ use core::{fmt, future::Future, pin::Pin};
 pub mod bus;
 #[allow(unsafe_code)]
 pub mod dma;
+#[allow(unsafe_code)]
+pub mod net_notifier;
 pub use bus::{
     BarIndex, BusContext, DtBusContextExt, IrqId, MmioRegion, PciBusContextExt,
     PciCapabilityHeader, PciCapabilityHeaderExt,
