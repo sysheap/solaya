@@ -10,3 +10,4 @@ set(SOLAYA_GCC_VERSION           "14.2.0")
 set(SOLAYA_MUSL_VERSION          "1.2.5")
 set(SOLAYA_LINUX_HEADERS_VERSION "6.12.7")
 set(SOLAYA_DASH_VERSION          "0.5.12")
+# doomgeneric has no tags; pin by commit hash in cmake/checksums.cmake.

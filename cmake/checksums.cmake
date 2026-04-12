@@ -41,3 +41,15 @@ set(SOLAYA_DASH_SHA256     "6a474ac46e8b0b32916c4c60df694c82058d3297d8b385b74508
 #   above is the canonical reference.  The hash was verified once at pin time
 #   against the tarball mtime on the upstream server.
 
+# doomgeneric — pinned to a specific commit on master rather than a tag;
+# upstream doesn't tag releases. The rev is a concrete commit hash (not a
+# branch name) so the build is reproducible even if master moves.
+set(SOLAYA_DOOMGENERIC_REPO  "https://github.com/ozkl/doomgeneric.git")
+set(SOLAYA_DOOMGENERIC_REV   "3b1d53020373b502035d7d48dede645a7c429feb")
+
+# doom1.wad — the shareware Doom IWAD that ships with the Doom engine as
+# demo content.  Fetched at build time with SHA256 verification.
+set(SOLAYA_DOOM_WAD_URL      "https://distro.ibiblio.org/slitaz/sources/packages/d/doom1.wad")
+set(SOLAYA_DOOM_WAD_SHA256   "1d7d43be501e67d927e415e0b8f3e29c3bf33075e859721816f652a526cac771")
+# source: slitaz distro mirror, the same URL the retired nix flake used.
+
