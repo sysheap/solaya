@@ -239,19 +239,25 @@ impl DwmacDevice {
     }
 
     fn tx_ring_mut(&mut self) -> &mut DescriptorRing<TX_RING_SIZE> {
-        self.tx_ring.as_typed_mut::<DescriptorRing<TX_RING_SIZE>>()
+        // SAFETY: DescriptorRing is `[Descriptor; N]`, and Descriptor is a
+        // POD struct of u32 fields (DWMAC normal descriptor layout). All-zero
+        // is a valid bit pattern (represents an empty descriptor).
+        unsafe { self.tx_ring.as_typed_mut::<DescriptorRing<TX_RING_SIZE>>() }
     }
 
     fn rx_ring_mut(&mut self) -> &mut DescriptorRing<RX_RING_SIZE> {
-        self.rx_ring.as_typed_mut::<DescriptorRing<RX_RING_SIZE>>()
+        // SAFETY: see `tx_ring_mut`.
+        unsafe { self.rx_ring.as_typed_mut::<DescriptorRing<RX_RING_SIZE>>() }
     }
 
     fn rx_ring_ref(&self) -> &DescriptorRing<RX_RING_SIZE> {
-        self.rx_ring.as_typed::<DescriptorRing<RX_RING_SIZE>>()
+        // SAFETY: see `tx_ring_mut`.
+        unsafe { self.rx_ring.as_typed::<DescriptorRing<RX_RING_SIZE>>() }
     }
 
     fn tx_ring_ref(&self) -> &DescriptorRing<TX_RING_SIZE> {
-        self.tx_ring.as_typed::<DescriptorRing<TX_RING_SIZE>>()
+        // SAFETY: see `tx_ring_mut`.
+        unsafe { self.tx_ring.as_typed::<DescriptorRing<TX_RING_SIZE>>() }
     }
 
     fn tx_buffer_slice_mut(&mut self, i: usize) -> &mut [u8] {
