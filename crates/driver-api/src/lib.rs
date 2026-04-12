@@ -1,13 +1,13 @@
 //! Typed driver API for Solaya.
 //!
-//! Trait-only crate: defines the contract every concrete driver implements and
-//! every kernel subsystem consumes. Contains no driver code, no device
-//! probing, and no state.
+//! Trait-only crate (plus a thin `DmaBuffer` wrapper). Defines the contract
+//! every concrete driver implements and every kernel subsystem consumes.
+//! Contains no driver code, no device probing, and no per-device state.
 //!
-//! Layering invariant: may depend on `abi`, `headers`, `klib`, `hal`. May not
-//! depend on `console`, `mm`, `drivers`, or `solaya` (the kernel). `mm` is a
-//! planned dependency (DMA types in Phase 5) but is not needed yet, and adding
-//! it today forces host tests through a riscv64-only crate.
+//! Layering invariant: may depend on `abi`, `headers`, `klib`, `hal`, `mm`.
+//! May not depend on `console`, `drivers`, or `solaya` (the kernel). The `mm`
+//! dependency is used only by the `dma` module to back `DmaBuffer` with the
+//! global page allocator.
 #![no_std]
 #![forbid(unsafe_code)]
 
@@ -15,6 +15,9 @@ extern crate alloc;
 
 use alloc::{boxed::Box, vec::Vec};
 use core::{fmt, future::Future, pin::Pin};
+
+pub mod dma;
+pub use dma::DmaBuffer;
 
 pub use headers::errno::Errno as IoError;
 
@@ -25,6 +28,16 @@ pub enum ProbeError {
     DoesNotMatch,
     /// The driver matched but failed to initialize.
     InitializationFailed(&'static str),
+}
+
+/// Error returned by bus-level operations (MMIO mapping, DMA allocation,
+/// IRQ registration).
+#[derive(Debug)]
+pub enum BusError {
+    NoSuchBar,
+    MmioMapFailed,
+    OutOfMemory,
+    IrqUnavailable,
 }
 
 /// 48-bit Ethernet MAC address.

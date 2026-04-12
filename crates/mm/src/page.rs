@@ -61,6 +61,7 @@ impl Page {
 
 pub trait PagesAsSlice {
     fn as_u8_slice(&mut self) -> &mut [u8];
+    fn as_u8_slice_ref(&self) -> &[u8];
 }
 
 impl PagesAsSlice for [Page] {
@@ -73,6 +74,14 @@ impl PagesAsSlice for [Page] {
                 self.as_mut_ptr().cast::<u8>(),
                 core::mem::size_of_val(self),
             )
+        }
+    }
+
+    fn as_u8_slice_ref(&self) -> &[u8] {
+        // SAFETY: Same invariants as as_u8_slice, reinterpreting &[Page] as
+        // &[u8] via an identical layout (repr(C, align(4096)) over [u8; N]).
+        unsafe {
+            core::slice::from_raw_parts(self.as_ptr().cast::<u8>(), core::mem::size_of_val(self))
         }
     }
 }
