@@ -4,7 +4,10 @@ pub mod jh7110;
 pub mod registry;
 pub mod virtio;
 
-pub use registry::{BlockDeviceRegistry, NetDeviceRegistry};
+pub use registry::{
+    BlockDeviceRegistry, CharDeviceRegistry, DisplayDeviceRegistry, InputDeviceRegistry,
+    NetDeviceRegistry, RngDeviceRegistry,
+};
 
 use alloc::{sync::Arc, vec::Vec};
 use core::sync::atomic::{AtomicBool, Ordering};

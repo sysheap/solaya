@@ -7,7 +7,55 @@
 
 use core::sync::atomic::{AtomicU8, Ordering};
 
+use alloc::sync::Arc;
+use driver_api::{CharDevice, IoError};
+use headers::errno::Errno;
+
 pub use console::uart::CONSOLE_UART;
+
+/// `CharDevice` adapter for the console UART.
+///
+/// Carries the TTY line discipline internally: `write` goes through the TTY
+/// `process_output` path (handles ONLCR, echo, etc.) before hitting the
+/// UART; `read` drains cooked bytes from the TTY input buffer.
+///
+/// The TTY itself still lives in `io/tty_device` and is wired up at init.
+/// Fully decoupling TTY from UART stays deferred (#250 item #5).
+pub struct ConsoleCharDevice;
+
+impl CharDevice for ConsoleCharDevice {
+    fn name(&self) -> &str {
+        "console"
+    }
+
+    fn read(&self, buf: &mut [u8]) -> Result<usize, IoError> {
+        let tty = crate::io::tty_device::console_tty();
+        let data = tty.lock().get_input(buf.len());
+        if data.is_empty() {
+            return Err(Errno::EAGAIN);
+        }
+        buf[..data.len()].copy_from_slice(&data);
+        Ok(data.len())
+    }
+
+    fn write(&self, data: &[u8]) -> Result<usize, IoError> {
+        let tty = crate::io::tty_device::console_tty();
+        let processed = tty.lock().process_output(data);
+        let mut uart = CONSOLE_UART.lock();
+        for &b in &processed {
+            uart.write_byte(b);
+        }
+        Ok(data.len())
+    }
+}
+
+/// Register the console UART as a `CharDevice` in both the registry and
+/// devfs. Called once during kernel init.
+pub fn register_console_char_device() {
+    let device: Arc<dyn CharDevice> = Arc::new(ConsoleCharDevice);
+    crate::drivers::CharDeviceRegistry::global().register(device.clone());
+    crate::fs::devfs::register_char_device("console", device);
+}
 
 pub fn on_uart_interrupt() {
     let mut raw_bytes = klib::array_vec::ArrayVec::<u8, 64>::new();

@@ -176,6 +176,7 @@ pub extern "C" fn kernel_init(hart_id: usize, device_tree_pointer: *const ()) ->
 
     process_table::init();
     fs::init();
+    io::uart::register_console_char_device();
 
     hal::cpu::write_sscratch(Cpu::init(boot_cpu_id, num_cpus) as usize);
 
