@@ -13,3 +13,6 @@ forced-target = "riscv64gc-unknown-linux-musl"
 [dependencies]
 abi = { path = "../crates/abi" }
 headers = { path = "../crates/headers" }
+
+[lints]
+workspace = true

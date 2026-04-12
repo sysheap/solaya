@@ -34,3 +34,6 @@ gimli = { version = "0.33", default-features = false, features = ["read"] }
 
 [target.'cfg(not(miri))'.dev-dependencies]
 unwinding = { version = "0.2.8", default-features = false, features = ["fde-static", "panic", "personality", "unwinder"] }
+
+[lints]
+workspace = true

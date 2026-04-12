@@ -11,3 +11,6 @@ abi = { path = "../abi", default-features = false }
 [lib]
 test = false
 bench = false
+
+[lints]
+workspace = true

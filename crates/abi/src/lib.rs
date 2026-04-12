@@ -4,7 +4,6 @@
 //! Layering invariant: may depend on nothing. Test: "would a userspace
 //! program link against this?" If no, it doesn't belong.
 #![no_std]
-#![allow(dead_code)]
 #![allow(unused_variables)]
 #![feature(auto_traits)]
 #![feature(negative_impls)]
