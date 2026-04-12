@@ -37,8 +37,6 @@ const CAPABILITY_POINTER_MASK: u8 = !0x3;
 pub mod command_register {
     pub const IO_SPACE: u16 = 1 << 0;
     pub const MEMORY_SPACE: u16 = 1 << 1;
-    pub const BUS_MASTER: u16 = 1 << 2;
-    pub const INTERRUPT_DISABLE: u16 = 1 << 10;
 }
 
 mmio_struct! {

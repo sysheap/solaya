@@ -1,11 +1,10 @@
 use crate::{
     info,
     klibc::{MMIO, mmio},
-    pci::{GeneralDevicePciHeaderExt, GeneralDevicePciHeaderFields, PCIDevice, PciCpuAddr},
 };
 use alloc::sync::Arc;
 use core::sync::atomic::{AtomicUsize, Ordering};
-use driver_api::{DisplayDevice, FramebufferInfo, IoError};
+use driver_api::{BarIndex, BusContext, DisplayDevice, FramebufferInfo, IoError, bus::pci_command};
 use headers::errno::Errno;
 #[allow(unused_imports)]
 use mmio::write_bytes;
@@ -29,18 +28,19 @@ pub const FB_SIZE: usize = FB_STRIDE * FB_HEIGHT;
 
 static FB_BASE: AtomicUsize = AtomicUsize::new(0);
 
-pub fn fb_base() -> Option<PciCpuAddr> {
+pub fn fb_base() -> Option<usize> {
     let addr = FB_BASE.load(Ordering::Relaxed);
-    if addr == 0 {
-        None
-    } else {
-        Some(PciCpuAddr::new(addr))
-    }
+    if addr == 0 { None } else { Some(addr) }
 }
 
-pub fn is_bochs_display(device: &PCIDevice) -> bool {
-    let cs = device.configuration_space();
-    cs.vendor_id().read() == BOCHS_VENDOR_ID && cs.device_id().read() == BOCHS_DEVICE_ID
+pub fn is_bochs_display(bus: &dyn BusContext) -> bool {
+    let Some(pci) = bus.as_pci() else {
+        return false;
+    };
+    let vendor_device = pci.read_config_u32(0);
+    let vendor = (vendor_device & 0xFFFF) as u16;
+    let device = ((vendor_device >> 16) & 0xFFFF) as u16;
+    vendor == BOCHS_VENDOR_ID && device == BOCHS_DEVICE_ID
 }
 
 fn write_vbe_reg(dispi_base: usize, index: u16, value: u16) {
@@ -49,12 +49,13 @@ fn write_vbe_reg(dispi_base: usize, index: u16, value: u16) {
     reg.write(value);
 }
 
-pub fn initialize(mut pci_device: PCIDevice) -> Arc<dyn DisplayDevice> {
-    let bar0 = pci_device.get_or_initialize_bar(0);
-    let bar2 = pci_device.get_or_initialize_bar(2);
+pub fn initialize(bus: &dyn BusContext) -> Arc<dyn DisplayDevice> {
+    let pci = bus.as_pci().expect("bochs-display requires a PCI bus");
+    let bar0 = pci.map_bar(BarIndex(0)).expect("map bar0");
+    let bar2 = pci.map_bar(BarIndex(2)).expect("map bar2");
 
-    let fb_addr = bar0.cpu_address.as_usize();
-    let dispi_base = bar2.cpu_address.as_usize() + 0x500;
+    let fb_addr = bar0.virt_base;
+    let dispi_base = bar2.virt_base + 0x500;
 
     write_vbe_reg(dispi_base, VBE_DISPI_INDEX_ENABLE, 0);
     write_vbe_reg(dispi_base, VBE_DISPI_INDEX_XRES, FB_WIDTH as u16);
@@ -66,11 +67,7 @@ pub fn initialize(mut pci_device: PCIDevice) -> Arc<dyn DisplayDevice> {
         VBE_DISPI_ENABLED | VBE_DISPI_LFB_ENABLED,
     );
 
-    pci_device
-        .configuration_space_mut()
-        .set_command_register_bits(
-            crate::pci::command_register::MEMORY_SPACE | crate::pci::command_register::BUS_MASTER,
-        );
+    pci.set_command_bits(pci_command::MEMORY_SPACE | pci_command::BUS_MASTER);
 
     FB_BASE.store(fb_addr, Ordering::Relaxed);
 
@@ -110,7 +107,7 @@ impl DisplayDevice for BochsDisplay {
             return Ok(0);
         }
         let len = end - offset;
-        mmio::read_bytes(base.as_usize() + offset, &mut buf[..len]);
+        mmio::read_bytes(base + offset, &mut buf[..len]);
         Ok(len)
     }
 
@@ -121,7 +118,7 @@ impl DisplayDevice for BochsDisplay {
             return Ok(0);
         }
         let len = end - offset;
-        mmio::write_bytes(base.as_usize() + offset, &data[..len]);
+        mmio::write_bytes(base + offset, &data[..len]);
         hal::cpu::memory_fence();
         Ok(len)
     }

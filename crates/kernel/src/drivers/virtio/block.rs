@@ -7,15 +7,17 @@ use core::{
 };
 use headers::errno::Errno;
 
+use driver_api::{BarIndex, BusContext, PciCapabilityHeaderExt, bus::pci_command};
+
 use crate::{
     drivers::virtio::{
         capability::{
             DEVICE_STATUS_ACKNOWLEDGE, DEVICE_STATUS_DRIVER, DEVICE_STATUS_DRIVER_OK,
-            DEVICE_STATUS_FAILED, DEVICE_STATUS_FEATURES_OK, VIRTIO_DEVICE_ID, VIRTIO_F_VERSION_1,
+            DEVICE_STATUS_FAILED, DEVICE_STATUS_FEATURES_OK, VIRTIO_F_VERSION_1,
             VIRTIO_PCI_CAP_COMMON_CFG, VIRTIO_PCI_CAP_DEVICE_CFG, VIRTIO_PCI_CAP_ISR_CFG,
-            VIRTIO_PCI_CAP_NOTIFY_CFG, VIRTIO_VENDOR_ID, VIRTIO_VENDOR_SPECIFIC_CAPABILITY_ID,
-            virtio_pci_cap, virtio_pci_capFields, virtio_pci_common_cfg,
-            virtio_pci_common_cfgFields, virtio_pci_notify_cap, virtio_pci_notify_capFields,
+            VIRTIO_PCI_CAP_NOTIFY_CFG, VIRTIO_VENDOR_SPECIFIC_CAPABILITY_ID, virtio_pci_cap,
+            virtio_pci_capFields, virtio_pci_common_cfg, virtio_pci_common_cfgFields,
+            virtio_pci_notify_cap, virtio_pci_notify_capFields,
         },
         virtqueue::{BufferDirection, UsedBuffer, VirtQueue},
     },
@@ -26,9 +28,6 @@ use crate::{
         util::{ByteInterpretable, is_power_of_2_or_zero},
     },
     mmio_struct,
-    pci::{
-        GeneralDevicePciHeaderExt, GeneralDevicePciHeaderFields, PCIDevice, PciCapabilityFields,
-    },
 };
 
 const EXPECTED_QUEUE_SIZE: usize = 0x100;
@@ -57,7 +56,6 @@ mmio_struct! {
 
 #[allow(dead_code)]
 pub struct BlockDevice {
-    device: PCIDevice,
     common_cfg: MMIO<virtio_pci_common_cfg>,
     blk_cfg: MMIO<virtio_blk_config>,
     request_queue: VirtQueue<EXPECTED_QUEUE_SIZE>,
@@ -343,18 +341,16 @@ async fn write(index: usize, offset: usize, data: &[u8]) -> Result<usize, Errno>
 }
 
 impl BlockDevice {
-    pub fn is_virtio_block(device: &PCIDevice) -> bool {
-        let cs = device.configuration_space();
-        cs.vendor_id().read() == VIRTIO_VENDOR_ID
-            && VIRTIO_DEVICE_ID.contains(&cs.device_id().read())
-            && cs.subsystem_id().read() == VIRTIO_BLOCK_SUBSYSTEM_ID
+    pub fn is_virtio_block(bus: &dyn BusContext) -> bool {
+        crate::drivers::virtio::capability::is_virtio_with_subsystem(bus, VIRTIO_BLOCK_SUBSYSTEM_ID)
     }
 
-    pub fn initialize(mut pci_device: PCIDevice) -> Result<InitializedBlockDevice, &'static str> {
-        let capabilities = pci_device.capabilities();
-        let mut virtio_capabilities: Vec<MMIO<virtio_pci_cap>> = capabilities
-            .filter(|cap| cap.id().read() == VIRTIO_VENDOR_SPECIFIC_CAPABILITY_ID)
-            .map(|cap| cap.new_type::<virtio_pci_cap>())
+    pub fn initialize(bus: &dyn BusContext) -> Result<InitializedBlockDevice, &'static str> {
+        let pci = bus.as_pci().ok_or("virtio-block requires a PCI bus")?;
+        let mut virtio_capabilities: Vec<MMIO<virtio_pci_cap>> = pci
+            .capabilities()
+            .filter(|cap| cap.id() == VIRTIO_VENDOR_SPECIFIC_CAPABILITY_ID)
+            .map(|cap| cap.as_type::<virtio_pci_cap>())
             .collect();
 
         let common_cfg_cap = virtio_capabilities
@@ -362,10 +358,11 @@ impl BlockDevice {
             .find(|cap| cap.cfg_type().read() == VIRTIO_PCI_CAP_COMMON_CFG)
             .ok_or("Common configuration capability not found")?;
 
-        let config_bar = pci_device.get_or_initialize_bar(common_cfg_cap.bar().read());
-        let common_cfg: MMIO<virtio_pci_common_cfg> = MMIO::new(
-            (config_bar.cpu_address + common_cfg_cap.offset().read() as usize).as_usize(),
-        );
+        let config_bar = pci
+            .map_bar(BarIndex(common_cfg_cap.bar().read()))
+            .map_err(|_| "Failed to map common-cfg BAR")?;
+        let common_cfg: MMIO<virtio_pci_common_cfg> =
+            MMIO::new(config_bar.virt_base + common_cfg_cap.offset().read() as usize);
 
         // Reset and acknowledge
         common_cfg.device_status().write(0x0);
@@ -428,7 +425,9 @@ impl BlockDevice {
             "Notify offset multiplier must be a power of 2 or zero"
         );
 
-        let notify_bar = pci_device.get_or_initialize_bar(notify_cfg.cap().bar().read());
+        let notify_bar = pci
+            .map_bar(BarIndex(notify_cfg.cap().bar().read()))
+            .map_err(|_| "Failed to map notify BAR")?;
 
         // Setup single request queue at index 0
         common_cfg.queue_select().write(0);
@@ -436,7 +435,7 @@ impl BlockDevice {
             VirtQueue::new(common_cfg.queue_size().read(), 0);
 
         let notify_mmio: MMIO<u16> = MMIO::new(
-            notify_bar.cpu_address.as_usize()
+            notify_bar.virt_base
                 + notify_cfg.cap().offset().read() as usize
                 + common_cfg.queue_notify_off().read() as usize
                     * notify_cfg.notify_off_multiplier().read() as usize,
@@ -465,10 +464,11 @@ impl BlockDevice {
             .find(|cap| cap.cfg_type().read() == VIRTIO_PCI_CAP_DEVICE_CFG)
             .ok_or("Device configuration capability not found")?;
 
-        let blk_config_bar = pci_device.get_or_initialize_bar(blk_cfg_cap.bar().read());
-        let blk_cfg: MMIO<virtio_blk_config> = MMIO::new(
-            (blk_config_bar.cpu_address + blk_cfg_cap.offset().read() as usize).as_usize(),
-        );
+        let blk_config_bar = pci
+            .map_bar(BarIndex(blk_cfg_cap.bar().read()))
+            .map_err(|_| "Failed to map blk-cfg BAR")?;
+        let blk_cfg: MMIO<virtio_blk_config> =
+            MMIO::new(blk_config_bar.virt_base + blk_cfg_cap.offset().read() as usize);
 
         let capacity_sectors = blk_cfg.capacity().read();
 
@@ -485,17 +485,15 @@ impl BlockDevice {
             .find(|cap| cap.cfg_type().read() == VIRTIO_PCI_CAP_ISR_CFG)
             .ok_or("ISR configuration capability not found")?;
 
-        let isr_bar = pci_device.get_or_initialize_bar(isr_cfg_cap.bar().read());
+        let isr_bar = pci
+            .map_bar(BarIndex(isr_cfg_cap.bar().read()))
+            .map_err(|_| "Failed to map ISR BAR")?;
         let isr_status: MMIO<u32> =
-            MMIO::new((isr_bar.cpu_address + isr_cfg_cap.offset().read() as usize).as_usize());
+            MMIO::new(isr_bar.virt_base + isr_cfg_cap.offset().read() as usize);
 
         // Enable Bus Master for DMA and clear Interrupt Disable for legacy INTx
-        pci_device
-            .configuration_space_mut()
-            .set_command_register_bits(crate::pci::command_register::BUS_MASTER);
-        pci_device
-            .configuration_space_mut()
-            .clear_command_register_bits(crate::pci::command_register::INTERRUPT_DISABLE);
+        pci.set_command_bits(pci_command::BUS_MASTER);
+        pci.clear_command_bits(pci_command::INTERRUPT_DISABLE);
 
         info!(
             "Successfully initialized block device: {} sectors ({} bytes)",
@@ -504,7 +502,6 @@ impl BlockDevice {
         );
 
         let device = BlockDevice {
-            device: pci_device,
             common_cfg,
             blk_cfg,
             request_queue,

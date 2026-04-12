@@ -20,7 +20,7 @@ use crate::{
     pci::{PCIDevice, PciBusContext},
     processes::kernel_tasks,
 };
-use driver_api::{BusContext, IrqId};
+use driver_api::BusContext;
 
 pub fn init_all_pci_devices(mut pci_devices: Vec<PCIDevice>) {
     init_network_device(&mut pci_devices);
@@ -31,35 +31,31 @@ pub fn init_all_pci_devices(mut pci_devices: Vec<PCIDevice>) {
 }
 
 fn init_network_device(pci_devices: &mut Vec<PCIDevice>) {
-    if let Some(i) = pci_devices
-        .iter()
-        .position(virtio::net::NetworkDevice::is_virtio_net)
-    {
-        let device = pci_devices.swap_remove(i);
-        let plic_irq = device.plic_interrupt_id();
-        let init =
-            virtio::net::NetworkDevice::initialize(device).expect("Initialization must work.");
-        let handle = Arc::new(virtio::net::VirtioNetHandle::new(
-            init.device,
-            init.interrupt_status,
-        ));
-        let irq_handler: Arc<dyn driver_api::IrqHandler> = handle.clone();
-        let registration = plic::register(plic_irq, irq_handler);
-        handle.set_irq_registration(registration);
-        let net_device: Arc<dyn driver_api::NetDevice> = handle;
-        NetDeviceRegistry::global().register(net_device);
-        kernel_tasks::spawn(net::network_rx_task());
-    }
+    let Some(i) = find_pci_device(pci_devices, virtio::net::NetworkDevice::is_virtio_net) else {
+        return;
+    };
+    let mut device = pci_devices.swap_remove(i);
+    let plic_irq = device.plic_interrupt_id();
+    let bus = PciBusContext::new(&mut device);
+    let init = virtio::net::NetworkDevice::initialize(&bus).expect("Initialization must work.");
+    let handle = Arc::new(virtio::net::VirtioNetHandle::new(
+        init.device,
+        init.interrupt_status,
+    ));
+    let irq_handler: Arc<dyn driver_api::IrqHandler> = handle.clone();
+    let registration = plic::register(plic_irq, irq_handler);
+    handle.set_irq_registration(registration);
+    let net_device: Arc<dyn driver_api::NetDevice> = handle;
+    NetDeviceRegistry::global().register(net_device);
+    kernel_tasks::spawn(net::network_rx_task());
 }
 
 fn init_block_devices(pci_devices: &mut Vec<PCIDevice>) {
-    while let Some(i) = pci_devices
-        .iter()
-        .position(virtio::block::BlockDevice::is_virtio_block)
-    {
-        let device = pci_devices.swap_remove(i);
+    while let Some(i) = find_pci_device(pci_devices, virtio::block::BlockDevice::is_virtio_block) {
+        let mut device = pci_devices.swap_remove(i);
         let plic_irq = device.plic_interrupt_id();
-        let init = virtio::block::BlockDevice::initialize(device)
+        let bus = PciBusContext::new(&mut device);
+        let init = virtio::block::BlockDevice::initialize(&bus)
             .expect("Block device initialization must work.");
         let irq_handler: Arc<dyn driver_api::IrqHandler> =
             Arc::new(virtio::block::BlockIrqHandler::new(init.interrupt_status));
@@ -83,12 +79,14 @@ fn init_block_devices(pci_devices: &mut Vec<PCIDevice>) {
 }
 
 fn init_display_device(pci_devices: &mut Vec<PCIDevice>) {
-    if let Some(i) = pci_devices.iter().position(bochs_display::is_bochs_display) {
-        let device = pci_devices.swap_remove(i);
-        let handle = bochs_display::initialize(device);
-        DisplayDeviceRegistry::global().register(handle.clone());
-        fs::devfs::register_display_device(handle);
-    }
+    let Some(i) = find_pci_device(pci_devices, bochs_display::is_bochs_display) else {
+        return;
+    };
+    let mut device = pci_devices.swap_remove(i);
+    let bus = PciBusContext::new(&mut device);
+    let handle = bochs_display::initialize(&bus);
+    DisplayDeviceRegistry::global().register(handle.clone());
+    fs::devfs::register_display_device(handle);
 }
 
 fn init_rng_device(pci_devices: &mut Vec<PCIDevice>) {
@@ -96,8 +94,7 @@ fn init_rng_device(pci_devices: &mut Vec<PCIDevice>) {
         return;
     };
     let mut device = pci_devices.swap_remove(i);
-    let irq = IrqId(device.plic_interrupt_id());
-    let bus = PciBusContext::new(&mut device, irq);
+    let bus = PciBusContext::new(&mut device);
     let rng =
         virtio::rng::RngDevice::initialize(&bus).expect("RNG device initialization must work.");
     let handle: Arc<dyn driver_api::RngDevice> = Arc::new(virtio::rng::VirtioRngHandle::new(rng));
@@ -112,9 +109,8 @@ fn find_pci_device<F>(pci_devices: &mut [PCIDevice], predicate: F) -> Option<usi
 where
     F: Fn(&dyn BusContext) -> bool,
 {
-    for i in 0..pci_devices.len() {
-        let irq = IrqId(pci_devices[i].plic_interrupt_id());
-        let bus = PciBusContext::new(&mut pci_devices[i], irq);
+    for (i, device) in pci_devices.iter_mut().enumerate() {
+        let bus = PciBusContext::new(device);
         if predicate(&bus) {
             return Some(i);
         }
@@ -248,23 +244,22 @@ fn init_l2_cache_from_device_tree(soc: &device_tree::Node<'_>) {
 }
 
 fn init_input_device(pci_devices: &mut Vec<PCIDevice>) {
-    if let Some(i) = pci_devices
-        .iter()
-        .position(virtio::input::InputDevice::is_virtio_input)
-    {
-        let device = pci_devices.swap_remove(i);
-        let plic_irq = device.plic_interrupt_id();
-        let init = virtio::input::InputDevice::initialize(device)
-            .expect("Input device initialization must work.");
-        let handle = Arc::new(virtio::input::VirtioInputHandle::new(
-            init.device,
-            init.interrupt_status,
-        ));
-        let irq_handler: Arc<dyn driver_api::IrqHandler> = handle.clone();
-        let registration = plic::register(plic_irq, irq_handler);
-        handle.set_irq_registration(registration);
-        let trait_handle: Arc<dyn driver_api::InputDevice> = handle;
-        InputDeviceRegistry::global().register(trait_handle.clone());
-        fs::devfs::register_input_device(trait_handle);
-    }
+    let Some(i) = find_pci_device(pci_devices, virtio::input::InputDevice::is_virtio_input) else {
+        return;
+    };
+    let mut device = pci_devices.swap_remove(i);
+    let plic_irq = device.plic_interrupt_id();
+    let bus = PciBusContext::new(&mut device);
+    let init = virtio::input::InputDevice::initialize(&bus)
+        .expect("Input device initialization must work.");
+    let handle = Arc::new(virtio::input::VirtioInputHandle::new(
+        init.device,
+        init.interrupt_status,
+    ));
+    let irq_handler: Arc<dyn driver_api::IrqHandler> = handle.clone();
+    let registration = plic::register(plic_irq, irq_handler);
+    handle.set_irq_registration(registration);
+    let trait_handle: Arc<dyn driver_api::InputDevice> = handle;
+    InputDeviceRegistry::global().register(trait_handle.clone());
+    fs::devfs::register_input_device(trait_handle);
 }
