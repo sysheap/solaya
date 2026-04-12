@@ -2,7 +2,9 @@ pub mod jh7110;
 
 use alloc::{boxed::Box, vec::Vec};
 
-use crate::{debug, info, klibc::MMIO, net::mac::MacAddress};
+use console::{debug, info};
+use driver_api::MacAddress;
+use hal::{mmio::MMIO, spinlock::Spinlock};
 
 // --- Register offsets within the 64KB MMIO region ---
 
@@ -711,11 +713,11 @@ impl DwmacDevice {
 /// underlying device behind a `Spinlock` so the trait's `&self` methods
 /// can mutate the ring indices.
 pub struct DwmacHandle {
-    inner: crate::klibc::Spinlock<DwmacDevice>,
+    inner: Spinlock<DwmacDevice>,
     mac: MacAddress,
     name: alloc::string::String,
     isr_status: MMIO<u32>,
-    irq: crate::klibc::Spinlock<Option<driver_api::IrqRegistration>>,
+    irq: Spinlock<Option<driver_api::IrqRegistration>>,
 }
 
 impl DwmacHandle {
@@ -723,11 +725,11 @@ impl DwmacHandle {
         let mac = device.mac_address;
         let isr_status = device.isr_status_mmio();
         Self {
-            inner: crate::klibc::Spinlock::new(device),
+            inner: Spinlock::new(device),
             mac,
             name: alloc::string::String::from("eth0"),
             isr_status,
-            irq: crate::klibc::Spinlock::new(None),
+            irq: Spinlock::new(None),
         }
     }
 

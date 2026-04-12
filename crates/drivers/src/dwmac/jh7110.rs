@@ -1,4 +1,5 @@
-use crate::{info, klibc::MMIO};
+use console::info;
+use hal::mmio::MMIO;
 
 const SYS_CRG_BASE: usize = 0x1302_0000;
 const STG_CRG_BASE: usize = 0x1023_0000;

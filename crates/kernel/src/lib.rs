@@ -61,6 +61,7 @@ mod net;
 #[cfg(not(miri))]
 pub mod panic;
 mod pci;
+mod platform;
 mod processes;
 mod syscalls;
 

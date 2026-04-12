@@ -1,8 +1,6 @@
-pub mod dwmac;
-pub mod jh7110;
 pub mod registry;
 
-pub use drivers::{bochs_display, virtio};
+pub use drivers::{bochs_display, dwmac, virtio};
 
 pub use registry::{
     BlockDeviceRegistry, CharDeviceRegistry, DisplayDeviceRegistry, InputDeviceRegistry,
