@@ -682,12 +682,14 @@ Do not paper over disagreement.
   - `mm::page::PagesAsSlice` grew a `as_u8_slice_ref(&self) -> &[u8]`
     companion to the existing `&mut` method so `DmaBuffer::as_slice` is a
     safe wrapper.
-  - Per-request `Vec<u8>` buffers in `VirtQueue::put_buffer_chain` still use
-    `buffer.as_ptr() as u64` — they're short-lived heap-backed buffers
-    passed to the virtio device and, on the current identity-mapped target,
-    the virtual address is the physical address. Migrating them requires
-    rewriting every virtio-* driver to hand DmaBuffers to VirtQueue;
-    deferred to a future phase. The cast is documented at the call site.
+  - Per-request buffers now also live in `DmaBuffer` (block header/data/
+    status, rng requests, input events, net rx pool + tx frames). Issue
+    #250 item 9 replaced `VirtQueue::put_buffer{,_chain}`'s `Vec<u8>`
+    inputs with `DmaBuffer`, keyed `outstanding_buffers: BTreeMap<u16,
+    DmaBuffer>`, and returns completions as `UsedBufferEntry { dma,
+    written_len }`. The last `.as_ptr() as u64` cast in `virtqueue.rs` is
+    gone, and `klib::deconstructed_vec` (the Vec-into-raw-parts helper
+    that backed the old path) was deleted.
   - DWMAC migration is **deferred**. DWMAC uses 32-bit DMA addressing
     (`as u32`, not `as u64`), so the acceptance grep does not flag it. QEMU
     doesn't route the StarFive MAC, so any DWMAC changes cannot be
@@ -920,3 +922,15 @@ Do not paper over disagreement.
     PCI-shaped `probe → attach` contract. `init_dwmac_devices` is
     untouched.
   - Acceptance: `just ci` green, 69/69 system tests.
+
+- v10 (post-issue-#250-item-9): per-request virtio buffers migrated to
+  `DmaBuffer`. `VirtQueue::put_buffer{,_chain}` now take `DmaBuffer` (not
+  `Vec<u8>`); `outstanding_buffers` is `BTreeMap<u16, DmaBuffer>`;
+  completions come back as `UsedBufferEntry { dma: DmaBuffer, written_len:
+  usize }`. Every virtio driver (block header/data/status, rng requests,
+  input events, net rx pool + tx frames) allocates via
+  `DmaBuffer::new_coherent`. The last `.as_ptr() as u64` cast in
+  `virtqueue.rs` is gone. `klib::deconstructed_vec` was the Vec-into-raw-
+  parts helper behind the old path and is deleted. DWMAC still uses
+  `Vec<u8>` per-packet buffers (deferred with the rest of the DWMAC
+  migration). Acceptance: `just ci` green, 69/69 system tests.
