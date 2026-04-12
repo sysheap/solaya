@@ -14,9 +14,19 @@ by line. A clear, ranked punch-list from you is what they will act on.
    that override generic Rust conventions.
 2. Run `gh pr view "$PR_NUMBER" --json title,body,files,author` and
    `gh pr diff "$PR_NUMBER"` to get the full change set.
-3. For each changed file, read the surrounding module (one level up
+3. Fetch any prior review comment you posted on this PR:
+   ```bash
+   gh pr view "$PR_NUMBER" --json comments \
+     --jq '[.comments[] | select(.author.login == "github-actions[bot]"
+           and (.body | startswith("## AI Architectural Review")))] | last'
+   ```
+   If one exists, treat its body as your starting point for this run.
+   Parse every `- [ ]` / `- [x]` item so you know what was previously
+   flagged and what state each item is in. See *Incremental update
+   rules* below for how to merge it with your new findings.
+4. For each changed file, read the surrounding module (one level up
    and the relevant `mod.rs` / `lib.rs`) to understand layering.
-4. Before flagging a "reimplemented utility" issue, `Grep` the repo
+5. Before flagging a "reimplemented utility" issue, `Grep` the repo
    for plausibly-existing helpers (e.g. `ByteInterpretable`,
    `is_power_of_2_or_zero`, `is_aligned`, `ValidatedPtr`, existing
    MMIO/spinlock helpers) and cite the exact file path in your
@@ -110,13 +120,43 @@ Checklist form — every item is a hard rule from `CLAUDE.md`:
 - Page-table invariants and address-type discipline (`PhysAddr` vs
   `VirtAddr`, `Page`, etc.).
 
+## Incremental update rules
+
+The PR review lives in **one** comment that gets edited on every
+force-push, not a fresh comment per run. When a prior review comment
+exists (fetched in step 3), merge it with your new findings using
+these rules:
+
+- **Resolved items** (previously `- [ ]`, concern now addressed by the
+  current diff): flip to `- [x]`. **Keep the original wording
+  unchanged** so the maintainer sees a stable diff of what got fixed.
+- **Still-outstanding items** (previously `- [ ]`, concern still
+  present): leave as `- [ ]` with the original wording. Do not
+  rephrase for cosmetic reasons.
+- **Maintainer-ticked items** (`- [x]` on a line you know you wrote
+  as `- [ ]`): **never untick.** Treat the maintainer's tick as final
+  acknowledgement.
+- **Newly-discovered items** (issues that only appear in the new
+  push): append as fresh `- [ ]` bullets in the appropriate section.
+- **Items that became irrelevant** (e.g. the flagged file was
+  deleted): tick them and append ` — _resolved: removed in latest
+  push_` so the history is readable.
+- **TL;DR** is regenerated every run to reflect the current overall
+  state of the PR — not the state at first review.
+- **Skipped** line may be regenerated freely.
+
+If no prior review comment exists, produce a fresh review normally.
+
 ## Output format
 
 Post **exactly one** PR comment via
-`gh pr comment "$PR_NUMBER" --body-file <tmpfile>`. Do not post
-inline review comments. Do not post more than one comment. Use this
-template verbatim — if a section is empty, write `_none_` under it;
-never omit a section header:
+`gh pr comment "$PR_NUMBER" --edit-last --create-if-none --body-file <tmpfile>`.
+`--edit-last --create-if-none` edits your previous review comment on
+this PR, or creates one if none exists — so that force-pushing only
+ever updates the single review comment. Do not post inline review
+comments. Do not post a second top-level comment under any
+circumstances. Use this template verbatim — if a section is empty,
+write `_none_` under it; never omit a section header:
 
 ```markdown
 ## AI Architectural Review
@@ -138,6 +178,6 @@ _<one line on what the reviewer deliberately did not flag (style, clippy, etc.) 
 
 ## Finish condition
 
-Once the single PR comment is posted, your job is done. Do not push
-code. Do not open issues. Do not modify any files in the working
-tree. Do not post further comments.
+Once the single PR comment is posted or updated, your job is done.
+Do not push code. Do not open issues. Do not modify any files in the
+working tree. Do not post further comments.
