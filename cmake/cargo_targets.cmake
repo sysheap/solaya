@@ -4,26 +4,24 @@
 # crates (boot, kernel) will grow their own helper in stage 6; for now this
 # file only exposes shared lookup functions.
 
-# Validate a previously cached SOLAYA_CARGO before reusing it. When the build
-# dir is shared between host and a podman/devcontainer (e.g. configure ran in
-# the container and stored `/root/.cargo/bin/cargo`, which the host user can't
-# execute), the cached path must be re-detected instead of silently failing
-# every cargo-driven target with exit 126.
-if(SOLAYA_CARGO)
-    execute_process(
-        COMMAND "${SOLAYA_CARGO}" --version
-        RESULT_VARIABLE _solaya_cargo_check
-        OUTPUT_QUIET ERROR_QUIET
-    )
-    if(NOT _solaya_cargo_check EQUAL 0)
-        message(STATUS
-            "Cached SOLAYA_CARGO=${SOLAYA_CARGO} is not executable in this "
-            "environment; re-detecting.")
-        unset(SOLAYA_CARGO CACHE)
-    endif()
+# Resolve cargo at build time, not configure time. When the same build/ dir
+# is shared between a podman devcontainer and the host, baking an absolute
+# cargo path (e.g. /root/.cargo/bin/cargo) into build.ninja breaks the
+# "other" environment with exit 126 (Permission denied). Emit the bare
+# command name so /bin/sh resolves it via $PATH on whichever side runs ninja.
+execute_process(
+    COMMAND cargo --version
+    RESULT_VARIABLE _solaya_cargo_rc
+    OUTPUT_QUIET ERROR_QUIET
+)
+if(NOT _solaya_cargo_rc EQUAL 0)
+    message(FATAL_ERROR "cargo not found on PATH — install the Rust toolchain")
 endif()
 
-find_program(SOLAYA_CARGO cargo REQUIRED)
+# Drop any absolute path cached by earlier versions of this file so
+# CMakeCache.txt doesn't retain dead state across reconfigures.
+unset(SOLAYA_CARGO CACHE)
+set(SOLAYA_CARGO cargo)
 
 # solaya_read_kconfig_features(out_var crate_name)
 #
