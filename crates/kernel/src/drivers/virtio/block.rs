@@ -219,7 +219,7 @@ impl driver_api::BlockDevice for BlockDeviceHandle {
     }
 }
 
-pub async fn read(index: usize, offset: usize, buf: &mut [u8]) -> Result<usize, Errno> {
+async fn read(index: usize, offset: usize, buf: &mut [u8]) -> Result<usize, Errno> {
     let cap = {
         let guard = BLOCK_DEVICES.lock();
         let dev = guard.get(index).ok_or(Errno::ENODEV)?;
@@ -265,7 +265,7 @@ pub async fn read(index: usize, offset: usize, buf: &mut [u8]) -> Result<usize, 
     Ok(read_len)
 }
 
-pub async fn write(index: usize, offset: usize, data: &[u8]) -> Result<usize, Errno> {
+async fn write(index: usize, offset: usize, data: &[u8]) -> Result<usize, Errno> {
     let cap = {
         let guard = BLOCK_DEVICES.lock();
         let dev = guard.get(index).ok_or(Errno::ENODEV)?;
