@@ -1,0 +1,129 @@
+# cmake/tests.cmake — native CMake targets for the test/lint recipes.
+#
+# Each target shells out to the same cargo invocations the justfile used,
+# so semantics stay identical to what developers running `just` saw.
+
+# Common env for cargo invocations that touch the headers crate (which needs
+# $SOLAYA_HEADERS_GENERATED because its build.rs copies files from there).
+set(_solaya_cargo_env
+    "SOLAYA_HEADERS_GENERATED=${SOLAYA_HEADERS_GENERATED}"
+    "SOLAYA_USERSPACE_ARTIFACT_DIR=${SOLAYA_USERSPACE_ARTIFACT_DIR}"
+)
+
+# -----------------------------------------------------------------------------
+# clippy: lint the whole workspace tree.
+# -----------------------------------------------------------------------------
+add_custom_target(clippy
+    # userspace — lives in its own workspace so run from userspace/
+    COMMAND ${CMAKE_COMMAND} -E env ${_solaya_cargo_env}
+            ${CMAKE_COMMAND} -E chdir ${CMAKE_SOURCE_DIR}/userspace
+            ${SOLAYA_CARGO} clippy -- -D warnings
+    # boot + solaya + driver-api — main workspace
+    COMMAND ${CMAKE_COMMAND} -E env ${_solaya_cargo_env}
+            ${SOLAYA_CARGO} clippy -p boot -p solaya -p driver-api -- -D warnings
+    # system-tests — separate workspace, x86_64 host
+    COMMAND ${SOLAYA_CARGO} clippy --release
+            --manifest-path ${CMAKE_SOURCE_DIR}/system-tests/Cargo.toml
+            --target x86_64-unknown-linux-gnu --no-deps -- -D warnings
+    # mcp-server — separate workspace, x86_64 host
+    COMMAND ${SOLAYA_CARGO} clippy --release
+            --manifest-path ${CMAKE_SOURCE_DIR}/mcp-server/Cargo.toml
+            --target x86_64-unknown-linux-gnu --no-deps -- -D warnings
+    # solaya tests (separate feature set)
+    COMMAND ${CMAKE_COMMAND} -E env ${_solaya_cargo_env}
+            ${SOLAYA_CARGO} clippy -p solaya --tests -- -D warnings
+    # driver-api host tests (different target so the trait tests compile)
+    COMMAND ${SOLAYA_CARGO} clippy -p driver-api --tests
+            --target x86_64-unknown-linux-gnu -- -D warnings
+    DEPENDS headers-generated
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    USES_TERMINAL
+    VERBATIM
+    COMMENT "clippy across userspace / boot+solaya+driver-api / system-tests / mcp-server / solaya-tests / driver-api-tests"
+)
+
+# -----------------------------------------------------------------------------
+# test-unit: kernel + klib + hal + driver-api unit tests.
+# klib/hal run on x86_64 host (hal test needs --no-default-features so
+# riscv-specific code doesn't compile).
+# -----------------------------------------------------------------------------
+add_custom_target(test-unit
+    COMMAND ${CMAKE_COMMAND} -E env ${_solaya_cargo_env}
+            ${SOLAYA_CARGO} test --release -p solaya
+    COMMAND ${SOLAYA_CARGO} test --release -p klib --lib
+            --target x86_64-unknown-linux-gnu
+    COMMAND ${SOLAYA_CARGO} test --release -p hal --lib
+            --target x86_64-unknown-linux-gnu --no-default-features
+    COMMAND ${SOLAYA_CARGO} test --release -p driver-api
+            --target x86_64-unknown-linux-gnu
+    DEPENDS userspace-all headers-generated
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    USES_TERMINAL
+    VERBATIM
+    COMMENT "Unit tests (solaya / klib / hal / driver-api)"
+)
+
+# -----------------------------------------------------------------------------
+# test-system: integration tests via cargo-nextest.
+# Always depends on the full kernel build (the tests boot the kernel in QEMU).
+# -----------------------------------------------------------------------------
+add_custom_target(test-system
+    COMMAND ${SOLAYA_CARGO} nextest run --release
+            --manifest-path ${CMAKE_SOURCE_DIR}/system-tests/Cargo.toml
+            --target x86_64-unknown-linux-gnu
+    DEPENDS solaya-bin
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    USES_TERMINAL
+    VERBATIM
+    COMMENT "System tests via cargo-nextest"
+)
+
+# -----------------------------------------------------------------------------
+# miri: undefined-behaviour checker. Runs against riscv64gc-unknown-linux-gnu
+# (NOT the bare-metal target; miri doesn't support *-none-elf).
+# -----------------------------------------------------------------------------
+add_custom_target(miri
+    COMMAND ${CMAKE_COMMAND} -E env
+        ${_solaya_cargo_env}
+        "MIRIFLAGS=-Zmiri-env-forward=RUST_BACKTRACE -Zmiri-strict-provenance"
+        "RUST_BACKTRACE=1"
+        ${SOLAYA_CARGO} miri test -p solaya
+            --target riscv64gc-unknown-linux-gnu
+    DEPENDS solaya-kernel-elf headers-generated
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    USES_TERMINAL
+    VERBATIM
+    COMMENT "Miri (undefined-behaviour detector)"
+)
+
+# -----------------------------------------------------------------------------
+# fmt / fmt-check: cargo fmt across every workspace.
+# -----------------------------------------------------------------------------
+# Depends on solaya-kernel-elf so crates/kernel/build.rs has emitted
+# crates/kernel/src/autogenerated/userspace_programs.rs before cargo fmt
+# parses the crate tree. cargo fmt does not run build scripts, so a plain
+# userspace-all dep is not enough.
+add_custom_target(fmt-check
+    COMMAND ${SOLAYA_CARGO} fmt --check
+    COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_SOURCE_DIR}/userspace
+            ${SOLAYA_CARGO} fmt --check
+    COMMAND ${SOLAYA_CARGO} fmt --check
+            --manifest-path ${CMAKE_SOURCE_DIR}/system-tests/Cargo.toml
+    COMMAND ${SOLAYA_CARGO} fmt --check
+            --manifest-path ${CMAKE_SOURCE_DIR}/mcp-server/Cargo.toml
+    COMMAND ${SOLAYA_CARGO} fmt --check
+            --manifest-path ${CMAKE_SOURCE_DIR}/tools/bindgen-driver/Cargo.toml
+    DEPENDS solaya-kernel-elf
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    USES_TERMINAL
+    VERBATIM
+    COMMENT "cargo fmt --check across every workspace"
+)
+
+# -----------------------------------------------------------------------------
+# ci: the full pre-merge gate.
+# -----------------------------------------------------------------------------
+add_custom_target(ci
+    DEPENDS fmt-check clippy test-unit miri test-system
+    COMMENT "All CI checks (fmt, clippy, unit, miri, system)"
+)

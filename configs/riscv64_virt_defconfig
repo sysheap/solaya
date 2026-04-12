@@ -1,0 +1,6 @@
+# Solaya default configuration for the QEMU virt machine, RISC-V 64.
+#
+# All omitted options take their Kconfig-declared defaults. Regenerate with
+# `cmake --build build --target savedefconfig` after `menuconfig`.
+
+CONFIG_ARCH_RISCV64=y

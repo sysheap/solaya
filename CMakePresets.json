@@ -1,0 +1,23 @@
+{
+    "version": 6,
+    "cmakeMinimumRequired": {
+        "major": 3,
+        "minor": 25,
+        "patch": 0
+    },
+    "configurePresets": [
+        {
+            "name": "riscv64-virt",
+            "displayName": "RISC-V 64 QEMU virt",
+            "description": "Default Solaya build target.",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build"
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "riscv64-virt",
+            "configurePreset": "riscv64-virt"
+        }
+    ]
+}

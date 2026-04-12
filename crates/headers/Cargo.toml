@@ -5,8 +5,9 @@ description.workspace = true
 authors.workspace = true
 version.workspace = true
 
-[build-dependencies]
-bindgen = "0.72"
+# No bindgen dep: the actual bindgen invocation lives in tools/bindgen-driver
+# and is driven by cmake/bindgen.cmake. build.rs is a thin shim that only
+# copies generated files from $SOLAYA_HEADERS_GENERATED into OUT_DIR.
 
 [lib]
 test = false
