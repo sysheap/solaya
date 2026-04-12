@@ -714,16 +714,35 @@ pub struct DwmacHandle {
     inner: crate::klibc::Spinlock<DwmacDevice>,
     mac: MacAddress,
     name: alloc::string::String,
+    isr_status: MMIO<u32>,
+    irq: crate::klibc::Spinlock<Option<crate::interrupts::plic::IrqRegistration>>,
 }
 
 impl DwmacHandle {
     pub fn new(device: DwmacDevice) -> Self {
         let mac = device.mac_address;
+        let isr_status = device.isr_status_mmio();
         Self {
             inner: crate::klibc::Spinlock::new(device),
             mac,
             name: alloc::string::String::from("eth0"),
+            isr_status,
+            irq: crate::klibc::Spinlock::new(None),
         }
+    }
+
+    pub fn set_irq_registration(&self, registration: crate::interrupts::plic::IrqRegistration) {
+        *self.irq.lock() = Some(registration);
+    }
+}
+
+impl driver_api::IrqHandler for DwmacHandle {
+    fn handle(&self) {
+        // DWMAC4 DMA CH0 status is write-1-to-clear.
+        let mut isr = MMIO::<u32>::new(self.isr_status.addr());
+        let status = isr.read();
+        isr.write(status);
+        crate::net::notify_packet_arrival();
     }
 }
 

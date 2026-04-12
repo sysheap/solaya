@@ -192,7 +192,11 @@ pub extern "C" fn kernel_init(hart_id: usize, device_tree_pointer: *const ()) ->
         .and_then(|mut p| p.consume_sized_type::<crate::klibc::big_endian::BigEndian<u32>>())
         .map(|be| be.get())
         .unwrap_or(10);
-    plic::register_interrupt(uart_irq, io::uart::on_uart_interrupt);
+    // UART lives forever; leak the registration so it stays alive.
+    core::mem::forget(plic::register(
+        uart_irq,
+        alloc::sync::Arc::new(io::uart::UartIrqHandler),
+    ));
 
     if let Some(ref pci_info) = pci_information {
         let pci_devices = enumerate_devices(pci_info);

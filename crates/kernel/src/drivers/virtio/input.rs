@@ -1,5 +1,5 @@
-use alloc::{collections::VecDeque, string::String, sync::Arc, vec};
-use driver_api::{InputDevice as InputTrait, InputEvent};
+use alloc::{collections::VecDeque, string::String, vec};
+use driver_api::{InputDevice as InputTrait, InputEvent, IrqHandler};
 
 use crate::{
     drivers::virtio::{
@@ -16,7 +16,6 @@ use crate::{
     info,
     klibc::{
         MMIO, Spinlock,
-        runtime_initialized::RuntimeInitializedData,
         util::{ByteInterpretable, is_power_of_2_or_zero},
     },
     pci::{
@@ -45,23 +44,31 @@ pub struct InputDevice {
 }
 
 static EVENT_BUFFER: Spinlock<VecDeque<VirtioInputEvent>> = Spinlock::new(VecDeque::new());
-static ISR_STATUS: RuntimeInitializedData<MMIO<u32>> = RuntimeInitializedData::new();
-static HANDLE: Spinlock<Option<Arc<VirtioInputHandle>>> = Spinlock::new(None);
 
 /// `driver_api::InputDevice` adapter for the virtio-input driver. Holds the
 /// underlying device behind a `Spinlock` so the interrupt path can refill
-/// the event queue through `&self`.
+/// the event queue through `&self`. Also implements `IrqHandler`: the PLIC
+/// keeps an `Arc<dyn IrqHandler>` pointing at this struct, so no extra
+/// `HANDLE` shim is needed.
 pub struct VirtioInputHandle {
     inner: Spinlock<InputDevice>,
     name: String,
+    isr_status: MMIO<u32>,
+    irq: Spinlock<Option<crate::interrupts::plic::IrqRegistration>>,
 }
 
 impl VirtioInputHandle {
-    pub fn new(device: InputDevice) -> Self {
+    pub fn new(device: InputDevice, isr_status: MMIO<u32>) -> Self {
         Self {
             inner: Spinlock::new(device),
             name: String::from("keyboard0"),
+            isr_status,
+            irq: Spinlock::new(None),
         }
+    }
+
+    pub fn set_irq_registration(&self, registration: crate::interrupts::plic::IrqRegistration) {
+        *self.irq.lock() = Some(registration);
     }
 }
 
@@ -79,19 +86,11 @@ impl InputTrait for VirtioInputHandle {
     }
 }
 
-pub fn on_input_interrupt() {
-    let _isr = ISR_STATUS.read();
-    if let Some(handle) = HANDLE.lock().as_ref() {
-        handle.inner.lock().process_events();
+impl IrqHandler for VirtioInputHandle {
+    fn handle(&self) {
+        let _isr = self.isr_status.read();
+        self.inner.lock().process_events();
     }
-}
-
-pub fn init_isr_status(isr: MMIO<u32>) {
-    ISR_STATUS.initialize(isr);
-}
-
-pub(crate) fn store_handle(handle: Arc<VirtioInputHandle>) {
-    *HANDLE.lock() = Some(handle);
 }
 
 impl InputDevice {

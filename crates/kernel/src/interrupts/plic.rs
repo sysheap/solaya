@@ -2,15 +2,42 @@ use crate::{
     device_tree, info,
     klibc::{MMIO, Spinlock, big_endian::BigEndian, runtime_initialized::RuntimeInitializedData},
 };
-use alloc::vec::Vec;
+use alloc::{sync::Arc, vec::Vec};
+use core::sync::atomic::{AtomicU64, Ordering};
+use driver_api::IrqHandler;
 use hal::CpuId;
+
+/// Opaque slot identifier used to unregister an IRQ handler. A monotonic
+/// counter instead of a `Vec` index — `swap_remove` would otherwise
+/// invalidate other tokens.
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct SlotId(u64);
 
 struct InterruptHandler {
     irq: u32,
-    handler: fn(),
+    slot: SlotId,
+    handler: Arc<dyn IrqHandler>,
 }
 
 static INTERRUPT_HANDLERS: Spinlock<Vec<InterruptHandler>> = Spinlock::new(Vec::new());
+static NEXT_SLOT_ID: AtomicU64 = AtomicU64::new(0);
+
+/// RAII guard returned by [`register`]. Dropping it disables the IRQ at the
+/// PLIC (when the last handler on that line goes away) and removes the
+/// handler entry.
+///
+/// Drivers store the `IrqRegistration` inside their handle struct so
+/// interrupt teardown is automatic on `Drop`.
+#[must_use = "dropping this immediately unregisters the IRQ handler"]
+pub struct IrqRegistration {
+    slot: SlotId,
+}
+
+impl Drop for IrqRegistration {
+    fn drop(&mut self) {
+        unregister(self.slot);
+    }
+}
 
 pub struct Plic {
     base: usize,
@@ -68,6 +95,15 @@ impl Plic {
             .enable_register
             .add_within_region(word_offset as usize, self.size / 4);
         reg |= 1 << bit;
+    }
+
+    fn disable(&mut self, interrupt_id: u32) {
+        let word_offset = interrupt_id / 32;
+        let bit = interrupt_id % 32;
+        let mut reg = self
+            .enable_register
+            .add_within_region(word_offset as usize, self.size / 4);
+        reg &= !(1 << bit);
     }
 
     fn set_priority(&mut self, interrupt_id: u32, priority: u32) {
@@ -199,26 +235,50 @@ pub fn init_plic() {
     plic.drain_pending();
 }
 
-pub fn register_interrupt(irq: u32, handler: fn()) {
+/// Register `handler` for `irq` and return an RAII guard that unregisters on
+/// drop. Drivers hold the returned `IrqRegistration` in their handle struct.
+pub fn register(irq: u32, handler: Arc<dyn IrqHandler>) -> IrqRegistration {
     info!("Registering PLIC interrupt (IRQ {irq})");
     let mut plic = PLIC.lock();
     plic.enable(irq);
     plic.set_priority(irq, 1);
     drop(plic);
+    let slot = SlotId(NEXT_SLOT_ID.fetch_add(1, Ordering::Relaxed));
     INTERRUPT_HANDLERS
         .lock()
-        .push(InterruptHandler { irq, handler });
+        .push(InterruptHandler { irq, slot, handler });
+    IrqRegistration { slot }
+}
+
+fn unregister(slot: SlotId) {
+    let removed = {
+        let mut handlers = INTERRUPT_HANDLERS.lock();
+        let Some(pos) = handlers.iter().position(|h| h.slot == slot) else {
+            return;
+        };
+        handlers.swap_remove(pos)
+    };
+    let irq_still_used = INTERRUPT_HANDLERS
+        .lock()
+        .iter()
+        .any(|h| h.irq == removed.irq);
+    if !irq_still_used {
+        let mut plic = PLIC.lock();
+        plic.disable(removed.irq);
+    }
+    info!("Unregistered PLIC interrupt (IRQ {})", removed.irq);
 }
 
 pub fn dispatch_interrupt(irq: u32) {
-    let handlers = INTERRUPT_HANDLERS.lock();
-    for entry in handlers.iter() {
-        if entry.irq == irq {
-            let handler = entry.handler;
-            drop(handlers);
-            handler();
-            return;
-        }
+    let handler = {
+        let handlers = INTERRUPT_HANDLERS.lock();
+        handlers
+            .iter()
+            .find(|entry| entry.irq == irq)
+            .map(|entry| Arc::clone(&entry.handler))
+    };
+    match handler {
+        Some(h) => h.handle(),
+        None => panic!("Unknown PLIC interrupt source ID {irq}"),
     }
-    panic!("Unknown PLIC interrupt source ID {irq}");
 }

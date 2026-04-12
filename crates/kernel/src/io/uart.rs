@@ -8,7 +8,7 @@
 use core::sync::atomic::{AtomicU8, Ordering};
 
 use alloc::sync::Arc;
-use driver_api::{CharDevice, IoError};
+use driver_api::{CharDevice, IoError, IrqHandler};
 use headers::errno::Errno;
 
 pub use console::uart::CONSOLE_UART;
@@ -57,7 +57,17 @@ pub fn register_console_char_device() {
     crate::fs::devfs::register_char_device("console", device);
 }
 
-pub fn on_uart_interrupt() {
+/// `IrqHandler` for the console UART. Stateless — all state lives in the
+/// module-global `CONSOLE_UART` and the TTY line discipline.
+pub struct UartIrqHandler;
+
+impl IrqHandler for UartIrqHandler {
+    fn handle(&self) {
+        handle_uart_interrupt();
+    }
+}
+
+fn handle_uart_interrupt() {
     let mut raw_bytes = klib::array_vec::ArrayVec::<u8, 64>::new();
     {
         let uart = CONSOLE_UART.lock();

@@ -70,23 +70,31 @@ pub struct InitializedBlockDevice {
 }
 
 static BLOCK_DEVICES: Spinlock<Vec<BlockDevice>> = Spinlock::new(Vec::new());
-static BLOCK_ISR_STATUSES: Spinlock<Vec<MMIO<u32>>> = Spinlock::new(Vec::new());
 static BLOCK_INTERRUPT_COUNTER: AtomicU64 = AtomicU64::new(0);
 static BLOCK_INTERRUPT_WAKERS: Spinlock<Vec<Waker>> = Spinlock::new(Vec::new());
 static BLOCK_COMPLETIONS: Spinlock<BTreeMap<u16, UsedBuffer>> = Spinlock::new(BTreeMap::new());
 
-pub fn register_isr_status(isr: MMIO<u32>) {
-    BLOCK_ISR_STATUSES.lock().push(isr);
+/// Per-device IRQ handler. Holds the ISR MMIO register for this particular
+/// block device; reads it to acknowledge the interrupt, then wakes the
+/// shared bottom-half completion machinery.
+pub struct BlockIrqHandler {
+    isr_status: MMIO<u32>,
 }
 
-pub fn on_block_interrupt() {
-    for isr in BLOCK_ISR_STATUSES.lock().iter() {
-        let _status = isr.read();
+impl BlockIrqHandler {
+    pub fn new(isr_status: MMIO<u32>) -> Self {
+        Self { isr_status }
     }
-    BLOCK_INTERRUPT_COUNTER.fetch_add(1, Ordering::SeqCst);
-    let wakers: Vec<Waker> = BLOCK_INTERRUPT_WAKERS.lock().drain(..).collect();
-    for waker in wakers {
-        waker.wake();
+}
+
+impl driver_api::IrqHandler for BlockIrqHandler {
+    fn handle(&self) {
+        let _status = self.isr_status.read();
+        BLOCK_INTERRUPT_COUNTER.fetch_add(1, Ordering::SeqCst);
+        let wakers: Vec<Waker> = BLOCK_INTERRUPT_WAKERS.lock().drain(..).collect();
+        for waker in wakers {
+            waker.wake();
+        }
     }
 }
 
@@ -167,10 +175,11 @@ pub struct BlockDeviceHandle {
     index: usize,
     name: String,
     capacity_sectors: u64,
+    _irq: crate::interrupts::plic::IrqRegistration,
 }
 
 impl BlockDeviceHandle {
-    pub fn new(index: usize) -> Self {
+    pub fn new(index: usize, irq: crate::interrupts::plic::IrqRegistration) -> Self {
         assert!(index < 26, "block device index must be < 26 (a-z)");
         let suffix = (b'a' + index as u8) as char;
         let name = alloc::format!("vd{suffix}");
@@ -183,6 +192,7 @@ impl BlockDeviceHandle {
             index,
             name,
             capacity_sectors,
+            _irq: irq,
         }
     }
 }
