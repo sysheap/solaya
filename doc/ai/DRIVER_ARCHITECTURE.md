@@ -826,3 +826,34 @@ Do not paper over disagreement.
     Only `drivers/mod.rs` still reaches these — scope treats it as the
     orchestrator layer, not a driver file, and it stays that way until
     the Phase 8 policy/mechanism split.
+
+- v7 (post-Phase-7): Concrete drivers extracted to `crates/drivers/`.
+  `kernel/src/drivers/` is now a thin orchestrator (mod.rs + registry.rs).
+  Adjustments:
+  - Scaffolding commits: `1816e5b` (empty drivers crate), `9fb799f`
+    (`mmio_struct!` macro relocated from `kernel::klibc` to `hal`),
+    `8e2fb49` (net_notifier hook in driver-api for cross-driver RX wakes).
+  - Driver moves: `4d6e47e` (bochs_display), the virtio block/net/input/
+    rng/virtqueue/capability cluster, and dwmac. Each concrete driver now
+    lives under `crates/drivers/src/` with imports going through `console`,
+    `hal`, `klib`, `mm`, `driver-api` — never through `solaya`. `cargo
+    tree -p drivers` shows zero edge to `solaya`.
+  - `jh7110/reset.rs` stayed behind as `crates/kernel/src/platform/reset.rs`.
+    It reaches into `device_tree` and is called from the UART panic-path
+    (`crate::platform::reset::trigger_reset()`). That's kernel infrastructure,
+    not a device driver — hoisting it would have required threading a
+    `DtBusContext` through panic context, which is scope creep.
+  - The DWMAC SoC init helper (`dwmac::jh7110::init_gmac`) did move to
+    `crates/drivers/src/dwmac/jh7110.rs` — it's proper driver code, just
+    named after the SoC it targets.
+  - Kernel `klibc/mod.rs` dropped the unused `non_empty_vec` and
+    `is_power_of_2_or_zero` re-exports that only existed to serve the
+    now-relocated virtio drivers.
+  - No `DriverFactory` / `DriverCatalog` introduced yet — same scope rule
+    as Phase 6. `init_all_pci_devices` / `init_dwmac_devices` still live
+    in `kernel/src/drivers/mod.rs` and still reach into kernel subsystems
+    for mount/task-spawn orchestration. **Phase 8 is the right place to
+    split this.**
+  - Acceptance grep
+    `grep -rn '^use (solaya|crate::(fs|net|processes|syscalls|interrupts|pci|device_tree|cpu|klibc))' crates/drivers/`
+    returns **empty**. 69/69 system tests green.
