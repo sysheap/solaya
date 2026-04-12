@@ -5,6 +5,7 @@ use alloc::{
     vec::Vec,
 };
 use core::sync::atomic::{AtomicU64, Ordering};
+use driver_api::BlockDevice;
 use headers::errno::Errno;
 
 use crate::klibc::Spinlock;
@@ -172,7 +173,9 @@ pub trait VfsNode: Send + Sync {
     #[allow(dead_code)]
     fn dec_nlink(&self) {}
 
-    fn block_device_index(&self) -> Option<usize> {
+    /// If this node is backed by a block device, return an `Arc<dyn BlockDevice>`
+    /// so callers can bypass in-memory caching and do direct I/O.
+    fn block_device(&self) -> Option<Arc<dyn BlockDevice>> {
         None
     }
 

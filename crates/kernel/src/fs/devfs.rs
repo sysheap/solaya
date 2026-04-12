@@ -1,4 +1,5 @@
 use alloc::{collections::BTreeMap, string::String, sync::Arc, vec::Vec};
+use driver_api::BlockDevice;
 use headers::errno::Errno;
 
 use crate::{
@@ -185,4 +186,45 @@ pub fn register_device(name: &str, node: VfsNodeRef) {
 
 pub fn alloc_dev_ino() -> u64 {
     alloc_ino()
+}
+
+/// Generic devfs node for any `BlockDevice`. Exposes the device as a regular
+/// file; `block_device()` returns the Arc so callers can perform direct I/O
+/// without going through in-memory VFS caching.
+struct BlockNode {
+    ino: u64,
+    device: Arc<dyn BlockDevice>,
+}
+
+impl VfsNode for BlockNode {
+    fn node_type(&self) -> NodeType {
+        NodeType::File
+    }
+
+    fn ino(&self) -> u64 {
+        self.ino
+    }
+
+    fn size(&self) -> usize {
+        (self.device.num_blocks() as usize) * self.device.block_size()
+    }
+
+    fn truncate(&self, _length: usize) -> Result<(), Errno> {
+        Err(Errno::EINVAL)
+    }
+
+    fn block_device(&self) -> Option<Arc<dyn BlockDevice>> {
+        Some(self.device.clone())
+    }
+}
+
+/// Register a block device with devfs. The devfs entry name is taken from
+/// `device.name()` (e.g. `"vda"`). Must be called after `init()`.
+pub fn register_block_device(device: Arc<dyn BlockDevice>) {
+    let name = String::from(device.name());
+    let node: VfsNodeRef = Arc::new(BlockNode {
+        ino: alloc_ino(),
+        device,
+    });
+    register_device(&name, node);
 }

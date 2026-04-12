@@ -104,14 +104,11 @@ impl FileDescriptor {
             FileDescriptor::VfsFile(file) => {
                 let block_info = {
                     let inner = file.lock();
-                    inner
-                        .node()
-                        .block_device_index()
-                        .map(|idx| (idx, inner.offset()))
+                    inner.node().block_device().map(|dev| (dev, inner.offset()))
                 };
-                if let Some((idx, offset)) = block_info {
+                if let Some((dev, offset)) = block_info {
                     let mut tmp = alloc::vec![0u8; count];
-                    let n = crate::drivers::virtio::block::read(idx, offset, &mut tmp).await?;
+                    let n = dev.read(offset as u64, &mut tmp).await?;
                     file.lock().advance_offset(n);
                     tmp.truncate(n);
                     Ok(tmp)
@@ -179,11 +176,11 @@ impl FileDescriptor {
                     let mut inner = file.lock();
                     inner
                         .node()
-                        .block_device_index()
-                        .map(|idx| (idx, inner.effective_write_offset()))
+                        .block_device()
+                        .map(|dev| (dev, inner.effective_write_offset()))
                 };
-                if let Some((idx, offset)) = block_info {
-                    let n = crate::drivers::virtio::block::write(idx, offset, data).await?;
+                if let Some((dev, offset)) = block_info {
+                    let n = dev.write(offset as u64, data).await?;
                     file.lock().advance_offset(n);
                     Ok(n)
                 } else {
