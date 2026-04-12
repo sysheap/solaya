@@ -9,6 +9,10 @@ use core::fmt::Write;
 use hal::{Spinlock, mmio::MMIO};
 use klib::send_sync::UnsafeSendSync;
 
+/// Compile-time fallback base used for the early boot banner, before the
+/// device tree is parsed. Matches QEMU `virt` and the StarFive JH7110.
+/// After DT parse, `kernel_init` calls [`bind`] to switch to the base
+/// advertised by the `/serial` node; on QEMU that's a no-op.
 pub const UART_BASE_ADDRESS: usize = 0x1000_0000;
 
 const THR: usize = 0;
@@ -127,6 +131,26 @@ impl Uart {
         }
         Some(self.read_reg(THR))
     }
+
+    fn rebind(&mut self, base: usize) {
+        if base == self.base {
+            return;
+        }
+        self.base = base;
+        self.reg_shift = 0;
+        self.is_init = false;
+        self.init();
+    }
+}
+
+/// Rebind the console UART to a new MMIO base and re-initialise it.
+///
+/// Called by the kernel once the device tree has been parsed and the
+/// `/serial` node's `reg` property is known. No-op if the new base
+/// matches the compile-time default — the common case on QEMU virt and
+/// the JH7110.
+pub fn bind(base: usize) {
+    CONSOLE_UART.lock().rebind(base);
 }
 
 /// Detect register spacing by probing LSR at both possible offsets.
