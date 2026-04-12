@@ -655,6 +655,48 @@ Do not paper over disagreement.
   - Per-driver `RuntimeInitializedData<...>` globals (`virtio::rng::DEVICE`,
     `virtio::input::DEVICE`, `bochs_display` statics) are gone; the
     registries are the source of truth.
+- v5 (post-Phase-5): `DmaBuffer` landed in `driver-api`; virtio ring memory
+  migrated. Adjustments:
+  - `driver-api`'s `Cargo.toml` now depends on `mm`. To make that viable,
+    `mm/Cargo.toml` dropped its `per-package-target =
+    "riscv64gc-unknown-none-elf"` pin (option (a) in the plan). `mm` has no
+    target-specific code — page allocator + heap are generic no_std
+    algorithms — so building it on x86_64 for host tests works. `cargo test
+    -p mm --target x86_64-unknown-linux-gnu` passes cleanly and the default
+    riscv64 build is unchanged.
+  - `DmaBuffer` wraps `mm::page::PinnedHeapPages`. `new_coherent` rounds the
+    requested length up to a page boundary, stores the requested length for
+    accessor truncation, and returns `Ok(_)` today (panics on OOM — consistent
+    with the kernel's infallible page-alloc pattern). `phys_addr()` equals
+    `virt_addr()` on the current identity-mapped target.
+  - To keep the kernel crate `#![forbid(unsafe_code)]`, DmaBuffer exposes
+    **typed** accessors — `as_typed<T>` / `as_typed_mut<T>` — so virtqueue
+    can reinterpret a DmaBuffer as `[virtq_desc; QUEUE_SIZE]` etc. without a
+    raw cast in the kernel. The `unsafe` raw-pointer reinterpretation lives
+    inside `driver-api`'s `dma` module.
+  - `driver-api`'s crate-level `#![forbid(unsafe_code)]` relaxes to
+    `#![deny(unsafe_code)]` so the `dma` module can opt in via
+    `#[allow(unsafe_code)]`. Every other module in `driver-api` remains
+    unsafe-free and is statically checked by the deny. The kernel crate
+    stays `#![forbid(unsafe_code)]`.
+  - `mm::page::PagesAsSlice` grew a `as_u8_slice_ref(&self) -> &[u8]`
+    companion to the existing `&mut` method so `DmaBuffer::as_slice` is a
+    safe wrapper.
+  - Per-request `Vec<u8>` buffers in `VirtQueue::put_buffer_chain` still use
+    `buffer.as_ptr() as u64` — they're short-lived heap-backed buffers
+    passed to the virtio device and, on the current identity-mapped target,
+    the virtual address is the physical address. Migrating them requires
+    rewriting every virtio-* driver to hand DmaBuffers to VirtQueue;
+    deferred to a future phase. The cast is documented at the call site.
+  - DWMAC migration is **deferred**. DWMAC uses 32-bit DMA addressing
+    (`as u32`, not `as u64`), so the acceptance grep does not flag it. QEMU
+    doesn't route the StarFive MAC, so any DWMAC changes cannot be
+    validated end-to-end from this session. Tracking: migrate DWMAC rings +
+    packet buffers to DmaBuffer when StarFive hardware is available.
+  - Host-side `DmaBuffer` tests (`crates/driver-api/tests/dma_buffer.rs`)
+    run through the Rust global allocator (which honours 4 KiB alignment),
+    so no kernel page-allocator init is needed in the host-test context.
+
 - v4 (post-Phase-4): `IrqHandler` trait + RAII `IrqRegistration` landed.
   Every driver now goes through `Arc<dyn IrqHandler>`; no `fn()`-pointer
   interrupt handlers remain. Adjustments:
