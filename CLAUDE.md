@@ -4,23 +4,42 @@ RISC-V 64-bit hobby OS kernel written in Rust. No third-party runtime dependenci
 
 ## Quick Commands
 
+The build system is CMake + Kconfig. On first configure, CMake seeds
+`build/.config` from `configs/riscv64_virt_defconfig`. `cmake --build build
+--target menuconfig` opens the Kconfig TUI to change options.
+
 ```bash
-just run          # Build and run in QEMU
-just test         # Run unit tests + system tests
-just ci           # Run all CI checks (clippy, fmt, tests, miri)
-just build        # Build kernel with userspace
-just system-test  # Run only system tests
-just unit-test    # Run only unit tests
-just clippy       # Run linter
-just miri         # Run miri (detects undefined behavior)
-just mcp-server   # Build MCP server
-just disassm      # Disassemble kernel
-just addr2line 0x1234  # Get source line for kernel address
-just attach       # Attach GDB to running QEMU
-just stress-system-test       # Run system tests 5x in a row
-just loop-system-test TEST    # Run one system test in a loop until failure
-just deadlock-hunt            # Run system tests in loop with GDB enabled
+# First-time setup
+cmake --preset riscv64-virt                    # Configure
+cmake --build build --target toolchain-all     # Build cross-toolchain (~1h, cached after)
+
+# Common workflow
+cmake --build build --target solaya-bin        # Build kernel + patch symbols + emit binary
+cmake --build build --target run               # Build and run in QEMU
+cmake --build build --target run-fb            # Run with framebuffer
+cmake --build build --target debug             # tmux: kernel paused + GDB attached
+cmake --build build --target attach            # Attach GDB to an already-running QEMU
+cmake --build build --target disasm            # Disassemble boot ELF
+
+# Tests + lints
+cmake --build build --target test-unit         # Unit tests (solaya / klib / hal / driver-api)
+cmake --build build --target test-system       # System tests via cargo-nextest
+cmake --build build --target miri              # Undefined-behavior detection
+cmake --build build --target clippy            # Lint all workspaces
+cmake --build build --target fmt-check         # cargo fmt --check
+cmake --build build --target ci                # Full pre-merge gate
+
+# Config
+cmake --build build --target menuconfig        # Edit build/.config
+cmake --build build --target savedefconfig     # Write build/savedefconfig
+
+# Scripts (take args; invoke directly)
+./scripts/debug.sh [FUNC | USERBIN FUNC]       # Debug session with optional breakpoint
+./scripts/attach.sh                            # Attach GDB to running QEMU
 ```
+
+A thin top-level `Makefile` aliases the common targets (`make`, `make run`,
+`make test`, `make ci`, …) for muscle memory.
 
 ## Project Structure
 
@@ -99,13 +118,14 @@ All syscalls by those processes are logged with `[SYSCALL ENTER]` / `[SYSCALL EX
 
 ### GDB Debugging
 ```bash
-just debug        # Start QEMU + GDB in tmux
-just debugf FUNC  # Debug with breakpoint on function
+cmake --build build --target debug   # tmux: QEMU (paused) + GDB
+./scripts/debug.sh FUNC              # same, with hbreak on FUNC before continue
+./scripts/debug.sh USERBIN FUNC      # debug inside a userspace binary
 ```
 
 ### GDB MCP Server (Programmatic Debugging)
 
-An MCP server exposes GDB as tools for Claude Code. Start QEMU first (`just run`), then use the `gdb_*` tools.
+An MCP server exposes GDB as tools for Claude Code. Start QEMU first (`cmake --build build --target run`), then use the `gdb_*` tools.
 
 ```
 gdb_mcp_server/       # Python MCP server (pygdbmi + FastMCP)
@@ -122,7 +142,7 @@ Located in `system-tests/src/tests/`. Run the OS in QEMU and interact via stdin/
 
 ```bash
 # Run all system tests
-just system-test
+cmake --build build --target test-system
 
 # Run specific test
 cargo nextest run --release --manifest-path system-tests/Cargo.toml \
@@ -147,7 +167,7 @@ Kernel unit tests use `#[test_case]` macro (custom test framework).
 ## Adding Userspace Programs
 
 1. Create `userspace/src/bin/myprogram.rs`
-2. Run `just build` (automatically embedded in kernel)
+2. Run `cmake --build build` (automatically embedded in kernel)
 3. Available in shell as `myprogram`
 
 ## Key Files Quick Reference
@@ -250,7 +270,7 @@ The MCP server (`mcp-server/`) lets AI agents interact with Solaya running in QE
 
 ### Build & Run
 ```bash
-just mcp-server                    # Build
+cmake --build build --target mcp-server                         # Build
 ./mcp-server/target/x86_64-unknown-linux-gnu/release/mcp-server  # Run (stdio transport)
 ```
 
@@ -265,8 +285,8 @@ just mcp-server                    # Build
 | `send_input` | Send raw input, wait for custom marker. |
 | `send_ctrl_c` | Send Ctrl+C, wait for prompt. |
 | `read_output` | Non-blocking read of available output. |
-| `build_kernel` | Run `just build`, optionally `just clippy`. |
-| `run_system_tests` | Run `just system-test` or a specific test. |
+| `build_kernel` | Run `cmake --build build`, optionally with `--target clippy`. |
+| `run_system_tests` | Run `cmake --build build --target test-system` or a specific test. |
 
 ### Claude Code Integration
 Already configured in `.mcp.json` at the project root. Claude Code picks it up automatically on startup.
