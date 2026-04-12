@@ -7,8 +7,11 @@ use alloc::{collections::BTreeMap, vec::Vec};
 
 pub mod address;
 mod allocator;
+pub mod bus_context;
 mod devic_tree_parser;
 mod lookup;
+
+pub use bus_context::PciBusContext;
 
 use lookup::lookup;
 

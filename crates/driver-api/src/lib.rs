@@ -27,7 +27,8 @@ pub mod bus;
 #[allow(unsafe_code)]
 pub mod dma;
 pub use bus::{
-    BarIndex, BusContext, DtBusContextExt, IrqId, MmioRegion, PciBusContextExt, PciCapabilityHeader,
+    BarIndex, BusContext, DtBusContextExt, IrqId, MmioRegion, PciBusContextExt,
+    PciCapabilityHeader, PciCapabilityHeaderExt,
 };
 pub use dma::DmaBuffer;
 

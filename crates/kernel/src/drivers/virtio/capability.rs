@@ -1,9 +1,50 @@
 use crate::mmio_struct;
+use driver_api::BusContext;
 
 pub const VIRTIO_VENDOR_SPECIFIC_CAPABILITY_ID: u8 = 0x9;
 
 pub const VIRTIO_VENDOR_ID: u16 = 0x1AF4;
 pub const VIRTIO_DEVICE_ID: core::ops::RangeInclusive<u16> = 0x1000..=0x107F;
+
+// Standard PCI config-space offsets.
+const PCI_VENDOR_ID_OFFSET: u16 = 0x00;
+const PCI_SUBSYSTEM_ID_OFFSET: u16 = 0x2c;
+
+/// Matcher helper: does `bus` describe a virtio PCI device with the given
+/// subsystem ID? Reads only the standard PCI config-space fields, not any
+/// virtio capability structure — so it's safe to call before device
+/// initialization.
+pub fn is_virtio_with_subsystem(bus: &dyn BusContext, subsystem_id: u16) -> bool {
+    let Some(pci) = bus.as_pci() else {
+        return false;
+    };
+    let vendor_device = pci.read_config_u32(PCI_VENDOR_ID_OFFSET);
+    let vendor = (vendor_device & 0xFFFF) as u16;
+    let device = ((vendor_device >> 16) & 0xFFFF) as u16;
+    let subsys_vendor_subsys = pci.read_config_u32(PCI_SUBSYSTEM_ID_OFFSET);
+    let subsys = ((subsys_vendor_subsys >> 16) & 0xFFFF) as u16;
+    vendor == VIRTIO_VENDOR_ID && VIRTIO_DEVICE_ID.contains(&device) && subsys == subsystem_id
+}
+
+/// Matcher helper for virtio 1.0+ non-transitional devices, which encode the
+/// device type in the device ID itself (`0x1040 + type`). Falls back to the
+/// legacy subsystem-based match for device IDs below 0x1040.
+pub fn is_virtio_modern_or_legacy(bus: &dyn BusContext, subsystem_id: u16) -> bool {
+    let Some(pci) = bus.as_pci() else {
+        return false;
+    };
+    let vendor_device = pci.read_config_u32(PCI_VENDOR_ID_OFFSET);
+    let vendor = (vendor_device & 0xFFFF) as u16;
+    let device = ((vendor_device >> 16) & 0xFFFF) as u16;
+    if vendor != VIRTIO_VENDOR_ID || !VIRTIO_DEVICE_ID.contains(&device) {
+        return false;
+    }
+    if device >= 0x1040 {
+        return device - 0x1040 == subsystem_id;
+    }
+    let subsys = ((pci.read_config_u32(PCI_SUBSYSTEM_ID_OFFSET) >> 16) & 0xFFFF) as u16;
+    subsys == subsystem_id
+}
 
 pub const DEVICE_STATUS_ACKNOWLEDGE: u8 = 1;
 pub const DEVICE_STATUS_DRIVER: u8 = 2;

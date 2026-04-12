@@ -55,11 +55,39 @@ impl MmioRegion {
 
 /// Two-field header common to every PCI capability. Drivers receive an
 /// `MMIO<PciCapabilityHeader>` from [`PciBusContextExt::capabilities`] and
-/// reinterpret it as their capability type via `MMIO::new_type`.
+/// reinterpret it as their capability type via [`PciCapabilityHeaderExt::as_type`].
 #[repr(C, packed)]
 pub struct PciCapabilityHeader {
     pub id: u8,
     pub next: u8,
+}
+
+/// Field-access helpers for `MMIO<PciCapabilityHeader>`. Lives in driver-api
+/// so drivers don't need the kernel's `mmio_struct!` macro.
+pub trait PciCapabilityHeaderExt {
+    /// Capability ID (vendor-specific, MSI, power-management, ...).
+    fn id(&self) -> u8;
+    /// Pointer to the next capability (unused by drivers — the bus walks
+    /// the list — but exposed for completeness).
+    fn next_offset(&self) -> u8;
+    /// Reinterpret the capability at its base address as a driver-defined
+    /// type `T`. Useful for vendor-specific capability layouts that extend
+    /// past the two-byte header.
+    fn as_type<T>(&self) -> MMIO<T>;
+}
+
+impl PciCapabilityHeaderExt for MMIO<PciCapabilityHeader> {
+    fn id(&self) -> u8 {
+        MMIO::<u8>::new(self.addr()).read()
+    }
+
+    fn next_offset(&self) -> u8 {
+        MMIO::<u8>::new(self.addr() + 1).read()
+    }
+
+    fn as_type<T>(&self) -> MMIO<T> {
+        MMIO::new(self.addr())
+    }
 }
 
 /// Bus-agnostic surface: operations that every bus implements the same way.
