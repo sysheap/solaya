@@ -271,10 +271,6 @@ pub fn register_device(name: &str, node: VfsNodeRef) {
     dir.entries.lock().insert(String::from(name), node);
 }
 
-pub fn alloc_dev_ino() -> u64 {
-    alloc_ino()
-}
-
 /// Generic devfs node for any `BlockDevice`. Exposes the device as a regular
 /// file; `block_device()` returns the Arc so callers can perform direct I/O
 /// without going through in-memory VFS caching.

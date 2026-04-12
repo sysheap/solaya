@@ -69,10 +69,12 @@ impl CharDeviceRegistry {
         index
     }
 
+    #[allow(dead_code)]
     pub fn get(&self, index: usize) -> Option<Arc<dyn CharDevice>> {
         self.devices.lock().get(index).cloned()
     }
 
+    #[allow(dead_code)]
     pub fn len(&self) -> usize {
         self.devices.lock().len()
     }
@@ -101,10 +103,12 @@ impl DisplayDeviceRegistry {
         index
     }
 
+    #[allow(dead_code)]
     pub fn get(&self, index: usize) -> Option<Arc<dyn DisplayDevice>> {
         self.devices.lock().get(index).cloned()
     }
 
+    #[allow(dead_code)]
     pub fn len(&self) -> usize {
         self.devices.lock().len()
     }
@@ -133,10 +137,12 @@ impl InputDeviceRegistry {
         index
     }
 
+    #[allow(dead_code)]
     pub fn get(&self, index: usize) -> Option<Arc<dyn InputDevice>> {
         self.devices.lock().get(index).cloned()
     }
 
+    #[allow(dead_code)]
     pub fn len(&self) -> usize {
         self.devices.lock().len()
     }
@@ -165,10 +171,12 @@ impl RngDeviceRegistry {
         index
     }
 
+    #[allow(dead_code)]
     pub fn get(&self, index: usize) -> Option<Arc<dyn RngDevice>> {
         self.devices.lock().get(index).cloned()
     }
 
+    #[allow(dead_code)]
     pub fn len(&self) -> usize {
         self.devices.lock().len()
     }
