@@ -6,19 +6,15 @@ use core::{
     task::{Context, Poll, Waker},
 };
 
-use alloc::{boxed::Box, vec::Vec};
+use alloc::{sync::Arc, vec::Vec};
+use driver_api::NetDevice;
 
 use crate::{
     debug,
+    drivers::NetDeviceRegistry,
     klibc::{MMIO, Spinlock, runtime_initialized::RuntimeInitializedData},
     net::{ipv4::IpV4Header, udp::UdpHeader},
 };
-
-pub trait NetworkDevice: Send {
-    fn receive_packets(&mut self) -> Vec<Vec<u8>>;
-    fn send_packet(&mut self, data: Vec<u8>);
-    fn get_mac_address(&self) -> mac::MacAddress;
-}
 
 use self::{
     ethernet::EthernetHeader,
@@ -43,16 +39,21 @@ pub mod udp;
 pub const DRIVER_HEADER_RESERVE: usize = 12;
 
 struct NetworkStack {
-    device: Spinlock<Option<Box<dyn NetworkDevice>>>,
     ip_addr: Spinlock<Ipv4Addr>,
     open_sockets: Spinlock<LazyCell<OpenSockets>>,
 }
 
 static NETWORK_STACK: NetworkStack = NetworkStack {
-    device: Spinlock::new(None),
     ip_addr: Spinlock::new(Ipv4Addr::new(0, 0, 0, 0)),
     open_sockets: Spinlock::new(LazyCell::new(OpenSockets::new)),
 };
+
+/// The primary device used by the network stack — the first one registered
+/// by the driver layer. The `NetDeviceRegistry` holds all devices, this is
+/// just the one the stack binds to.
+fn primary_device() -> Option<Arc<dyn NetDevice>> {
+    NetDeviceRegistry::global().get(0)
+}
 
 static ISR_STATUS: RuntimeInitializedData<MMIO<u32>> = RuntimeInitializedData::new();
 static NETWORK_INTERRUPT_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -129,28 +130,16 @@ pub fn set_ip_addr(addr: Ipv4Addr) {
 }
 
 pub fn has_network_device() -> bool {
-    NETWORK_STACK.device.lock().is_some()
+    NetDeviceRegistry::global().len() > 0
 }
 
 pub fn open_sockets() -> &'static Spinlock<LazyCell<OpenSockets>> {
     &NETWORK_STACK.open_sockets
 }
 
-static CACHED_MAC: Spinlock<Option<MacAddress>> = Spinlock::new(None);
-
-pub fn assign_network_device(device: Box<dyn NetworkDevice>) {
-    *CACHED_MAC.lock() = Some(device.get_mac_address());
-    *NETWORK_STACK.device.lock() = Some(device);
-}
-
 fn receive_and_process_packets() -> usize {
-    let packets = NETWORK_STACK
-        .device
-        .lock()
-        .as_mut()
-        .expect("There must be a configured network device.")
-        .receive_packets();
-
+    let device = primary_device().expect("There must be a configured network device.");
+    let packets = device.receive();
     let count = packets.len();
     for packet in packets {
         process_packet(packet);
@@ -159,18 +148,15 @@ fn receive_and_process_packets() -> usize {
 }
 
 pub fn send_packet(packet: Vec<u8>) {
-    NETWORK_STACK
-        .device
-        .lock()
-        .as_mut()
+    primary_device()
         .expect("There must be a configured network device.")
-        .send_packet(packet);
+        .send(packet);
 }
 
 pub fn current_mac_address() -> MacAddress {
-    CACHED_MAC
-        .lock()
+    primary_device()
         .expect("MAC address must be cached after device init")
+        .mac()
 }
 
 fn process_packet(packet: Vec<u8>) {

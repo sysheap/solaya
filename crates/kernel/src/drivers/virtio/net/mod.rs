@@ -14,7 +14,7 @@ use crate::{
     },
     info,
     klibc::{
-        MMIO,
+        MMIO, Spinlock,
         util::{BufferExtension, ByteInterpretable, is_power_of_2_or_zero},
     },
     mmio_struct,
@@ -24,7 +24,7 @@ use crate::{
         PciCapabilityFields,
     },
 };
-use alloc::vec::Vec;
+use alloc::{string::String, vec::Vec};
 
 use crate::net::DRIVER_HEADER_RESERVE;
 const EXPECTED_QUEUE_SIZE: usize = 0x100;
@@ -335,7 +335,7 @@ impl NetworkDevice {
     }
 }
 
-impl crate::net::NetworkDevice for NetworkDevice {
+impl NetworkDevice {
     fn receive_packets(&mut self) -> Vec<Vec<u8>> {
         let new_receive_buffers = self.receive_queue.receive_buffer();
         let mut received_packets = Vec::new();
@@ -380,9 +380,50 @@ impl crate::net::NetworkDevice for NetworkDevice {
         // Notify device
         self.transmit_queue.notify();
     }
+}
 
-    fn get_mac_address(&self) -> MacAddress {
-        self.mac_address
+/// `driver_api::NetDevice` adapter for the virtio-net driver. Holds the
+/// underlying device behind a `Spinlock` so the trait's `&self` methods
+/// can mutate the virtqueues.
+pub struct VirtioNetHandle {
+    inner: Spinlock<NetworkDevice>,
+    mac: MacAddress,
+    name: String,
+}
+
+impl VirtioNetHandle {
+    pub fn new(device: NetworkDevice) -> Self {
+        let mac = device.mac_address;
+        Self {
+            inner: Spinlock::new(device),
+            mac,
+            name: String::from("eth0"),
+        }
+    }
+}
+
+impl driver_api::NetDevice for VirtioNetHandle {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn mac(&self) -> MacAddress {
+        self.mac
+    }
+
+    fn mtu(&self) -> u16 {
+        // virtio-net receive buffers are 1526 bytes = 12 (virtio_net_hdr) +
+        // 14 (ethernet header) + 1500 (MTU payload). We don't negotiate a
+        // larger MTU with the device.
+        1500
+    }
+
+    fn send(&self, frame: Vec<u8>) {
+        self.inner.lock().send_packet(frame);
+    }
+
+    fn receive(&self) -> Vec<Vec<u8>> {
+        self.inner.lock().receive_packets()
     }
 }
 

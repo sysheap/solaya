@@ -614,7 +614,7 @@ impl DwmacDevice {
     }
 }
 
-impl crate::net::NetworkDevice for DwmacDevice {
+impl DwmacDevice {
     fn receive_packets(&mut self) -> Vec<Vec<u8>> {
         let mut received = Vec::new();
 
@@ -705,8 +705,46 @@ impl crate::net::NetworkDevice for DwmacDevice {
         let next_desc = &self.tx_ring.descriptors[self.tx_idx] as *const _ as usize;
         write_reg(self.base, DMA_CH0_TXDESC_TAIL_PTR, next_desc as u32);
     }
+}
 
-    fn get_mac_address(&self) -> MacAddress {
-        self.mac_address
+/// `driver_api::NetDevice` adapter for the DWMAC driver. Holds the
+/// underlying device behind a `Spinlock` so the trait's `&self` methods
+/// can mutate the ring indices.
+pub struct DwmacHandle {
+    inner: crate::klibc::Spinlock<DwmacDevice>,
+    mac: MacAddress,
+    name: alloc::string::String,
+}
+
+impl DwmacHandle {
+    pub fn new(device: DwmacDevice) -> Self {
+        let mac = device.mac_address;
+        Self {
+            inner: crate::klibc::Spinlock::new(device),
+            mac,
+            name: alloc::string::String::from("eth0"),
+        }
+    }
+}
+
+impl driver_api::NetDevice for DwmacHandle {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn mac(&self) -> MacAddress {
+        self.mac
+    }
+
+    fn mtu(&self) -> u16 {
+        1500
+    }
+
+    fn send(&self, frame: Vec<u8>) {
+        self.inner.lock().send_packet(frame);
+    }
+
+    fn receive(&self) -> Vec<Vec<u8>> {
+        self.inner.lock().receive_packets()
     }
 }
