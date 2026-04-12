@@ -8,14 +8,22 @@
 //! May not depend on `console`, `drivers`, or `solaya` (the kernel). The `mm`
 //! dependency is used only by the `dma` module to back `DmaBuffer` with the
 //! global page allocator.
+//!
+//! Unsafe policy: every module except `dma` is `#![forbid(unsafe_code)]`.
+//! `dma` carries the typed reinterpretation of raw DMA-backed memory (the
+//! single unavoidable `unsafe`), contained to a handful of documented blocks
+//! inside `dma.rs`. The kernel crate remains `#![forbid(unsafe_code)]` and
+//! reaches DMA memory only through the safe accessors exposed here.
 #![no_std]
-#![forbid(unsafe_code)]
+#![deny(unsafe_op_in_unsafe_fn)]
+#![deny(unsafe_code)]
 
 extern crate alloc;
 
 use alloc::{boxed::Box, vec::Vec};
 use core::{fmt, future::Future, pin::Pin};
 
+#[allow(unsafe_code)]
 pub mod dma;
 pub use dma::DmaBuffer;
 
