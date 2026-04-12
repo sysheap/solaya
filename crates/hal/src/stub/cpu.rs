@@ -36,6 +36,10 @@ write_csr_stub!(sstatus);
 write_csr_stub!(sie);
 write_csr_stub!(sip);
 
+/// Stub for `write_satp_and_fence`. No-op on non-riscv64 hosts used for unit tests.
+///
+/// # Safety
+/// Host stub; does nothing. Signature matches the riscv64 variant for portability.
 #[allow(dead_code)]
 pub unsafe fn write_satp_and_fence(_satp_val: usize) {}
 
@@ -43,6 +47,10 @@ pub unsafe fn write_satp_and_fence(_satp_val: usize) {}
 pub fn memory_fence() {}
 pub fn io_fence() {}
 
+/// Stub for `disable_global_interrupts`. No-op on non-riscv64 hosts.
+///
+/// # Safety
+/// Host stub; does nothing. Signature matches the riscv64 variant for portability.
 #[allow(dead_code)]
 pub unsafe fn disable_global_interrupts() {}
 
@@ -81,6 +89,7 @@ pub fn asm_panic_rust() {
     panic!("Panic from asm code");
 }
 
+#[derive(Default)]
 pub struct InterruptGuard;
 
 impl InterruptGuard {

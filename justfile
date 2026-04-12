@@ -50,10 +50,11 @@ build-userspace: build-coreutils
 
 clippy: build-userspace
     cd userspace && cargo clippy -- -D warnings
-    cargo clippy -p boot -p solaya -- -D warnings
+    cargo clippy -p boot -p solaya -p driver-api -- -D warnings
     cargo clippy --release --manifest-path system-tests/Cargo.toml --target x86_64-unknown-linux-gnu --no-deps -- -D warnings
     cargo clippy --release --manifest-path mcp-server/Cargo.toml --target x86_64-unknown-linux-gnu --no-deps -- -D warnings
     cargo clippy -p solaya --tests -- -D warnings
+    cargo clippy -p driver-api --tests --target x86_64-unknown-linux-gnu -- -D warnings
 
 clean:
     rm -f crates/kernel/compiled_userspace/*
@@ -90,6 +91,7 @@ unit-test: build-userspace
     cargo test --release -p solaya
     cargo test --release -p klib --lib --target x86_64-unknown-linux-gnu
     cargo test --release -p hal --lib --target x86_64-unknown-linux-gnu --no-default-features
+    cargo test --release -p driver-api --target x86_64-unknown-linux-gnu
 
 system-test: build
     cargo nextest run --release --manifest-path system-tests/Cargo.toml --target x86_64-unknown-linux-gnu
