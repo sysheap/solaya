@@ -4,6 +4,7 @@ members = [
     "crates/abi",
     "crates/console",
     "crates/driver-api",
+    "crates/drivers",
     "crates/hal",
     "crates/headers",
     "crates/kernel",
