@@ -86,9 +86,18 @@ impl DmaBuffer {
     }
 
     /// Ensure device sees CPU writes. No-op on today's coherent platform.
+    ///
+    /// Contract for a future non-coherent port: the synced range is
+    /// `..self.len()`, not the page-rounded backing allocation. The tail
+    /// between `self.len()` and the next page boundary is not exposed
+    /// through `as_slice` / `as_mut_slice` / `as_typed*`, carries no
+    /// driver-visible data, and must not be touched by cache maintenance.
     pub fn sync_for_device(&self) {}
 
     /// Ensure CPU sees device writes. No-op on today's coherent platform.
+    ///
+    /// Same range contract as [`sync_for_device`](Self::sync_for_device):
+    /// invalidate exactly `..self.len()`.
     pub fn sync_for_cpu(&self) {}
 
     /// Reinterpret the buffer as a typed value of layout `T`.
