@@ -12,34 +12,71 @@ concurrency:
 jobs:
   ci:
     runs-on: ubuntu-latest
+    env:
+      # CMakePresets.json defaults to this path for the build tree.
+      BUILD_DIR: ${{ github.workspace }}/build
     steps:
       - uses: actions/checkout@v6
 
-      - uses: DeterminateSystems/determinate-nix-action@v3
+      - name: Install host build prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            cmake ninja-build \
+            python3 \
+            libclang-dev clang \
+            tmux \
+            flex bison bc \
+            texinfo gawk \
+            pkg-config \
+            rsync \
+            qemu-system-misc
 
-      - uses: nix-community/cache-nix-action@v7
+      - name: Install Rust toolchain from rust-toolchain.toml
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+            | sh -s -- -y --default-toolchain none --profile minimal
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+          $HOME/.cargo/bin/cargo --version
+          $HOME/.cargo/bin/rustc --version
+
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@v2
         with:
-          primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.lock', 'rust-toolchain') }}
-          restore-prefixes-all-matches: nix-${{ runner.os }}-
+          tool: cargo-nextest
 
-      - uses: nicknovitski/nix-develop@v1
+      # The cross-toolchain build is reproducible from the SHA256-pinned
+      # tarballs declared in cmake/checksums.cmake; cache the installed
+      # output keyed on the hash of those pins plus the bootstrap script.
+      - name: Cache cross-toolchain
+        id: cache-toolchain
+        uses: actions/cache@v4
         with:
-          arguments: .#ci
+          path: ${{ env.BUILD_DIR }}/toolchain
+          key: toolchain-${{ runner.os }}-${{ hashFiles('cmake/checksums.cmake', 'cmake/toolchain_bootstrap.cmake', 'toolchain/pins.cmake') }}
 
-      - name: Build code
-        run: just build
+      - name: Configure CMake
+        run: cmake -S . -B "$BUILD_DIR" --preset riscv64-virt
+
+      - name: Build cross-toolchain (cache miss only, about 1h first time)
+        if: steps.cache-toolchain.outputs.cache-hit != 'true'
+        run: cmake --build "$BUILD_DIR" --target toolchain-all
 
       - name: Format check
-        run: cargo fmt --check
+        run: cmake --build "$BUILD_DIR" --target fmt-check
 
       - name: Clippy
-        run: just clippy
+        run: cmake --build "$BUILD_DIR" --target clippy
+
+      - name: Build kernel
+        run: cmake --build "$BUILD_DIR" --target solaya-bin
 
       - name: Unit tests
-        run: just unit-test
+        run: cmake --build "$BUILD_DIR" --target test-unit
 
       - name: Miri
-        run: just miri
+        run: cmake --build "$BUILD_DIR" --target miri
 
       - name: System tests
-        run: just system-test
+        run: cmake --build "$BUILD_DIR" --target test-system
