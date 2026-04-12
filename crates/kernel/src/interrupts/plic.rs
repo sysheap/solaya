@@ -1,7 +1,7 @@
 use crate::{device_tree, info};
 use alloc::{sync::Arc, vec::Vec};
 use core::sync::atomic::{AtomicU64, Ordering};
-use driver_api::{IrqController, IrqHandler, IrqRegistration};
+use driver_api::{IrqHandler, IrqRegistration};
 use hal::{CpuId, mmio::MMIO, spinlock::Spinlock};
 use klib::{big_endian::BigEndian, runtime_initialized::RuntimeInitializedData};
 
@@ -13,22 +13,6 @@ struct InterruptHandler {
 
 static INTERRUPT_HANDLERS: Spinlock<Vec<InterruptHandler>> = Spinlock::new(Vec::new());
 static NEXT_SLOT_ID: AtomicU64 = AtomicU64::new(0);
-
-/// Zero-sized `IrqController` implementation that routes `unregister` calls
-/// back into this module's static state. Held as `Arc<dyn IrqController>`
-/// inside every `IrqRegistration` the PLIC hands out.
-struct PlicController;
-
-impl IrqController for PlicController {
-    fn unregister(&self, slot: u64) {
-        unregister(slot);
-    }
-}
-
-fn controller() -> Arc<dyn IrqController> {
-    // A ZST `Arc` is essentially free to construct; no need to cache it.
-    Arc::new(PlicController)
-}
 
 pub struct Plic {
     base: usize,
@@ -238,7 +222,7 @@ pub fn register(irq: u32, handler: Arc<dyn IrqHandler>) -> IrqRegistration {
     INTERRUPT_HANDLERS
         .lock()
         .push(InterruptHandler { irq, slot, handler });
-    IrqRegistration::new(controller(), slot)
+    IrqRegistration::new(move || unregister(slot))
 }
 
 fn unregister(slot: u64) {

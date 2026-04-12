@@ -10,8 +10,8 @@ use alloc::{boxed::Box, sync::Arc, vec, vec::Vec};
 use core::sync::atomic::{AtomicUsize, Ordering};
 
 use driver_api::{
-    BarIndex, BusContext, BusError, DmaBuffer, IrqController, IrqHandler, IrqId, IrqRegistration,
-    MmioRegion, PciBusContextExt, PciCapabilityHeader,
+    BarIndex, BusContext, BusError, DmaBuffer, IrqHandler, IrqId, IrqRegistration, MmioRegion,
+    PciBusContextExt, PciCapabilityHeader,
 };
 use hal::mmio::MMIO;
 
@@ -24,11 +24,6 @@ struct Counts {
     set_cmd: AtomicUsize,
     clear_cmd: AtomicUsize,
     read_cfg: AtomicUsize,
-}
-
-struct NoopController;
-impl IrqController for NoopController {
-    fn unregister(&self, _slot: u64) {}
 }
 
 struct MockPciBus {
@@ -60,7 +55,7 @@ impl BusContext for MockPciBus {
         _handler: Arc<dyn IrqHandler>,
     ) -> Result<IrqRegistration, BusError> {
         self.counts.irq.fetch_add(1, Ordering::SeqCst);
-        Ok(IrqRegistration::new(Arc::new(NoopController), 0))
+        Ok(IrqRegistration::new(|| {}))
     }
 
     fn as_pci(&self) -> Option<&dyn PciBusContextExt> {
