@@ -5,7 +5,7 @@ use alloc::vec::Vec;
 use console::{debug, info};
 use driver_api::{DmaBuffer, MacAddress};
 use hal::{mmio::MMIO, spinlock::Spinlock};
-use klib::util::Zeroable;
+use klib::util::AnyBitPattern;
 
 // --- Register offsets within the 64KB MMIO region ---
 
@@ -158,9 +158,12 @@ struct DmaDescriptor {
     des3: u32,
 }
 
-// SAFETY: POD descriptor of `u32` fields. All-zero represents an empty
-// descriptor (OWN bit clear) — the DWMAC normal-descriptor idle state.
-unsafe impl Zeroable for DmaDescriptor {}
+// SAFETY: POD descriptor — four `u32` fields in a `repr(C, align(64))` struct.
+// `u32` accepts any bit pattern; the only padding is trailing alignment
+// padding, which is not observed through a `&DmaDescriptor` reference. Every
+// 16-byte sequence the DWMAC writes back into the RX ring is therefore a
+// valid `DmaDescriptor`.
+unsafe impl AnyBitPattern for DmaDescriptor {}
 
 #[repr(C, align(64))]
 struct DescriptorRing<const N: usize> {
@@ -168,8 +171,8 @@ struct DescriptorRing<const N: usize> {
 }
 
 // SAFETY: transparent `repr(C)` wrapper around `[DmaDescriptor; N]`, which is
-// itself `Zeroable` via the blanket array impl.
-unsafe impl<const N: usize> Zeroable for DescriptorRing<N> {}
+// itself `AnyBitPattern` via the blanket array impl.
+unsafe impl<const N: usize> AnyBitPattern for DescriptorRing<N> {}
 
 #[repr(C, align(64))]
 #[derive(Clone)]

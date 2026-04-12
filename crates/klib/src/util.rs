@@ -94,29 +94,34 @@ pub trait ByteInterpretable {
     }
 }
 
-/// Marker trait asserting that the all-zero bit pattern is a valid value of
-/// `Self`. Used to reinterpret zero-initialized DMA memory as a typed value
-/// (see `driver_api::DmaBuffer::as_typed`).
+/// Marker trait asserting that **every** bit pattern of length
+/// `size_of::<Self>()` is a valid value of `Self`. Used to reinterpret DMA
+/// memory as a typed value (see `driver_api::DmaBuffer::as_typed`), including
+/// memory that a device has written with arbitrary bit patterns.
 ///
 /// # Safety
 ///
-/// Implementors vouch that every bit of `Self` may be zero simultaneously and
-/// the result is a valid `Self`. This rules out `NonZero*`, references
-/// (`&T`, `&mut T`), pointer-like smart pointers (`Box`, `Arc`, `Rc`), and
-/// enums whose zero discriminant is not a valid variant.
-pub unsafe trait Zeroable {}
+/// Implementors vouch that any sequence of `size_of::<Self>()` bytes —
+/// including bytes written by an untrusted device — produces a valid `Self`.
+/// This rules out `NonZero*`, `bool`, `char`, references (`&T`, `&mut T`),
+/// smart pointers (`Box`, `Arc`, `Rc`), and enums with invalid discriminants.
+/// Padding bytes count: types with padding are only sound if the
+/// padding is also free to take any bit pattern (a `#[repr(C)]` struct of
+/// same-size integer fields qualifies; a struct with interior padding does
+/// not unless the padding is explicitly modeled).
+pub unsafe trait AnyBitPattern {}
 
-unsafe impl Zeroable for u8 {}
-unsafe impl Zeroable for u16 {}
-unsafe impl Zeroable for u32 {}
-unsafe impl Zeroable for u64 {}
-unsafe impl Zeroable for usize {}
-unsafe impl Zeroable for i8 {}
-unsafe impl Zeroable for i16 {}
-unsafe impl Zeroable for i32 {}
-unsafe impl Zeroable for i64 {}
-unsafe impl Zeroable for isize {}
-unsafe impl<T: Zeroable, const N: usize> Zeroable for [T; N] {}
+unsafe impl AnyBitPattern for u8 {}
+unsafe impl AnyBitPattern for u16 {}
+unsafe impl AnyBitPattern for u32 {}
+unsafe impl AnyBitPattern for u64 {}
+unsafe impl AnyBitPattern for usize {}
+unsafe impl AnyBitPattern for i8 {}
+unsafe impl AnyBitPattern for i16 {}
+unsafe impl AnyBitPattern for i32 {}
+unsafe impl AnyBitPattern for i64 {}
+unsafe impl AnyBitPattern for isize {}
+unsafe impl<T: AnyBitPattern, const N: usize> AnyBitPattern for [T; N] {}
 
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
 pub fn cstr_from_null_terminated_ptr(ptr: *const core::ffi::c_char) -> &'static core::ffi::CStr {
