@@ -1,7 +1,8 @@
 use alloc::{collections::BTreeMap, vec::Vec};
 
-use crate::{debug, klibc::MMIO};
+use console::debug;
 use driver_api::DmaBuffer;
+use hal::mmio::MMIO;
 use klib::{deconstructed_vec::DeconstructedVec, non_empty_vec::NonEmptyVec};
 
 /// A virtio queue.

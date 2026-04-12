@@ -15,7 +15,9 @@
 //! `#![forbid(unsafe_code)]`.
 #![no_std]
 #![deny(unsafe_op_in_unsafe_fn)]
+#![feature(macro_metavar_expr_concat)]
 
 extern crate alloc;
 
 pub mod bochs_display;
+pub mod virtio;

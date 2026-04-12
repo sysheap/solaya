@@ -1,4 +1,4 @@
-pub use klib::{array_vec, btreemap, non_empty_vec, runtime_initialized, sizes};
+pub use klib::{array_vec, btreemap, runtime_initialized, sizes};
 
 pub mod big_endian;
 pub mod consumable_buffer;

@@ -1,5 +1,5 @@
-use crate::klibc::mmio_struct;
 use driver_api::BusContext;
+use hal::mmio_struct;
 
 pub const VIRTIO_VENDOR_SPECIFIC_CAPABILITY_ID: u8 = 0x9;
 
@@ -114,7 +114,7 @@ mmio_struct! {
 mmio_struct! {
     #[repr(C)]
     struct virtio_pci_notify_cap {
-        cap: crate::drivers::virtio::capability::virtio_pci_cap,
+        cap: crate::virtio::capability::virtio_pci_cap,
         notify_off_multiplier: u32,
     }
 }

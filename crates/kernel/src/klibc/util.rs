@@ -1,6 +1,6 @@
 pub use klib::util::{
-    InBytes, UsizeExt, align_up, as_byte_slice, copy_slice, is_aligned, is_power_of_2_or_zero,
-    ref_from_bytes, wrapping_add_signed,
+    InBytes, UsizeExt, align_up, as_byte_slice, copy_slice, is_aligned, ref_from_bytes,
+    wrapping_add_signed,
 };
 pub use mm::util::*;
 

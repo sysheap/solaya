@@ -4,23 +4,20 @@ use driver_api::{
     PciCapabilityHeaderExt, bus::pci_command,
 };
 
-use crate::{
-    drivers::virtio::{
-        capability::{
-            DEVICE_STATUS_ACKNOWLEDGE, DEVICE_STATUS_DRIVER, DEVICE_STATUS_DRIVER_OK,
-            DEVICE_STATUS_FAILED, DEVICE_STATUS_FEATURES_OK, VIRTIO_F_VERSION_1,
-            VIRTIO_PCI_CAP_COMMON_CFG, VIRTIO_PCI_CAP_ISR_CFG, VIRTIO_PCI_CAP_NOTIFY_CFG,
-            VIRTIO_VENDOR_SPECIFIC_CAPABILITY_ID, virtio_pci_cap, virtio_pci_capFields,
-            virtio_pci_common_cfg, virtio_pci_common_cfgFields, virtio_pci_notify_cap,
-            virtio_pci_notify_capFields,
-        },
-        virtqueue::{BufferDirection, VirtQueue},
+use console::info;
+use hal::{mmio::MMIO, spinlock::Spinlock};
+use klib::util::{ByteInterpretable, is_power_of_2_or_zero};
+
+use crate::virtio::{
+    capability::{
+        DEVICE_STATUS_ACKNOWLEDGE, DEVICE_STATUS_DRIVER, DEVICE_STATUS_DRIVER_OK,
+        DEVICE_STATUS_FAILED, DEVICE_STATUS_FEATURES_OK, VIRTIO_F_VERSION_1,
+        VIRTIO_PCI_CAP_COMMON_CFG, VIRTIO_PCI_CAP_ISR_CFG, VIRTIO_PCI_CAP_NOTIFY_CFG,
+        VIRTIO_VENDOR_SPECIFIC_CAPABILITY_ID, virtio_pci_cap, virtio_pci_capFields,
+        virtio_pci_common_cfg, virtio_pci_common_cfgFields, virtio_pci_notify_cap,
+        virtio_pci_notify_capFields,
     },
-    info,
-    klibc::{
-        MMIO, Spinlock,
-        util::{ByteInterpretable, is_power_of_2_or_zero},
-    },
+    virtqueue::{BufferDirection, VirtQueue},
 };
 
 const QUEUE_SIZE: usize = 32;
@@ -95,10 +92,7 @@ impl IrqHandler for VirtioInputHandle {
 
 impl InputDevice {
     pub fn is_virtio_input(bus: &dyn BusContext) -> bool {
-        crate::drivers::virtio::capability::is_virtio_modern_or_legacy(
-            bus,
-            VIRTIO_INPUT_SUBSYSTEM_ID,
-        )
+        crate::virtio::capability::is_virtio_modern_or_legacy(bus, VIRTIO_INPUT_SUBSYSTEM_ID)
     }
 
     pub fn initialize(bus: &dyn BusContext) -> Result<InitializedInput, &'static str> {
