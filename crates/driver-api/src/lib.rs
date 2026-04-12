@@ -17,6 +17,7 @@
 #![no_std]
 #![deny(unsafe_op_in_unsafe_fn)]
 #![deny(unsafe_code)]
+#![feature(macro_metavar_expr_concat)]
 
 extern crate alloc;
 
