@@ -54,9 +54,12 @@ jobs:
       # The cross-toolchain build is reproducible from the SHA256-pinned
       # tarballs declared in cmake/checksums.cmake; cache the installed
       # output keyed on the hash of those pins plus the bootstrap script.
-      - name: Cache cross-toolchain
+      # Using restore + explicit save (instead of actions/cache@v4) so the
+      # cache persists even when a later CI step fails — toolchain-all takes
+      # ~1h on cache miss and we don't want to rebuild it every failed run.
+      - name: Restore cross-toolchain cache
         id: cache-toolchain
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: ${{ env.BUILD_DIR }}/toolchain
           key: toolchain-${{ runner.os }}-${{ hashFiles('cmake/checksums.cmake', 'cmake/toolchain_bootstrap.cmake', 'toolchain/pins.cmake') }}
@@ -65,17 +68,28 @@ jobs:
         run: cmake -S . -B "$BUILD_DIR" --preset riscv64-virt
 
       - name: Build cross-toolchain (cache miss only, about 1h first time)
+        id: build-toolchain
         if: steps.cache-toolchain.outputs.cache-hit != 'true'
         run: cmake --build "$BUILD_DIR" --target toolchain-all
+
+      # Save immediately after a successful toolchain build so we don't lose
+      # the artifact when a subsequent step (kernel build / clippy / tests)
+      # fails. Skipped on cache hit (outcome == 'skipped').
+      - name: Save cross-toolchain cache
+        if: always() && steps.build-toolchain.outcome == 'success'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.BUILD_DIR }}/toolchain
+          key: toolchain-${{ runner.os }}-${{ hashFiles('cmake/checksums.cmake', 'cmake/toolchain_bootstrap.cmake', 'toolchain/pins.cmake') }}
+
+      - name: Build kernel
+        run: cmake --build "$BUILD_DIR" --target solaya-bin
 
       - name: Format check
         run: cmake --build "$BUILD_DIR" --target fmt-check
 
       - name: Clippy
         run: cmake --build "$BUILD_DIR" --target clippy
-
-      - name: Build kernel
-        run: cmake --build "$BUILD_DIR" --target solaya-bin
 
       - name: Unit tests
         run: cmake --build "$BUILD_DIR" --target test-unit
