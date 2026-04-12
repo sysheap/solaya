@@ -11,7 +11,7 @@
 # (see README.md host prerequisites).  See cmake/toolchain/riscv64.cmake for
 # the PATH lookup.
 #
-# Install layout (prefix = ${CMAKE_BINARY_DIR}/toolchain/${SOLAYA_ARCH}):
+# Install layout (prefix = ${SOLAYA_TC_ROOT}/${SOLAYA_ARCH}):
 #
 #   <prefix>/bin/                       — binutils + gcc wrappers
 #   <prefix>/${SOLAYA_TC_TRIPLE}/       — sysroot (standard gcc layout)
@@ -43,7 +43,7 @@ if(NOT SOLAYA_ARCH STREQUAL "riscv64")
 endif()
 
 set(SOLAYA_TC_TRIPLE  "riscv64-unknown-linux-musl")
-set(SOLAYA_TC_PREFIX  "${CMAKE_BINARY_DIR}/toolchain/${SOLAYA_ARCH}")
+set(SOLAYA_TC_PREFIX  "${SOLAYA_TC_ROOT}/${SOLAYA_ARCH}")
 set(SOLAYA_TC_SYSROOT "${SOLAYA_TC_PREFIX}/${SOLAYA_TC_TRIPLE}")
 
 # Inner-build parallelism for ExternalProject make invocations.
@@ -68,7 +68,7 @@ set(_J "-j${SOLAYA_BUILD_PARALLEL}")
 # the download cache in the build tree.
 set(_EP_COMMON
     DOWNLOAD_EXTRACT_TIMESTAMP OFF
-    DOWNLOAD_DIR               "${CMAKE_BINARY_DIR}/toolchain/_dl"
+    DOWNLOAD_DIR               "${SOLAYA_TC_ROOT}/_dl"
     USES_TERMINAL_DOWNLOAD     ON
     USES_TERMINAL_CONFIGURE    ON
     USES_TERMINAL_BUILD        ON

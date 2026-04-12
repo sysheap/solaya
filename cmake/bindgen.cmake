@@ -25,12 +25,12 @@ set(SOLAYA_BINDGEN_DRIVER_TARGET "${SOLAYA_BINDGEN_DRIVER_DIR}/target/x86_64-unk
 # under the same <sysroot>/usr/include/ dir, so the two variables point at
 # the same path by default.
 if(NOT DEFINED SOLAYA_BINDGEN_LINUX_HEADERS)
-    set(SOLAYA_BINDGEN_LINUX_HEADERS "${CMAKE_BINARY_DIR}/toolchain/riscv64/riscv64-unknown-linux-musl/usr/include"
+    set(SOLAYA_BINDGEN_LINUX_HEADERS "${SOLAYA_TC_PREFIX}/${SOLAYA_TC_TRIPLE}/usr/include"
         CACHE PATH "Directory containing asm/, asm-generic/, linux/ UAPI headers."
     )
 endif()
 if(NOT DEFINED SOLAYA_BINDGEN_MUSL_HEADERS)
-    set(SOLAYA_BINDGEN_MUSL_HEADERS "${CMAKE_BINARY_DIR}/toolchain/riscv64/riscv64-unknown-linux-musl/usr/include"
+    set(SOLAYA_BINDGEN_MUSL_HEADERS "${SOLAYA_TC_PREFIX}/${SOLAYA_TC_TRIPLE}/usr/include"
         CACHE PATH "Directory containing musl libc headers (sys/, netinet/, dirent.h, ...)."
     )
 endif()

@@ -2,8 +2,9 @@
 #
 # Used with `-DCMAKE_TOOLCHAIN_FILE=cmake/toolchain/riscv64.cmake` by stage-6+
 # consumers (kernel, userspace, out-of-tree builds).  Expects the cross
-# toolchain to already be installed under ${CMAKE_BINARY_DIR}/toolchain/riscv64
-# by `cmake --build build --target toolchain-all`.
+# toolchain to already be installed under ${SOLAYA_TC_ROOT}/riscv64 (default
+# ${CMAKE_SOURCE_DIR}/.toolchain/riscv64) by
+# `cmake --build build --target toolchain-all`.
 
 set(CMAKE_SYSTEM_NAME      Generic)
 set(CMAKE_SYSTEM_PROCESSOR riscv64)
@@ -14,15 +15,14 @@ set(SOLAYA_TC_TRIPLE "riscv64-unknown-linux-musl")
 # child project configure phase, so we accept SOLAYA_TC_PREFIX as an input
 # and fall back to a deterministic default relative to the source tree.
 if(NOT DEFINED SOLAYA_TC_PREFIX)
-    if(DEFINED CMAKE_BINARY_DIR AND EXISTS "${CMAKE_BINARY_DIR}/toolchain/riscv64/bin")
-        set(SOLAYA_TC_PREFIX "${CMAKE_BINARY_DIR}/toolchain/riscv64")
-    elseif(DEFINED ENV{SOLAYA_TC_PREFIX})
+    if(DEFINED ENV{SOLAYA_TC_PREFIX})
         set(SOLAYA_TC_PREFIX "$ENV{SOLAYA_TC_PREFIX}")
     else()
-        # Standard layout: assume the caller's -B build/ sits next to us.
+        # Standard layout: the toolchain lives at <repo-root>/.toolchain/riscv64
+        # (moved out of build/ so `rm -rf build` does not nuke ~1h of work).
         get_filename_component(_this_dir "${CMAKE_CURRENT_LIST_DIR}" DIRECTORY)
         get_filename_component(_src_root "${_this_dir}"              DIRECTORY)
-        set(SOLAYA_TC_PREFIX "${_src_root}/build/toolchain/riscv64")
+        set(SOLAYA_TC_PREFIX "${_src_root}/.toolchain/riscv64")
     endif()
 endif()
 

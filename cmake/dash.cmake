@@ -34,7 +34,7 @@ ExternalProject_Add(dash-build
     URL       "${SOLAYA_DASH_URL}"
     URL_HASH  SHA256=${SOLAYA_DASH_SHA256}
     DOWNLOAD_EXTRACT_TIMESTAMP OFF
-    DOWNLOAD_DIR               "${CMAKE_BINARY_DIR}/toolchain/_dl"
+    DOWNLOAD_DIR               "${SOLAYA_TC_ROOT}/_dl"
     USES_TERMINAL_DOWNLOAD     ON
     USES_TERMINAL_CONFIGURE    ON
     USES_TERMINAL_BUILD        ON
