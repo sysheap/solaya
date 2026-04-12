@@ -44,6 +44,9 @@ include(qemu)
 include(tools)
 
 add_subdirectory(toolchain)
+# dash depends on gcc-stage2 + musl ExternalProject targets declared inside
+# toolchain/, so include it only after that subdir has been processed.
+include(dash)
 add_subdirectory(userspace)
 add_subdirectory(crates/kernel)
 
