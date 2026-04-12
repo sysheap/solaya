@@ -3,7 +3,7 @@ use alloc::{collections::BTreeMap, vec::Vec};
 use console::debug;
 use driver_api::DmaBuffer;
 use hal::mmio::MMIO;
-use klib::non_empty_vec::NonEmptyVec;
+use klib::{non_empty_vec::NonEmptyVec, util::Zeroable};
 
 /// A virtio queue.
 ///
@@ -54,13 +54,8 @@ impl<const QUEUE_SIZE: usize> VirtQueue<QUEUE_SIZE> {
                 .expect("allocate virtq device area");
 
         // DmaBuffer returns zeroed pages; set the non-zero defaults in place.
-        // SAFETY: virtq_avail / virtq_used are POD structs containing only
-        // integer fields and arrays of integers — all-zero is a valid bit
-        // pattern.
-        unsafe {
-            *driver_area.as_typed_mut::<virtq_avail<QUEUE_SIZE>>() = virtq_avail::default();
-            *device_area.as_typed_mut::<virtq_used<QUEUE_SIZE>>() = virtq_used::default();
-        }
+        *driver_area.as_typed_mut::<virtq_avail<QUEUE_SIZE>>() = virtq_avail::default();
+        *device_area.as_typed_mut::<virtq_used<QUEUE_SIZE>>() = virtq_used::default();
 
         let queue = VirtQueue {
             descriptor_area,
@@ -105,27 +100,20 @@ impl<const QUEUE_SIZE: usize> VirtQueue<QUEUE_SIZE> {
     }
 
     fn descriptors(&self) -> &[virtq_desc; QUEUE_SIZE] {
-        // SAFETY: virtq_desc is a POD descriptor (le64/le32/le16 fields);
-        // all-zero is a valid bit pattern.
-        unsafe { self.descriptor_area.as_typed::<[virtq_desc; QUEUE_SIZE]>() }
+        self.descriptor_area.as_typed::<[virtq_desc; QUEUE_SIZE]>()
     }
 
     fn descriptors_mut(&mut self) -> &mut [virtq_desc; QUEUE_SIZE] {
-        // SAFETY: see `descriptors`.
-        unsafe {
-            self.descriptor_area
-                .as_typed_mut::<[virtq_desc; QUEUE_SIZE]>()
-        }
+        self.descriptor_area
+            .as_typed_mut::<[virtq_desc; QUEUE_SIZE]>()
     }
 
     fn driver_area_mut(&mut self) -> &mut virtq_avail<QUEUE_SIZE> {
-        // SAFETY: virtq_avail is a POD ring header; all-zero is valid.
-        unsafe { self.driver_area.as_typed_mut::<virtq_avail<QUEUE_SIZE>>() }
+        self.driver_area.as_typed_mut::<virtq_avail<QUEUE_SIZE>>()
     }
 
     fn device_area(&self) -> &virtq_used<QUEUE_SIZE> {
-        // SAFETY: virtq_used is a POD ring header; all-zero is valid.
-        unsafe { self.device_area.as_typed::<virtq_used<QUEUE_SIZE>>() }
+        self.device_area.as_typed::<virtq_used<QUEUE_SIZE>>()
     }
 
     /// Put a single buffer into the virtqueue.
@@ -334,6 +322,10 @@ struct virtq_desc {
     next: u16,
 }
 
+// SAFETY: POD struct of integer fields; all-zero is a valid descriptor
+// (VIRTIO 1.x: a descriptor with addr=len=flags=next=0 is an inert entry).
+unsafe impl Zeroable for virtq_desc {}
+
 const VIRTQ_AVAIL_F_NO_INTERRUPT: u16 = 1;
 
 #[allow(non_camel_case_types)]
@@ -344,6 +336,12 @@ struct virtq_avail<const QUEUE_SIZE: usize> {
     ring: [u16; QUEUE_SIZE],
     used_event: u16, /* Only if VIRTIO_F_EVENT_IDX */
 }
+
+// SAFETY: POD ring header of `u16` fields and arrays of `u16`; all-zero is a
+// valid empty ring (idx=0, flags=0 is VIRTQ_AVAIL_F_NO_INTERRUPT cleared,
+// which is acceptable pre-init state). The driver overwrites flags/idx right
+// after `as_typed_mut` returns.
+unsafe impl<const QUEUE_SIZE: usize> Zeroable for virtq_avail<QUEUE_SIZE> {}
 
 impl<const QUEUE_SIZE: usize> Default for virtq_avail<QUEUE_SIZE> {
     fn default() -> Self {
@@ -366,6 +364,9 @@ struct virtq_used<const QUEUE_SIZE: usize> {
     ring: [virtq_used_elem; QUEUE_SIZE],
     avail_event: u16, /* Only if VIRTIO_F_EVENT_IDX */
 }
+
+// SAFETY: POD ring header; every field and sub-field is `u16` or `u32`.
+unsafe impl<const QUEUE_SIZE: usize> Zeroable for virtq_used<QUEUE_SIZE> {}
 
 impl<const QUEUE_SIZE: usize> Default for virtq_used<QUEUE_SIZE> {
     fn default() -> Self {
