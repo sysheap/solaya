@@ -24,16 +24,11 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Cache indxr binary
-        id: cache-indxr
-        uses: actions/cache@v4
-        with:
-          path: ~/.cargo/bin/indxr
-          key: indxr-${{ runner.os }}-0.4.0
-
       - name: Install indxr
-        if: steps.cache-indxr.outputs.cache-hit != 'true'
-        run: cargo install indxr --version 0.4.0 --locked
+        uses: baptiste0928/cargo-install@v3
+        with:
+          crate: indxr
+          version: "0.4.0"
 
       - name: Run Claude Code Review
         id: claude-review
@@ -54,4 +49,3 @@ jobs:
             --max-turns 200
             --append-system-prompt "$(cat .github/ai-review-prompt.md)"
             --allowedTools "Read,Write,Edit,Grep,Glob,Bash,mcp__indxr__*"
-            --disallowedTools "Bash(gh pr close:*),Bash(gh pr edit:*),Bash(gh pr merge:*),Bash(gh pr reopen:*),Bash(gh pr review:*),Bash(gh issue:*),Bash(gh api:*),Bash(gh workflow:*),Bash(gh release:*),Bash(gh repo:*),Bash(git push:*)"
