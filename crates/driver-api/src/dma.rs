@@ -102,7 +102,15 @@ impl DmaBuffer {
     /// Panics if `size_of::<T>() > self.len()` or if `align_of::<T>() >
     /// PAGE_SIZE` (alignments beyond the page boundary cannot be guaranteed
     /// from the page-aligned base).
-    pub fn as_typed_mut<T>(&mut self) -> &mut T {
+    ///
+    /// # Safety
+    ///
+    /// The caller must guarantee that the all-zero bit pattern is a valid
+    /// value of `T` (i.e. `T` is "zeroable" — no `NonZero*`, no references,
+    /// no enums whose zero discriminant is invalid, etc.). Today's callers
+    /// are POD descriptor structs (virtio ring headers, DWMAC descriptor
+    /// rings) where this trivially holds.
+    pub unsafe fn as_typed_mut<T>(&mut self) -> &mut T {
         assert!(
             core::mem::size_of::<T>() <= self.len,
             "T does not fit in DmaBuffer"
@@ -114,13 +122,19 @@ impl DmaBuffer {
         // SAFETY: `pages.addr()` is a page-aligned pointer to at least
         // `size_of::<T>()` zero-initialized bytes (PinnedHeapPages::new fills
         // with `Page::zero()`). T's size and alignment requirements are
-        // checked above. The returned reference is tied to `&mut self` so no
-        // aliasing is possible.
+        // checked above. All-zero as a valid T is the caller's invariant
+        // (see # Safety). The returned reference is tied to `&mut self` so
+        // no aliasing is possible.
         unsafe { &mut *(self.pages.addr() as *mut T) }
     }
 
     /// Read-only sibling of `as_typed_mut`.
-    pub fn as_typed<T>(&self) -> &T {
+    ///
+    /// # Safety
+    ///
+    /// Same as [`as_typed_mut`](Self::as_typed_mut): caller must guarantee
+    /// the all-zero bit pattern is a valid `T`.
+    pub unsafe fn as_typed<T>(&self) -> &T {
         assert!(
             core::mem::size_of::<T>() <= self.len,
             "T does not fit in DmaBuffer"

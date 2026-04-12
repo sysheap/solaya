@@ -54,8 +54,13 @@ impl<const QUEUE_SIZE: usize> VirtQueue<QUEUE_SIZE> {
                 .expect("allocate virtq device area");
 
         // DmaBuffer returns zeroed pages; set the non-zero defaults in place.
-        *driver_area.as_typed_mut::<virtq_avail<QUEUE_SIZE>>() = virtq_avail::default();
-        *device_area.as_typed_mut::<virtq_used<QUEUE_SIZE>>() = virtq_used::default();
+        // SAFETY: virtq_avail / virtq_used are POD structs containing only
+        // integer fields and arrays of integers — all-zero is a valid bit
+        // pattern.
+        unsafe {
+            *driver_area.as_typed_mut::<virtq_avail<QUEUE_SIZE>>() = virtq_avail::default();
+            *device_area.as_typed_mut::<virtq_used<QUEUE_SIZE>>() = virtq_used::default();
+        }
 
         let queue = VirtQueue {
             descriptor_area,
@@ -100,20 +105,27 @@ impl<const QUEUE_SIZE: usize> VirtQueue<QUEUE_SIZE> {
     }
 
     fn descriptors(&self) -> &[virtq_desc; QUEUE_SIZE] {
-        self.descriptor_area.as_typed::<[virtq_desc; QUEUE_SIZE]>()
+        // SAFETY: virtq_desc is a POD descriptor (le64/le32/le16 fields);
+        // all-zero is a valid bit pattern.
+        unsafe { self.descriptor_area.as_typed::<[virtq_desc; QUEUE_SIZE]>() }
     }
 
     fn descriptors_mut(&mut self) -> &mut [virtq_desc; QUEUE_SIZE] {
-        self.descriptor_area
-            .as_typed_mut::<[virtq_desc; QUEUE_SIZE]>()
+        // SAFETY: see `descriptors`.
+        unsafe {
+            self.descriptor_area
+                .as_typed_mut::<[virtq_desc; QUEUE_SIZE]>()
+        }
     }
 
     fn driver_area_mut(&mut self) -> &mut virtq_avail<QUEUE_SIZE> {
-        self.driver_area.as_typed_mut::<virtq_avail<QUEUE_SIZE>>()
+        // SAFETY: virtq_avail is a POD ring header; all-zero is valid.
+        unsafe { self.driver_area.as_typed_mut::<virtq_avail<QUEUE_SIZE>>() }
     }
 
     fn device_area(&self) -> &virtq_used<QUEUE_SIZE> {
-        self.device_area.as_typed::<virtq_used<QUEUE_SIZE>>()
+        // SAFETY: virtq_used is a POD ring header; all-zero is valid.
+        unsafe { self.device_area.as_typed::<virtq_used<QUEUE_SIZE>>() }
     }
 
     /// Put a single buffer into the virtqueue.
