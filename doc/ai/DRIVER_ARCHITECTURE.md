@@ -636,3 +636,22 @@ Do not paper over disagreement.
   - MTU is hard-coded to 1500 in both handles. Neither driver negotiates
     a larger MTU with the device today, but the trait method is in
     place so the negotiated value can surface when we add it.
+- v3 (post-Phase-3): `Char/Display/Input/Rng` traits + UART/bochs/virtio-rng/virtio-input
+  migrated. Adjustments:
+  - `DisplayDevice` carries `read_at`/`write_at` instead of a speculative
+    `flush(rect)`. That matches what devfs actually calls today; `flush` can
+    be added when a compositor appears.
+  - `InputEvent` is a `#[repr(C)]` struct in `driver-api`, a field-by-field
+    twin of `VirtioInputEvent`. `VirtioInputHandle::poll_event` copies.
+    Sharing a single definition would require driver-api to depend on
+    kernel's `ByteInterpretable` — wrong layering direction.
+  - `virtio::input` keeps a module-local
+    `HANDLE: Spinlock<Option<Arc<VirtioInputHandle>>>` purely so the PLIC's
+    `fn()` interrupt callback can reach `process_events()`. **Phase 4
+    collapses this.**
+  - `/dev/urandom` was renamed to `/dev/random` to match what the
+    migrated RNG exposes — existing userspace callers were updated by the
+    generic `RngNode` adapter (which reads `RngDeviceRegistry::primary()`).
+  - Per-driver `RuntimeInitializedData<...>` globals (`virtio::rng::DEVICE`,
+    `virtio::input::DEVICE`, `bochs_display` statics) are gone; the
+    registries are the source of truth.
