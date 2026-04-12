@@ -4,6 +4,25 @@
 # crates (boot, kernel) will grow their own helper in stage 6; for now this
 # file only exposes shared lookup functions.
 
+# Validate a previously cached SOLAYA_CARGO before reusing it. When the build
+# dir is shared between host and a podman/devcontainer (e.g. configure ran in
+# the container and stored `/root/.cargo/bin/cargo`, which the host user can't
+# execute), the cached path must be re-detected instead of silently failing
+# every cargo-driven target with exit 126.
+if(SOLAYA_CARGO)
+    execute_process(
+        COMMAND "${SOLAYA_CARGO}" --version
+        RESULT_VARIABLE _solaya_cargo_check
+        OUTPUT_QUIET ERROR_QUIET
+    )
+    if(NOT _solaya_cargo_check EQUAL 0)
+        message(STATUS
+            "Cached SOLAYA_CARGO=${SOLAYA_CARGO} is not executable in this "
+            "environment; re-detecting.")
+        unset(SOLAYA_CARGO CACHE)
+    endif()
+endif()
+
 find_program(SOLAYA_CARGO cargo REQUIRED)
 
 # solaya_read_kconfig_features(out_var crate_name)
