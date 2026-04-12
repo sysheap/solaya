@@ -1,3 +1,15 @@
+//! TTY line discipline.
+//!
+//! This module lives in `kernel`, not `console`, because POSIX job control
+//! is intrinsically coupled to kernel-only state: the foreground process
+//! group id (`Tid`) comes from `processes::process_table`; SIGTTIN delivery
+//! walks the process table (`process_table::THE.send_signal_to_pgid`) and
+//! consults per-thread signal masks / handlers on `Thread`; and the UART
+//! IRQ path that feeds us goes through `Cpu::with_scheduler` to stop /
+//! signal the foreground process group. Moving this file into `console`
+//! would drag `processes` and the scheduler behind it, inverting the
+//! layering. The plain character device (UART itself) is already in
+//! `driver_api::CharDevice`; this file is the line discipline on top.
 use abi::pid::Tid;
 use alloc::{collections::VecDeque, sync::Arc, vec::Vec};
 use core::{
