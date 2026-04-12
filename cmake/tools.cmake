@@ -46,27 +46,20 @@ add_custom_target(fetch-deps
 
 # index — regenerate INDEX.md via indxr. Wired as a dependency of solaya-bin
 # below so every `make build` keeps the AI-agent codebase index fresh.
-# Soft-fail if indxr is not installed so fresh clones without the tool still
-# build.
-find_program(SOLAYA_INDXR indxr)
-
-if(SOLAYA_INDXR)
-    add_custom_target(index
-        COMMAND ${SOLAYA_INDXR} -q -o ${CMAKE_SOURCE_DIR}/INDEX.md
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-        VERBATIM
-        COMMENT "Regenerating INDEX.md"
-    )
-else()
-    message(WARNING
-        "indxr not found on PATH — INDEX.md will not be regenerated on build. "
-        "Install with `cargo install indxr` to enable.")
-    add_custom_target(index
-        COMMAND ${CMAKE_COMMAND} -E echo
-                "indxr not installed; skipping INDEX.md regeneration"
-        VERBATIM
-    )
-endif()
+#
+# The script resolves `indxr` at *build* time (via the shell's PATH lookup)
+# instead of having CMake cache an absolute path at configure time — the
+# cached path would be unusable when configure and build run as different
+# users (e.g. configure as root bakes /root/.cargo/bin/indxr into the
+# cache, and a normal user sharing the build dir then hits Permission
+# denied). The script also soft-fails when indxr is not installed.
+add_custom_target(index
+    COMMAND ${CMAKE_SOURCE_DIR}/scripts/regenerate-index.sh
+            ${CMAKE_SOURCE_DIR}/INDEX.md
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    VERBATIM
+    COMMENT "Regenerating INDEX.md"
+)
 
 # Hardware-deploy targets delegate to small scripts in scripts/.
 add_custom_target(tftp-deploy
