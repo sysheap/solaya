@@ -1,4 +1,7 @@
+pub mod factory;
 pub mod jh7110;
+
+pub use factory::DwmacDtFactory;
 
 use alloc::vec::Vec;
 

@@ -40,13 +40,15 @@ independently.
 2. Add the driver under `crates/drivers/src/`. It depends only on
    `driver-api`, `hal`, `mm`, `console`, `klib`, `abi`, `headers` — **never
    on `solaya`**.
-3. Expose an `initialize(bus: &dyn BusContext) -> Result<...>` entry point
-   plus an IRQ handler (usually an impl on the same handle struct).
-4. Wire it into `crates/kernel/src/drivers/mod.rs::init_all_pci_devices` (or
-   `init_dwmac_devices` for DT-enumerated devices): find a matching device,
-   construct `PciBusContext`/`DtBusContext`, call `initialize`, register the
-   `Arc<dyn Trait>` into the matching `Registry`. No mounts or task spawns
-   here.
+3. Implement `driver_api::DriverFactory` for your driver. `probe(bus)`
+   inspects the bus (via `bus.as_pci()` / `bus.as_dt()`) and returns
+   `true` if your driver claims the device; `attach(bus)` does the full
+   initialization and returns the typed `DriverInstance`.
+4. Register the factory in `crates/drivers/src/lib.rs::register_builtin`.
+   `init_all_pci_devices` and `init_all_dt_devices` in
+   `crates/kernel/src/drivers/mod.rs` both use the same catalog, so
+   DT-enumerated and PCI-enumerated drivers live side by side. No mounts
+   or task spawns here.
 5. If the device needs userspace-visible side effects (auto-mount,
    background task), wire them in `crates/kernel/src/init/mod.rs` where
    policy lives.

@@ -43,7 +43,7 @@ kernel/src/            # Main kernel logic (#![forbid(unsafe_code)])
   syscalls/            # Linux syscall handlers
   interrupts/          # Trap handling, PLIC
   net/                 # Network stack (UDP, TCP)
-  drivers/             # VirtIO drivers, consolidated init_all_pci_devices()
+  drivers/             # Thin orchestrator: init_all_pci_devices / init_all_dt_devices
   io/                  # UART extensions, TtyDevice (terminal subsystem)
   pci/                 # PCI enumeration
   klibc/               # Re-exports from sys + kernel-specific utils
@@ -79,7 +79,9 @@ boot::kernel_init() -> solaya::kernel_init()
   +-> Cpu::activate_kernel_page_table()
   +-> plic::init_uart_interrupt()   # Enable UART interrupts
   +-> enumerate_devices()           # Find PCI devices
-  +-> drivers::init_all_pci_devices()  # Init all VirtIO drivers
+  +-> platform::init_from_device_tree() # SoC setup (L2 cache, ...)
+  +-> drivers::init_all_pci_devices()  # Attach PCI drivers via catalog
+  +-> drivers::init_all_dt_devices()   # Attach DT drivers via catalog
   +-> kernel_tasks::create_worker_thread()  # Kernel async task executor
   +-> start_other_harts()           # Boot other CPUs
   +-> prepare_for_scheduling()      # Enter scheduler loop
