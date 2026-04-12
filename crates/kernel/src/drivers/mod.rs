@@ -17,9 +17,10 @@ use crate::{
     interrupts::plic,
     klibc::big_endian::BigEndian,
     net::{self, mac::MacAddress},
-    pci::PCIDevice,
+    pci::{PCIDevice, PciBusContext},
     processes::kernel_tasks,
 };
+use driver_api::{BusContext, IrqId};
 
 pub fn init_all_pci_devices(mut pci_devices: Vec<PCIDevice>) {
     init_network_device(&mut pci_devices);
@@ -91,18 +92,34 @@ fn init_display_device(pci_devices: &mut Vec<PCIDevice>) {
 }
 
 fn init_rng_device(pci_devices: &mut Vec<PCIDevice>) {
-    if let Some(i) = pci_devices
-        .iter()
-        .position(virtio::rng::RngDevice::is_virtio_rng)
-    {
-        let device = pci_devices.swap_remove(i);
-        let rng = virtio::rng::RngDevice::initialize(device)
-            .expect("RNG device initialization must work.");
-        let handle: Arc<dyn driver_api::RngDevice> =
-            Arc::new(virtio::rng::VirtioRngHandle::new(rng));
-        RngDeviceRegistry::global().register(handle.clone());
-        fs::devfs::register_rng_device(handle);
+    let Some(i) = find_pci_device(pci_devices, virtio::rng::RngDevice::is_virtio_rng) else {
+        return;
+    };
+    let mut device = pci_devices.swap_remove(i);
+    let irq = IrqId(device.plic_interrupt_id());
+    let bus = PciBusContext::new(&mut device, irq);
+    let rng =
+        virtio::rng::RngDevice::initialize(&bus).expect("RNG device initialization must work.");
+    let handle: Arc<dyn driver_api::RngDevice> = Arc::new(virtio::rng::VirtioRngHandle::new(rng));
+    RngDeviceRegistry::global().register(handle.clone());
+    fs::devfs::register_rng_device(handle);
+}
+
+/// Find the first PCI device in `pci_devices` matching `predicate`. Builds a
+/// `PciBusContext` around each device in turn so the predicate can inspect
+/// the device through the bus-agnostic surface only.
+fn find_pci_device<F>(pci_devices: &mut [PCIDevice], predicate: F) -> Option<usize>
+where
+    F: Fn(&dyn BusContext) -> bool,
+{
+    for i in 0..pci_devices.len() {
+        let irq = IrqId(pci_devices[i].plic_interrupt_id());
+        let bus = PciBusContext::new(&mut pci_devices[i], irq);
+        if predicate(&bus) {
+            return Some(i);
+        }
     }
+    None
 }
 
 /// Discover and initialize DWMAC ethernet controllers from the device tree.

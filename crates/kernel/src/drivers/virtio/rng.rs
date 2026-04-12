@@ -1,12 +1,14 @@
 use alloc::{string::String, vec};
-use driver_api::{IoError, RngDevice as RngTrait};
+use driver_api::{
+    BarIndex, BusContext, IoError, PciCapabilityHeaderExt, RngDevice as RngTrait, bus::pci_command,
+};
 
 use crate::{
     drivers::virtio::{
         capability::{
             DEVICE_STATUS_ACKNOWLEDGE, DEVICE_STATUS_DRIVER, DEVICE_STATUS_DRIVER_OK,
-            DEVICE_STATUS_FAILED, DEVICE_STATUS_FEATURES_OK, VIRTIO_DEVICE_ID, VIRTIO_F_VERSION_1,
-            VIRTIO_PCI_CAP_COMMON_CFG, VIRTIO_PCI_CAP_NOTIFY_CFG, VIRTIO_VENDOR_ID,
+            DEVICE_STATUS_FAILED, DEVICE_STATUS_FEATURES_OK, VIRTIO_F_VERSION_1,
+            VIRTIO_PCI_CAP_COMMON_CFG, VIRTIO_PCI_CAP_NOTIFY_CFG,
             VIRTIO_VENDOR_SPECIFIC_CAPABILITY_ID, virtio_pci_cap, virtio_pci_capFields,
             virtio_pci_common_cfg, virtio_pci_common_cfgFields, virtio_pci_notify_cap,
             virtio_pci_notify_capFields,
@@ -15,9 +17,6 @@ use crate::{
     },
     info,
     klibc::{MMIO, Spinlock, util::is_power_of_2_or_zero},
-    pci::{
-        GeneralDevicePciHeaderExt, GeneralDevicePciHeaderFields, PCIDevice, PciCapabilityFields,
-    },
 };
 
 const QUEUE_SIZE: usize = 0x10;
@@ -57,18 +56,16 @@ impl RngTrait for VirtioRngHandle {
 }
 
 impl RngDevice {
-    pub fn is_virtio_rng(device: &PCIDevice) -> bool {
-        let cs = device.configuration_space();
-        cs.vendor_id().read() == VIRTIO_VENDOR_ID
-            && VIRTIO_DEVICE_ID.contains(&cs.device_id().read())
-            && cs.subsystem_id().read() == VIRTIO_RNG_SUBSYSTEM_ID
+    pub fn is_virtio_rng(bus: &dyn BusContext) -> bool {
+        crate::drivers::virtio::capability::is_virtio_with_subsystem(bus, VIRTIO_RNG_SUBSYSTEM_ID)
     }
 
-    pub fn initialize(mut pci_device: PCIDevice) -> Result<RngDevice, &'static str> {
-        let capabilities = pci_device.capabilities();
-        let virtio_capabilities: alloc::vec::Vec<MMIO<virtio_pci_cap>> = capabilities
-            .filter(|cap| cap.id().read() == VIRTIO_VENDOR_SPECIFIC_CAPABILITY_ID)
-            .map(|cap| cap.new_type::<virtio_pci_cap>())
+    pub fn initialize(bus: &dyn BusContext) -> Result<RngDevice, &'static str> {
+        let pci = bus.as_pci().ok_or("virtio-rng requires a PCI bus")?;
+        let virtio_capabilities: alloc::vec::Vec<MMIO<virtio_pci_cap>> = pci
+            .capabilities()
+            .filter(|cap| cap.id() == VIRTIO_VENDOR_SPECIFIC_CAPABILITY_ID)
+            .map(|cap| cap.as_type::<virtio_pci_cap>())
             .collect();
 
         let common_cfg_cap = virtio_capabilities
@@ -76,10 +73,11 @@ impl RngDevice {
             .find(|cap| cap.cfg_type().read() == VIRTIO_PCI_CAP_COMMON_CFG)
             .ok_or("Common configuration capability not found")?;
 
-        let config_bar = pci_device.get_or_initialize_bar(common_cfg_cap.bar().read());
-        let common_cfg: MMIO<virtio_pci_common_cfg> = MMIO::new(
-            (config_bar.cpu_address + common_cfg_cap.offset().read() as usize).as_usize(),
-        );
+        let config_bar = pci
+            .map_bar(BarIndex(common_cfg_cap.bar().read()))
+            .map_err(|_| "Failed to map common-cfg BAR")?;
+        let common_cfg: MMIO<virtio_pci_common_cfg> =
+            MMIO::new(config_bar.virt_base + common_cfg_cap.offset().read() as usize);
 
         // Reset and acknowledge
         common_cfg.device_status().write(0x0);
@@ -142,7 +140,9 @@ impl RngDevice {
             "Notify offset multiplier must be a power of 2 or zero"
         );
 
-        let notify_bar = pci_device.get_or_initialize_bar(notify_cfg.cap().bar().read());
+        let notify_bar = pci
+            .map_bar(BarIndex(notify_cfg.cap().bar().read()))
+            .map_err(|_| "Failed to map notify BAR")?;
 
         // Setup single request queue at index 0.
         // Write our desired queue size to the device (VirtIO spec allows
@@ -153,7 +153,7 @@ impl RngDevice {
         let mut request_queue: VirtQueue<QUEUE_SIZE> = VirtQueue::new(queue_size, 0);
 
         let notify_mmio: MMIO<u16> = MMIO::new(
-            notify_bar.cpu_address.as_usize()
+            notify_bar.virt_base
                 + notify_cfg.cap().offset().read() as usize
                 + common_cfg.queue_notify_off().read() as usize
                     * notify_cfg.notify_off_multiplier().read() as usize,
@@ -181,12 +181,8 @@ impl RngDevice {
         );
 
         // Enable Bus Master for DMA and clear Interrupt Disable for legacy INTx
-        pci_device
-            .configuration_space_mut()
-            .set_command_register_bits(crate::pci::command_register::BUS_MASTER);
-        pci_device
-            .configuration_space_mut()
-            .clear_command_register_bits(crate::pci::command_register::INTERRUPT_DISABLE);
+        pci.set_command_bits(pci_command::BUS_MASTER);
+        pci.clear_command_bits(pci_command::INTERRUPT_DISABLE);
 
         info!("Successfully initialized VirtIO RNG device");
 
