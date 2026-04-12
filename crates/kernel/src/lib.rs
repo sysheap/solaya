@@ -125,6 +125,18 @@ pub extern "C" fn kernel_init(hart_id: usize, device_tree_pointer: *const ()) ->
 
     symbols::init();
     device_tree::init(device_tree_pointer);
+
+    // Switch the UART off the compile-time default and onto whatever the
+    // device tree advertises. No-op on QEMU virt and the JH7110, which
+    // both use 0x1000_0000; required for any future board that doesn't.
+    if let Some(serial_reg) = device_tree::THE
+        .root_node()
+        .find_node("serial")
+        .and_then(|node| node.parse_reg_property())
+    {
+        console::uart::bind(serial_reg.address);
+    }
+
     let device_tree_range = get_devicetree_range();
 
     memory::init_page_allocator(&[device_tree_range]);
