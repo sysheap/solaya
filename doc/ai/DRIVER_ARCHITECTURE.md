@@ -592,3 +592,23 @@ Do not paper over disagreement.
   Tracks planned architecture + 2 detected inconsistencies in the current
   tree (`crates/console` not in workspace; `crates/kernel/src/klibc/`
   grab-bag survives).
+- v1 (post-Phase-1): Phase 1 landed in commits
+  `6f1217f..55d530e`. Inconsistency 1 (console in workspace) is **fixed**.
+  Adjustments to the design:
+  - `driver-api`'s `Cargo.toml` does **not** depend on `mm` yet. `mm` sets
+    `per-package-target = "riscv64gc-unknown-none-elf"`, which blocks host
+    integration tests. Phase 5 (`DmaBuffer`) is the right time to add the
+    `mm` dep, possibly gated to the riscv64 target.
+  - `VfsNode::block_device_index() -> Option<usize>` was replaced with
+    `VfsNode::block_device() -> Option<Arc<dyn BlockDevice>>`. Cleaner
+    coupling and it let virtio's free-function `read`/`write` go private.
+  - `BlockDeviceHandle` (the trait adapter) stays in `virtio/block.rs`
+    for now. It moves to `crates/drivers/` in Phase 7 along with the
+    concrete driver.
+  - The registry index currently equals the virtio-internal `BLOCK_DEVICES`
+    index by construction (`assert!(registered_idx == idx)`). Fine while
+    there's one block driver; Phase 7 drops the indirection.
+  - Pre-existing clippy violations in `crates/hal/src/stub/cpu.rs` surfaced
+    when host-target builds started running from `driver-api`'s tests.
+    Minor docs added to `unsafe fn`s; this is expected for any crate that
+    gets compiled on the host going forward.
