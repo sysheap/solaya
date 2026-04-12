@@ -1,3 +1,7 @@
+pub mod bus_context;
+
+pub use bus_context::DtBusContext;
+
 use crate::{
     assert::static_assert_size,
     debug, info,
@@ -452,7 +456,7 @@ mod tests {
     };
     use abi::include_bytes_align_as;
 
-    const DTB: &[u8] = include_bytes_align_as!(Header, "test/test_data/dtb");
+    const DTB: &[u8] = include_bytes_align_as!(Header, "../test/test_data/dtb");
 
     // Static DeviceTree to avoid Box::leak per test (miri leak check).
     static TEST_DT: klib::runtime_initialized::RuntimeInitializedData<DeviceTree> =
