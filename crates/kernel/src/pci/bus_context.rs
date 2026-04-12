@@ -23,20 +23,13 @@ use crate::{
 /// `&mut` on the underlying MMIO).
 pub struct PciBusContext<'a> {
     device: Spinlock<&'a mut PCIDevice>,
-    irq: IrqId,
 }
 
 impl<'a> PciBusContext<'a> {
-    pub fn new(device: &'a mut PCIDevice, irq: IrqId) -> Self {
+    pub fn new(device: &'a mut PCIDevice) -> Self {
         Self {
             device: Spinlock::new(device),
-            irq,
         }
-    }
-
-    /// Shortcut for drivers that only need the legacy `plic_interrupt_id()`.
-    pub fn irq(&self) -> IrqId {
-        self.irq
     }
 }
 

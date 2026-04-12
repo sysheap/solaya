@@ -4,11 +4,11 @@ use crate::{
     drivers::virtio::{
         capability::{
             DEVICE_STATUS_ACKNOWLEDGE, DEVICE_STATUS_DRIVER, DEVICE_STATUS_DRIVER_OK,
-            DEVICE_STATUS_FAILED, DEVICE_STATUS_FEATURES_OK, VIRTIO_DEVICE_ID, VIRTIO_F_VERSION_1,
+            DEVICE_STATUS_FAILED, DEVICE_STATUS_FEATURES_OK, VIRTIO_F_VERSION_1,
             VIRTIO_PCI_CAP_COMMON_CFG, VIRTIO_PCI_CAP_DEVICE_CFG, VIRTIO_PCI_CAP_ISR_CFG,
-            VIRTIO_PCI_CAP_NOTIFY_CFG, VIRTIO_VENDOR_ID, VIRTIO_VENDOR_SPECIFIC_CAPABILITY_ID,
-            virtio_pci_cap, virtio_pci_capFields, virtio_pci_common_cfg,
-            virtio_pci_common_cfgFields, virtio_pci_notify_cap, virtio_pci_notify_capFields,
+            VIRTIO_PCI_CAP_NOTIFY_CFG, VIRTIO_VENDOR_SPECIFIC_CAPABILITY_ID, virtio_pci_cap,
+            virtio_pci_capFields, virtio_pci_common_cfg, virtio_pci_common_cfgFields,
+            virtio_pci_notify_cap, virtio_pci_notify_capFields,
         },
         virtqueue::{BufferDirection, VirtQueue},
     },
@@ -19,12 +19,9 @@ use crate::{
     },
     mmio_struct,
     net::mac::MacAddress,
-    pci::{
-        GeneralDevicePciHeaderExt, GeneralDevicePciHeaderFields, PCIAllocatedSpace, PCIDevice,
-        PciCapabilityFields,
-    },
 };
 use alloc::{string::String, vec::Vec};
+use driver_api::{BarIndex, BusContext, MmioRegion, PciCapabilityHeaderExt, bus::pci_command};
 
 use crate::net::DRIVER_HEADER_RESERVE;
 const EXPECTED_QUEUE_SIZE: usize = 0x100;
@@ -33,7 +30,6 @@ const VIRTIO_NET_F_MAC: u64 = 1 << 5;
 
 #[allow(dead_code)]
 pub struct NetworkDevice {
-    device: PCIDevice,
     common_cfg: MMIO<virtio_pci_common_cfg>,
     net_cfg: MMIO<virtio_net_config>,
     notify_cfg: MMIO<virtio_pci_notify_cap>,
@@ -50,18 +46,19 @@ pub struct InitializedNetworkDevice {
 }
 
 impl NetworkDevice {
-    pub fn is_virtio_net(device: &PCIDevice) -> bool {
-        let cs = device.configuration_space();
-        cs.vendor_id().read() == VIRTIO_VENDOR_ID
-            && VIRTIO_DEVICE_ID.contains(&cs.device_id().read())
-            && cs.subsystem_id().read() == VIRTIO_NETWORK_SUBSYSTEM_ID
+    pub fn is_virtio_net(bus: &dyn BusContext) -> bool {
+        crate::drivers::virtio::capability::is_virtio_with_subsystem(
+            bus,
+            VIRTIO_NETWORK_SUBSYSTEM_ID,
+        )
     }
 
-    pub fn initialize(mut pci_device: PCIDevice) -> Result<InitializedNetworkDevice, &'static str> {
-        let capabilities = pci_device.capabilities();
-        let mut virtio_capabilities: Vec<MMIO<virtio_pci_cap>> = capabilities
-            .filter(|cap| cap.id().read() == VIRTIO_VENDOR_SPECIFIC_CAPABILITY_ID)
-            .map(|cap| cap.new_type::<virtio_pci_cap>())
+    pub fn initialize(bus: &dyn BusContext) -> Result<InitializedNetworkDevice, &'static str> {
+        let pci = bus.as_pci().ok_or("virtio-net requires a PCI bus")?;
+        let mut virtio_capabilities: Vec<MMIO<virtio_pci_cap>> = pci
+            .capabilities()
+            .filter(|cap| cap.id() == VIRTIO_VENDOR_SPECIFIC_CAPABILITY_ID)
+            .map(|cap| cap.as_type::<virtio_pci_cap>())
             .collect();
 
         let common_cfg = virtio_capabilities
@@ -71,10 +68,12 @@ impl NetworkDevice {
 
         debug!("Common configuration capability found at {:?}", common_cfg);
 
-        let config_bar = pci_device.get_or_initialize_bar(common_cfg.bar().read());
+        let config_bar = pci
+            .map_bar(BarIndex(common_cfg.bar().read()))
+            .map_err(|_| "Failed to map common-cfg BAR")?;
 
         let common_cfg: MMIO<virtio_pci_common_cfg> =
-            MMIO::new((config_bar.cpu_address + common_cfg.offset().read() as usize).as_usize());
+            MMIO::new(config_bar.virt_base + common_cfg.offset().read() as usize);
 
         debug!("Common config: {:#x?}", common_cfg);
 
@@ -103,7 +102,9 @@ impl NetworkDevice {
             "Notify length must be at least 2"
         );
 
-        let notify_bar = pci_device.get_or_initialize_bar(notify_cfg.cap().bar().read());
+        let notify_bar = pci
+            .map_bar(BarIndex(notify_cfg.cap().bar().read()))
+            .map_err(|_| "Failed to map notify BAR")?;
 
         let (mut receive_queue, transmit_queue) =
             Self::setup_virtqueues(&common_cfg, &notify_cfg, &notify_bar);
@@ -131,9 +132,11 @@ impl NetworkDevice {
             .find(|cap| cap.cfg_type().read() == VIRTIO_PCI_CAP_ISR_CFG)
             .ok_or("ISR configuration capability not found")?;
 
-        let isr_bar = pci_device.get_or_initialize_bar(isr_cfg_cap.bar().read());
+        let isr_bar = pci
+            .map_bar(BarIndex(isr_cfg_cap.bar().read()))
+            .map_err(|_| "Failed to map ISR BAR")?;
         let isr_status: MMIO<u32> =
-            MMIO::new((isr_bar.cpu_address + isr_cfg_cap.offset().read() as usize).as_usize());
+            MMIO::new(isr_bar.virt_base + isr_cfg_cap.offset().read() as usize);
 
         // Get net configuration
         let net_cfg_cap = virtio_capabilities
@@ -143,11 +146,12 @@ impl NetworkDevice {
 
         debug!("Device configuration capability found at {:?}", net_cfg_cap);
 
-        let net_config_bar = pci_device.get_or_initialize_bar(net_cfg_cap.bar().read());
+        let net_config_bar = pci
+            .map_bar(BarIndex(net_cfg_cap.bar().read()))
+            .map_err(|_| "Failed to map net-cfg BAR")?;
 
-        let net_cfg: MMIO<virtio_net_config> = MMIO::new(
-            (net_config_bar.cpu_address + net_cfg_cap.offset().read() as usize).as_usize(),
-        );
+        let net_cfg: MMIO<virtio_net_config> =
+            MMIO::new(net_config_bar.virt_base + net_cfg_cap.offset().read() as usize);
 
         debug!("Net config: {:#x?}", net_cfg);
 
@@ -156,21 +160,15 @@ impl NetworkDevice {
         let mac_address = net_cfg.mac().read();
 
         // Enable Bus Master for DMA and clear Interrupt Disable for legacy INTx
-        pci_device
-            .configuration_space_mut()
-            .set_command_register_bits(crate::pci::command_register::BUS_MASTER);
-        pci_device
-            .configuration_space_mut()
-            .clear_command_register_bits(crate::pci::command_register::INTERRUPT_DISABLE);
+        pci.set_command_bits(pci_command::BUS_MASTER);
+        pci.clear_command_bits(pci_command::INTERRUPT_DISABLE);
 
         info!(
-            "Successfully initialized network device at {:p} with mac {}",
-            *pci_device.configuration_space(),
+            "Successfully initialized network device with mac {}",
             mac_address
         );
 
         let device = Self {
-            device: pci_device,
             common_cfg,
             net_cfg,
             notify_cfg,
@@ -253,7 +251,7 @@ impl NetworkDevice {
     fn setup_virtqueues(
         common_cfg: &MMIO<virtio_pci_common_cfg>,
         notify_cfg: &MMIO<virtio_pci_notify_cap>,
-        notify_bar: &PCIAllocatedSpace,
+        notify_bar: &MmioRegion,
     ) -> (
         VirtQueue<EXPECTED_QUEUE_SIZE>,
         VirtQueue<EXPECTED_QUEUE_SIZE>,
@@ -275,7 +273,7 @@ impl NetworkDevice {
         );
 
         let transmit_notify: MMIO<u16> = MMIO::new(
-            notify_bar.cpu_address.as_usize()
+            notify_bar.virt_base
                 + notify_cfg.cap().offset().read() as usize
                 + common_cfg.queue_notify_off().read() as usize
                     * notify_cfg.notify_off_multiplier().read() as usize,
