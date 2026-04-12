@@ -113,3 +113,90 @@ pub trait NetDevice: Send + Sync {
     /// Drain all currently available received frames.
     fn receive(&self) -> Vec<Vec<u8>>;
 }
+
+/// Character device — byte-stream read/write (serial, TTY, pipe-like devices).
+///
+/// `read` and `write` take `&self`; implementors serialise access internally
+/// (typically via a `Spinlock`). The contract for `read` matches existing
+/// console behavior: return `Err(Errno::EAGAIN)` when no bytes are available
+/// and the caller should retry.
+pub trait CharDevice: Send + Sync {
+    /// Stable short name, e.g. `"console"`.
+    fn name(&self) -> &str;
+
+    /// Read up to `buf.len()` bytes. Returns the number of bytes read, or
+    /// `Err(EAGAIN)` if no data is currently available.
+    fn read(&self, buf: &mut [u8]) -> Result<usize, IoError>;
+
+    /// Write `data`. Returns the number of bytes written (typically
+    /// `data.len()` for synchronous console-style devices).
+    fn write(&self, data: &[u8]) -> Result<usize, IoError>;
+}
+
+/// Static framebuffer description, returned by `DisplayDevice::framebuffer`.
+///
+/// `phys_addr` is the CPU-visible address of the framebuffer — today the
+/// identity-mapped MMIO base of the display controller. `stride` is in bytes.
+#[derive(Debug, Clone, Copy)]
+pub struct FramebufferInfo {
+    pub width: u32,
+    pub height: u32,
+    pub stride: u32,
+    pub bpp: u8,
+    pub phys_addr: u64,
+}
+
+/// Linear-framebuffer display device.
+///
+/// Minimal surface — enough for devfs mmap/read/write. `flush` is deferred
+/// until a real compositor consumer exists.
+pub trait DisplayDevice: Send + Sync {
+    /// Stable short name, e.g. `"fb0"`.
+    fn name(&self) -> &str;
+
+    /// Framebuffer geometry + physical base address.
+    fn framebuffer(&self) -> FramebufferInfo;
+
+    /// Read `buf.len()` bytes from the framebuffer starting at `offset`.
+    /// Returns the number of bytes copied (may short-read at end).
+    fn read_at(&self, offset: usize, buf: &mut [u8]) -> Result<usize, IoError>;
+
+    /// Write `data` to the framebuffer starting at `offset`.
+    /// Returns the number of bytes written.
+    fn write_at(&self, offset: usize, data: &[u8]) -> Result<usize, IoError>;
+}
+
+/// One input event, raw virtio-input layout (type, code, value).
+///
+/// Matches the wire format on the virtio event queue so devfs consumers can
+/// pass the bytes through unchanged. If/when evdev-compatible events become
+/// necessary, this type grows to match `struct input_event` from UAPI.
+#[derive(Debug, Clone, Copy)]
+#[repr(C)]
+pub struct InputEvent {
+    pub event_type: u16,
+    pub code: u16,
+    pub value: u32,
+}
+
+/// Input device (keyboard, mouse, virtio-input).
+///
+/// Events are buffered by the driver; `poll_event` pops one event or returns
+/// `None` if the queue is empty.
+pub trait InputDevice: Send + Sync {
+    /// Stable short name, e.g. `"keyboard0"`.
+    fn name(&self) -> &str;
+
+    /// Pop one buffered event, or `None` if the queue is empty.
+    fn poll_event(&self) -> Option<InputEvent>;
+}
+
+/// Hardware random number generator.
+pub trait RngDevice: Send + Sync {
+    /// Stable short name, e.g. `"random"`.
+    fn name(&self) -> &str;
+
+    /// Fill `buf` with random bytes. Returns the number of bytes written
+    /// (typically `buf.len()`).
+    fn fill(&self, buf: &mut [u8]) -> Result<usize, IoError>;
+}
