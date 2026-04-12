@@ -37,9 +37,15 @@ add_custom_target(solaya-kernel-elf
 )
 
 # patch-symbols is phony (cargo owns the ELF's mtime) but we only want to
-# rewrite the `symbols` section when the nm output actually changed —
+# rewrite the `symbols` section when its actual contents would change —
 # otherwise every no-op rebuild bumps the ELF mtime and invalidates
 # downstream targets (e.g. test-system) for no reason.
+#
+# We compare the new nm output against the ELF's current `symbols` section
+# contents (not a cached sidecar file): a cached file goes stale whenever
+# cargo rebuilds the ELF, which reverts the section to the 1-byte placeholder
+# from the linker script while the cache still matches the new nm output —
+# causing objcopy to be skipped and symbol resolution to silently break.
 add_custom_target(patch-symbols
     COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/kernel"
     COMMAND bash -c
@@ -47,10 +53,12 @@ add_custom_target(patch-symbols
          ${SOLAYA_NM} --demangle --numeric-sort --line-numbers ${_kernel_elf} \
             | grep -e ' t ' -e ' T ' > ${_symbols_file}.new; \
          printf '\\0' >> ${_symbols_file}.new; \
-         if cmp -s ${_symbols_file}.new ${_symbols_file}; then \
-             rm ${_symbols_file}.new; \
+         ${SOLAYA_OBJCOPY} --dump-section symbols=${_symbols_file}.current ${_kernel_elf}; \
+         if cmp -s ${_symbols_file}.new ${_symbols_file}.current; then \
+             rm ${_symbols_file}.new ${_symbols_file}.current; \
          else \
              mv ${_symbols_file}.new ${_symbols_file}; \
+             rm -f ${_symbols_file}.current; \
              ${SOLAYA_OBJCOPY} --update-section symbols=${_symbols_file} ${_kernel_elf}; \
          fi"
     DEPENDS solaya-kernel-elf
