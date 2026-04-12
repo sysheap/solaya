@@ -53,6 +53,7 @@ mod debugging;
 mod device_tree;
 mod drivers;
 mod fs;
+mod init;
 pub mod interrupts;
 mod io;
 mod klibc;
@@ -207,6 +208,8 @@ pub extern "C" fn kernel_init(hart_id: usize, device_tree_pointer: *const ()) ->
     }
 
     drivers::init_dwmac_devices();
+
+    init::bring_up_system();
 
     processes::kernel_tasks::create_worker_thread();
 

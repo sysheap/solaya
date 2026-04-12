@@ -12,11 +12,10 @@ use core::sync::atomic::{AtomicBool, Ordering};
 
 use crate::{
     device_tree::{self, DtBusContext},
-    fs, info,
+    info,
     klibc::big_endian::BigEndian,
-    net::{self, mac::MacAddress},
+    net::mac::MacAddress,
     pci::{PCIDevice, PciBusContext},
-    processes::kernel_tasks,
 };
 use driver_api::{BusContext, IrqId};
 
@@ -47,7 +46,6 @@ fn init_network_device(pci_devices: &mut Vec<PCIDevice>) {
     handle.set_irq_registration(registration);
     let net_device: Arc<dyn driver_api::NetDevice> = handle;
     NetDeviceRegistry::global().register(net_device);
-    kernel_tasks::spawn(net::network_rx_task());
 }
 
 fn init_block_devices(pci_devices: &mut Vec<PCIDevice>) {
@@ -65,18 +63,11 @@ fn init_block_devices(pci_devices: &mut Vec<PCIDevice>) {
         let idx = virtio::block::assign_block_device(init.device);
         let handle: Arc<dyn driver_api::BlockDevice> =
             Arc::new(virtio::block::BlockDeviceHandle::new(idx, irq));
-        let registered_idx = BlockDeviceRegistry::global().register(handle.clone());
+        let registered_idx = BlockDeviceRegistry::global().register(handle);
         assert!(
             registered_idx == idx,
             "registry index must match virtio BLOCK_DEVICES index during Phase 1"
         );
-        fs::devfs::register_block_device(handle);
-    }
-
-    if BlockDeviceRegistry::global().len() > 0
-        && let Some(primary) = BlockDeviceRegistry::global().get(0)
-    {
-        kernel_tasks::spawn(fs::ext2::mount_ext2(primary));
     }
 }
 
@@ -87,8 +78,7 @@ fn init_display_device(pci_devices: &mut Vec<PCIDevice>) {
     let mut device = pci_devices.swap_remove(i);
     let bus = PciBusContext::new(&mut device);
     let handle = bochs_display::initialize(&bus);
-    DisplayDeviceRegistry::global().register(handle.clone());
-    fs::devfs::register_display_device(handle);
+    DisplayDeviceRegistry::global().register(handle);
 }
 
 fn init_rng_device(pci_devices: &mut Vec<PCIDevice>) {
@@ -100,8 +90,7 @@ fn init_rng_device(pci_devices: &mut Vec<PCIDevice>) {
     let rng =
         virtio::rng::RngDevice::initialize(&bus).expect("RNG device initialization must work.");
     let handle: Arc<dyn driver_api::RngDevice> = Arc::new(virtio::rng::VirtioRngHandle::new(rng));
-    RngDeviceRegistry::global().register(handle.clone());
-    fs::devfs::register_rng_device(handle);
+    RngDeviceRegistry::global().register(handle);
 }
 
 /// Find the first PCI device in `pci_devices` matching `predicate`. Builds a
@@ -123,7 +112,7 @@ where
 /// Discover and initialize DWMAC ethernet controllers from the device tree.
 /// Only registers the first successfully initialized port with the network stack.
 pub fn init_dwmac_devices() {
-    if net::has_network_device() {
+    if NetDeviceRegistry::global().len() > 0 {
         return;
     }
 
@@ -205,7 +194,7 @@ pub fn init_dwmac_devices() {
             continue;
         };
 
-        if !net::has_network_device() {
+        if NetDeviceRegistry::global().len() == 0 {
             let handle = Arc::new(dwmac::DwmacHandle::new(device));
             let irq_handler: Arc<dyn driver_api::IrqHandler> = handle.clone();
             let bus = DtBusContext::new(reg.address, reg.size);
@@ -215,7 +204,6 @@ pub fn init_dwmac_devices() {
             handle.set_irq_registration(registration);
             let net_device: Arc<dyn driver_api::NetDevice> = handle;
             NetDeviceRegistry::global().register(net_device);
-            kernel_tasks::spawn(net::network_rx_task());
             info!("DWMAC: GMAC{} registered as network device", gmac_index);
         }
     }
@@ -267,6 +255,5 @@ fn init_input_device(pci_devices: &mut Vec<PCIDevice>) {
         .expect("register irq");
     handle.set_irq_registration(registration);
     let trait_handle: Arc<dyn driver_api::InputDevice> = handle;
-    InputDeviceRegistry::global().register(trait_handle.clone());
-    fs::devfs::register_input_device(trait_handle);
+    InputDeviceRegistry::global().register(trait_handle);
 }
