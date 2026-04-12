@@ -30,6 +30,14 @@ include(cargo_targets)
 # consume binaries from there.
 include(arch)
 
+# Shared path for userspace artefacts. Defined at the top level (before the
+# tests/qemu includes reference it) so the value is baked into every
+# add_custom_target env; userspace/CMakeLists.txt re-declares it with CACHE
+# semantics so the value survives reconfigure.
+set(SOLAYA_USERSPACE_ARTIFACT_DIR "${CMAKE_BINARY_DIR}/userspace/artifacts"
+    CACHE PATH "Where userspace binaries are deposited for kernel embedding."
+)
+
 include(bindgen)
 include(tests)
 include(qemu)
