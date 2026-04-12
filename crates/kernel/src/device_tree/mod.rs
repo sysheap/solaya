@@ -272,7 +272,7 @@ impl<'a> Node<'a> {
         None
     }
 
-    pub fn get_property(&self, name: &'a str) -> Option<ConsumableBuffer<'a>> {
+    pub fn get_property(&self, name: &str) -> Option<ConsumableBuffer<'a>> {
         for token in self {
             match token {
                 FdtToken::Prop(prop_name, data) => {

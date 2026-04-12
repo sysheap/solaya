@@ -157,13 +157,29 @@ pub trait PciBusContextExt {
 }
 
 /// Operations a device-tree-bound driver needs on its bus: the base address
-/// and size from the `reg` property.
+/// and size from the `reg` property, and raw access to other node
+/// properties so drivers can probe by `compatible` string and parse
+/// device-specific properties (MAC address, phandle pairs, ...) without
+/// reaching into the device-tree crate directly.
 pub trait DtBusContextExt {
     /// Base address from the node's `reg` property.
     fn reg_base(&self) -> usize;
 
     /// Size of the region described by the `reg` property.
     fn reg_size(&self) -> usize;
+
+    /// First value of the node's `compatible` property, or `None` if the
+    /// property is missing or empty.
+    fn compatible(&self) -> Option<&str>;
+
+    /// First u32 of the node's `interrupts` property, interpreted as a PLIC
+    /// IRQ source ID. Returns `None` if the property is missing or too short.
+    fn first_interrupt(&self) -> Option<u32>;
+
+    /// Raw bytes of the named property, or `None` if it is missing.
+    /// Drivers parse these bytes themselves (e.g. big-endian u32 pairs for
+    /// phandle properties, 6-byte MAC addresses).
+    fn property_bytes(&self, name: &str) -> Option<&[u8]>;
 }
 
 /// Command-register bit constants, shared between `PciBusContextExt`

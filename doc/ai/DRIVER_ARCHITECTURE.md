@@ -64,7 +64,7 @@ refactor's scope (tracked as part of #250), but don't re-tangle them.
 | virtio-net | `crates/kernel/src/drivers/virtio/net/mod.rs` | Network |
 | virtio-input | `crates/kernel/src/drivers/virtio/input.rs` | Input events |
 | virtio-rng | `crates/kernel/src/drivers/virtio/rng.rs` | Entropy source |
-| dwmac (+ jh7110 SoC glue) | `crates/kernel/src/drivers/dwmac/` | Network (StarFive HW) |
+| dwmac (+ jh7110 SoC glue) | `crates/drivers/src/dwmac/` | Network (StarFive HW) |
 | bochs display | `crates/kernel/src/drivers/bochs_display.rs` | Framebuffer |
 | jh7110 clock/reset | `crates/kernel/src/drivers/jh7110/` | Platform init |
 | UART | `crates/kernel/src/io/uart.rs` | Serial console |
@@ -91,8 +91,10 @@ global, and registers a `fn()` interrupt handler with `plic::register_interrupt`
 `init_block_devices` additionally does
 `kernel_tasks::spawn(fs::ext2::mount_ext2(0))` — policy mixed into mechanism.
 
-DWMAC lives in a separate `init_dwmac_devices()` that walks the device tree
-and duplicates the same pattern.
+DWMAC lived in a separate `init_dwmac_devices()` that walked the device
+tree and duplicated the same pattern. As of v12 it has joined the
+catalog — DT enumeration is a peer to PCI enumeration through
+`init_all_dt_devices()`.
 
 ### Top coupling offenders
 
@@ -934,6 +936,24 @@ Do not paper over disagreement.
   parts helper behind the old path and is deleted. DWMAC still uses
   `Vec<u8>` per-packet buffers (deferred with the rest of the DWMAC
   migration). Acceptance: `just ci` green, 69/69 system tests.
+
+- v12 (post-review): DWMAC joined the driver catalog. `DtBusContextExt`
+  gained `compatible()`, `first_interrupt()`, and `property_bytes(name)`
+  so DT-bound factories can probe and parse without reaching into
+  `crate::device_tree`. `crates/drivers/src/dwmac/factory.rs` hosts
+  `DwmacDtFactory`, registered through the same
+  `drivers::register_builtin` as the virtio factories. Kernel gained
+  `init_all_dt_devices()`, a DT-enumeration peer to
+  `init_all_pci_devices` that walks `soc` children, builds a
+  `DtBusContext`, and asks the catalog to attach. L2 cache bring-up
+  moved out of DWMAC into `crates/kernel/src/platform/dt.rs`
+  (`platform::init_from_device_tree()`), called once before driver
+  enumeration — it's SoC infrastructure, not a DWMAC concern. The
+  hand-written `init_dwmac_devices` / `parse_phandle_ids` /
+  `init_l2_cache_from_device_tree` helpers in `kernel/src/drivers/mod.rs`
+  are gone. Acceptance: `just ci` green, 69/69 system tests. DWMAC
+  hardware path is compile-verified only; runtime verification still
+  needs StarFive VisionFive 2 hardware.
 
 - v11 (post-issue-#250-item-8): DWMAC descriptor rings and packet buffers
   migrated to `DmaBuffer`. `DwmacDevice` now owns four `DmaBuffer`s

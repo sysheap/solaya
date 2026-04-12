@@ -219,12 +219,14 @@ pub extern "C" fn kernel_init(hart_id: usize, device_tree_pointer: *const ()) ->
 
     driver_api::net_notifier::set_notifier(net::notify_packet_arrival);
 
+    platform::init_from_device_tree();
+
     if let Some(ref pci_info) = pci_information {
         let pci_devices = enumerate_devices(pci_info);
         drivers::init_all_pci_devices(pci_devices);
     }
 
-    drivers::init_dwmac_devices();
+    drivers::init_all_dt_devices();
 
     init::bring_up_system();
 

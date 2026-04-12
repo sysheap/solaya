@@ -83,10 +83,11 @@ crates/kernel/ (crate name: `solaya`)
   src/fs/             - VFS layer (tmpfs, procfs, devfs, ext2)
   src/net/            - Network stack (UDP, TCP, ARP, IP)
   src/drivers/        - Thin orchestrator: init_all_pci_devices /
-                        init_dwmac_devices (mechanism only after Phase 8;
-                        registers Arc<dyn Trait>s into registries).
+                        init_all_dt_devices enumerate PCI and device-tree
+                        buses through the shared driver catalog and route
+                        each matched driver into the typed registries.
     mod.rs            - PCI + DT enumeration loops
-    registry.rs       - Typed registries per device class
+    registry.rs       - Generic Registry<T> + RegistryKind impls
   src/init/           - Policy layer: bring_up_system() reads the
                         registries and spawns ext2 mount + network_rx_task.
   src/io/             - UART extensions, TtyDevice (terminal subsystem)

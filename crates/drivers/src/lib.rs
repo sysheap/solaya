@@ -28,12 +28,15 @@ use driver_api::DriverCatalog;
 
 /// Register every built-in driver factory with `catalog`. Insertion order
 /// determines probe precedence when two factories claim the same device.
-/// DWMAC is intentionally omitted — it's device-tree-walked, not
-/// PCI-enumerated, so it has its own bring-up path in the kernel.
+/// Factories are bus-agnostic — each one's `probe` inspects the
+/// `BusContext` it receives and claims the device if it matches, so the
+/// kernel can reuse the same catalog for both PCI and device-tree
+/// enumeration.
 pub fn register_builtin(catalog: &mut DriverCatalog) {
     catalog.register(Box::new(virtio::block::VirtioBlockFactory));
     catalog.register(Box::new(virtio::net::VirtioNetFactory));
     catalog.register(Box::new(virtio::input::VirtioInputFactory));
     catalog.register(Box::new(virtio::rng::VirtioRngFactory));
     catalog.register(Box::new(bochs_display::BochsDisplayFactory));
+    catalog.register(Box::new(dwmac::DwmacDtFactory));
 }
