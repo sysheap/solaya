@@ -13,8 +13,8 @@
 
 extern crate alloc;
 
-use alloc::boxed::Box;
-use core::{future::Future, pin::Pin};
+use alloc::{boxed::Box, vec::Vec};
+use core::{fmt, future::Future, pin::Pin};
 
 pub use headers::errno::Errno as IoError;
 
@@ -25,6 +25,31 @@ pub enum ProbeError {
     DoesNotMatch,
     /// The driver matched but failed to initialize.
     InitializationFailed(&'static str),
+}
+
+/// 48-bit Ethernet MAC address.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(transparent)]
+pub struct MacAddress([u8; 6]);
+
+impl MacAddress {
+    pub const fn new(address: [u8; 6]) -> Self {
+        Self(address)
+    }
+
+    pub fn as_bytes(&self) -> [u8; 6] {
+        self.0
+    }
+}
+
+impl fmt::Display for MacAddress {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
+            self.0[0], self.0[1], self.0[2], self.0[3], self.0[4], self.0[5]
+        )
+    }
 }
 
 /// Block storage device (disk, partition, virtio-blk, etc.).
@@ -59,4 +84,32 @@ pub trait BlockDevice: Send + Sync {
         offset_bytes: u64,
         data: &'a [u8],
     ) -> Pin<Box<dyn Future<Output = Result<usize, IoError>> + Send + 'a>>;
+}
+
+/// Ethernet-style network device.
+///
+/// The trait is `Send + Sync`; implementors typically store the underlying
+/// hardware state behind a `Spinlock` so `send`/`receive` can take `&self`
+/// while mutating ring indices internally.
+///
+/// `receive` is batched (drains everything currently available) to match the
+/// driver surface today — `network_rx_task` polls once per interrupt and
+/// expects to get all pending frames in one call.
+pub trait NetDevice: Send + Sync {
+    /// Stable short name, e.g. `"eth0"`.
+    fn name(&self) -> &str;
+
+    /// Hardware MAC address. Stable for the lifetime of the device.
+    fn mac(&self) -> MacAddress;
+
+    /// Maximum transmission unit in bytes (payload only, not counting the
+    /// Ethernet header).
+    fn mtu(&self) -> u16;
+
+    /// Enqueue one frame for transmission. Infallible — if the driver cannot
+    /// accept the frame it must panic (matches today's behavior).
+    fn send(&self, frame: Vec<u8>);
+
+    /// Drain all currently available received frames.
+    fn receive(&self) -> Vec<Vec<u8>>;
 }
