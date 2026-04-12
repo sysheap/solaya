@@ -8,7 +8,7 @@ pub mod util;
 pub mod writable_buffer;
 
 pub use hal::{
-    mmio::{self, MMIO},
+    mmio::MMIO,
     spinlock::{Spinlock, SpinlockGuard},
 };
 

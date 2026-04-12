@@ -17,3 +17,5 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 extern crate alloc;
+
+pub mod bochs_display;

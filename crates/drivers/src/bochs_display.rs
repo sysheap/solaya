@@ -1,10 +1,8 @@
-use crate::{
-    info,
-    klibc::{MMIO, mmio},
-};
 use alloc::sync::Arc;
+use console::info;
 use core::sync::atomic::{AtomicUsize, Ordering};
 use driver_api::{BarIndex, BusContext, DisplayDevice, FramebufferInfo, IoError, bus::pci_command};
+use hal::mmio::{self, MMIO};
 use headers::errno::Errno;
 #[allow(unused_imports)]
 use mmio::write_bytes;
