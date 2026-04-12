@@ -44,6 +44,30 @@ add_custom_target(fetch-deps
     COMMENT "Prefetching cargo deps for every workspace"
 )
 
+# index — regenerate INDEX.md via indxr. Wired as a dependency of solaya-bin
+# below so every `make build` keeps the AI-agent codebase index fresh.
+# Soft-fail if indxr is not installed so fresh clones without the tool still
+# build.
+find_program(SOLAYA_INDXR indxr)
+
+if(SOLAYA_INDXR)
+    add_custom_target(index
+        COMMAND ${SOLAYA_INDXR} -q -o ${CMAKE_SOURCE_DIR}/INDEX.md
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        VERBATIM
+        COMMENT "Regenerating INDEX.md"
+    )
+else()
+    message(WARNING
+        "indxr not found on PATH — INDEX.md will not be regenerated on build. "
+        "Install with `cargo install indxr` to enable.")
+    add_custom_target(index
+        COMMAND ${CMAKE_COMMAND} -E echo
+                "indxr not installed; skipping INDEX.md regeneration"
+        VERBATIM
+    )
+endif()
+
 # Hardware-deploy targets delegate to small scripts in scripts/.
 add_custom_target(tftp-deploy
     COMMAND ${CMAKE_SOURCE_DIR}/scripts/tftp-deploy.sh
