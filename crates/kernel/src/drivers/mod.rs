@@ -79,8 +79,9 @@ fn init_block_devices(pci_devices: &mut Vec<PCIDevice>) {
 fn init_display_device(pci_devices: &mut Vec<PCIDevice>) {
     if let Some(i) = pci_devices.iter().position(bochs_display::is_bochs_display) {
         let device = pci_devices.swap_remove(i);
-        bochs_display::initialize(device);
-        bochs_display::register_devfs_node();
+        let handle = bochs_display::initialize(device);
+        DisplayDeviceRegistry::global().register(handle.clone());
+        fs::devfs::register_display_device(handle);
     }
 }
 
@@ -92,8 +93,10 @@ fn init_rng_device(pci_devices: &mut Vec<PCIDevice>) {
         let device = pci_devices.swap_remove(i);
         let rng = virtio::rng::RngDevice::initialize(device)
             .expect("RNG device initialization must work.");
-        virtio::rng::set_device(rng);
-        virtio::rng::register_devfs_node();
+        let handle: Arc<dyn driver_api::RngDevice> =
+            Arc::new(virtio::rng::VirtioRngHandle::new(rng));
+        RngDeviceRegistry::global().register(handle.clone());
+        fs::devfs::register_rng_device(handle);
     }
 }
 
@@ -231,8 +234,11 @@ fn init_input_device(pci_devices: &mut Vec<PCIDevice>) {
         let init = virtio::input::InputDevice::initialize(device)
             .expect("Input device initialization must work.");
         virtio::input::init_isr_status(init.interrupt_status);
-        virtio::input::set_device(init.device);
+        let handle = Arc::new(virtio::input::VirtioInputHandle::new(init.device));
+        virtio::input::store_handle(handle.clone());
+        let trait_handle: Arc<dyn driver_api::InputDevice> = handle;
+        InputDeviceRegistry::global().register(trait_handle.clone());
+        fs::devfs::register_input_device(trait_handle);
         plic::register_interrupt(plic_irq, virtio::input::on_input_interrupt);
-        virtio::input::register_devfs_node();
     }
 }

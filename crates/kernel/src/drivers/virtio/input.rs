@@ -1,4 +1,5 @@
-use alloc::{collections::VecDeque, vec};
+use alloc::{collections::VecDeque, string::String, sync::Arc, vec};
+use driver_api::{InputDevice as InputTrait, InputEvent};
 
 use crate::{
     drivers::virtio::{
@@ -43,30 +44,45 @@ pub struct InputDevice {
     event_queue: VirtQueue<QUEUE_SIZE>,
 }
 
-static INPUT_DEVICE: Spinlock<Option<InputDevice>> = Spinlock::new(None);
 static EVENT_BUFFER: Spinlock<VecDeque<VirtioInputEvent>> = Spinlock::new(VecDeque::new());
 static ISR_STATUS: RuntimeInitializedData<MMIO<u32>> = RuntimeInitializedData::new();
+static HANDLE: Spinlock<Option<Arc<VirtioInputHandle>>> = Spinlock::new(None);
 
-pub fn read_events(buf: &mut [u8]) -> usize {
-    let mut events = EVENT_BUFFER.lock();
-    let max_events = buf.len() / EVENT_SIZE;
-    let mut written = 0;
-    for _ in 0..max_events {
-        if let Some(event) = events.pop_front() {
-            buf[written..written + EVENT_SIZE].copy_from_slice(event.as_slice());
-            written += EVENT_SIZE;
-        } else {
-            break;
+/// `driver_api::InputDevice` adapter for the virtio-input driver. Holds the
+/// underlying device behind a `Spinlock` so the interrupt path can refill
+/// the event queue through `&self`.
+pub struct VirtioInputHandle {
+    inner: Spinlock<InputDevice>,
+    name: String,
+}
+
+impl VirtioInputHandle {
+    pub fn new(device: InputDevice) -> Self {
+        Self {
+            inner: Spinlock::new(device),
+            name: String::from("keyboard0"),
         }
     }
-    written
+}
+
+impl InputTrait for VirtioInputHandle {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn poll_event(&self) -> Option<InputEvent> {
+        EVENT_BUFFER.lock().pop_front().map(|e| InputEvent {
+            event_type: e.event_type,
+            code: e.code,
+            value: e.value,
+        })
+    }
 }
 
 pub fn on_input_interrupt() {
     let _isr = ISR_STATUS.read();
-    let mut dev = INPUT_DEVICE.lock();
-    if let Some(dev) = dev.as_mut() {
-        dev.process_events();
+    if let Some(handle) = HANDLE.lock().as_ref() {
+        handle.inner.lock().process_events();
     }
 }
 
@@ -74,53 +90,8 @@ pub fn init_isr_status(isr: MMIO<u32>) {
     ISR_STATUS.initialize(isr);
 }
 
-pub fn set_device(device: InputDevice) {
-    *INPUT_DEVICE.lock() = Some(device);
-}
-
-pub fn register_devfs_node() {
-    use crate::fs::{
-        devfs,
-        vfs::{NodeType, VfsNode},
-    };
-    use alloc::sync::Arc;
-    use headers::errno::Errno;
-
-    struct DevKeyboard {
-        ino: u64,
-    }
-
-    impl VfsNode for DevKeyboard {
-        fn node_type(&self) -> NodeType {
-            NodeType::File
-        }
-        fn ino(&self) -> u64 {
-            self.ino
-        }
-        fn size(&self) -> usize {
-            0
-        }
-        fn read(&self, _offset: usize, buf: &mut [u8]) -> Result<usize, Errno> {
-            let n = read_events(buf);
-            if n == 0 {
-                return Err(Errno::EAGAIN);
-            }
-            Ok(n)
-        }
-        fn write(&self, _offset: usize, data: &[u8]) -> Result<usize, Errno> {
-            Ok(data.len())
-        }
-        fn truncate(&self, _length: usize) -> Result<(), Errno> {
-            Ok(())
-        }
-    }
-
-    devfs::register_device(
-        "keyboard0",
-        Arc::new(DevKeyboard {
-            ino: devfs::alloc_dev_ino(),
-        }),
-    );
+pub(crate) fn store_handle(handle: Arc<VirtioInputHandle>) {
+    *HANDLE.lock() = Some(handle);
 }
 
 impl InputDevice {
