@@ -3,18 +3,18 @@ use alloc::{collections::BTreeMap, vec::Vec};
 use console::debug;
 use driver_api::DmaBuffer;
 use hal::mmio::MMIO;
-use klib::{deconstructed_vec::DeconstructedVec, non_empty_vec::NonEmptyVec};
+use klib::non_empty_vec::NonEmptyVec;
 
 /// A virtio queue.
 ///
-/// The three ring areas live in [`DmaBuffer`]s — the device reads/writes them
-/// via their physical addresses. `DmaBuffer` owns the page-aligned backing
-/// memory and releases it on `Drop`, replacing the earlier `Box` + raw cast
-/// pattern.
+/// The three ring areas and every per-request buffer live in [`DmaBuffer`]s —
+/// the device reads/writes them via their physical addresses. `DmaBuffer` owns
+/// the page-aligned backing memory and releases it on `Drop`, so the queue no
+/// longer keeps any `Vec<u8>` raw-parts around.
 pub struct VirtQueue<const QUEUE_SIZE: usize> {
     descriptor_area: DmaBuffer,
     free_descriptor_indices: Vec<u16>,
-    outstanding_buffers: BTreeMap<u16, DeconstructedVec>,
+    outstanding_buffers: BTreeMap<u16, DmaBuffer>,
     last_used_ring_index: u16,
     driver_area: DmaBuffer,
     device_area: DmaBuffer,
@@ -119,7 +119,7 @@ impl<const QUEUE_SIZE: usize> VirtQueue<QUEUE_SIZE> {
     /// Put a single buffer into the virtqueue.
     pub fn put_buffer(
         &mut self,
-        buffer: Vec<u8>,
+        buffer: DmaBuffer,
         direction: BufferDirection,
     ) -> Result<u16, QueueError> {
         self.put_buffer_chain(NonEmptyVec::new((buffer, direction)))
@@ -130,7 +130,7 @@ impl<const QUEUE_SIZE: usize> VirtQueue<QUEUE_SIZE> {
     /// Only the head descriptor index is placed in the available ring.
     pub fn put_buffer_chain(
         &mut self,
-        buffers: NonEmptyVec<(Vec<u8>, BufferDirection)>,
+        buffers: NonEmptyVec<(DmaBuffer, BufferDirection)>,
     ) -> Result<u16, QueueError> {
         if self.free_descriptor_indices.len() < buffers.len() {
             return Err(QueueError::NoFreeDescriptors);
@@ -145,12 +145,7 @@ impl<const QUEUE_SIZE: usize> VirtQueue<QUEUE_SIZE> {
         for (i, (buffer, direction)) in buffers.into_iter().enumerate() {
             let desc_idx = indices[i];
             let descriptor = &mut self.descriptors_mut()[desc_idx as usize];
-            // SAFETY (documented, non-unsafe cast): `buffer.as_ptr()` is the
-            // kernel virtual address of a heap-backed Vec<u8>. The kernel
-            // identity-maps RAM, so this equals the physical address the
-            // virtio device will DMA against. Migrating per-request buffers
-            // to DmaBuffer is deferred (ring memory migrated in this phase).
-            descriptor.addr = buffer.as_ptr() as u64;
+            descriptor.addr = buffer.phys_addr();
             descriptor.len = u32::try_from(buffer.len()).expect("buffer length fits in u32");
 
             let mut flags = match direction {
@@ -166,10 +161,7 @@ impl<const QUEUE_SIZE: usize> VirtQueue<QUEUE_SIZE> {
             }
             descriptor.flags = flags;
 
-            let insert_result = self
-                .outstanding_buffers
-                .insert(desc_idx, DeconstructedVec::from_vec(buffer))
-                .is_none();
+            let insert_result = self.outstanding_buffers.insert(desc_idx, buffer).is_none();
             assert!(
                 insert_result,
                 "Outstanding buffers is not allowed to contain this index"
@@ -217,8 +209,8 @@ impl<const QUEUE_SIZE: usize> VirtQueue<QUEUE_SIZE> {
             let total_written = result_len as usize;
 
             // Follow the descriptor chain collecting all buffers
-            let mut first_buffer: Option<Vec<u8>> = None;
-            let mut rest_buffers: Vec<Vec<u8>> = Vec::new();
+            let mut first_entry: Option<UsedBufferEntry> = None;
+            let mut rest_entries: Vec<UsedBufferEntry> = Vec::new();
             let mut current_idx = head_index;
             let mut remaining_written = total_written;
 
@@ -237,19 +229,22 @@ impl<const QUEUE_SIZE: usize> VirtQueue<QUEUE_SIZE> {
                     .remove(&current_idx)
                     .expect("There must be an outstanding buffer for this id");
 
-                let buf_len = if is_device_writable {
-                    let len = core::cmp::min(remaining_written, stored.length());
-                    remaining_written = remaining_written.saturating_sub(stored.length());
+                let written_len = if is_device_writable {
+                    let len = core::cmp::min(remaining_written, stored.len());
+                    remaining_written = remaining_written.saturating_sub(stored.len());
                     len
                 } else {
-                    stored.length()
+                    stored.len()
                 };
 
-                let buf = stored.into_vec_with_len(buf_len);
-                if first_buffer.is_none() {
-                    first_buffer = Some(buf);
+                let entry = UsedBufferEntry {
+                    dma: stored,
+                    written_len,
+                };
+                if first_entry.is_none() {
+                    first_entry = Some(entry);
                 } else {
-                    rest_buffers.push(buf);
+                    rest_entries.push(entry);
                 }
 
                 let descriptor = &mut self.descriptors_mut()[current_idx as usize];
@@ -266,10 +261,10 @@ impl<const QUEUE_SIZE: usize> VirtQueue<QUEUE_SIZE> {
                 }
             }
 
-            let first = first_buffer.expect("chain always has at least one descriptor");
+            let first = first_entry.expect("chain always has at least one descriptor");
             let mut buffers = NonEmptyVec::new(first);
-            for buf in rest_buffers {
-                buffers = buffers.push(buf);
+            for entry in rest_entries {
+                buffers = buffers.push(entry);
             }
 
             return_buffers.push(UsedBuffer {
@@ -293,10 +288,20 @@ impl<const QUEUE_SIZE: usize> VirtQueue<QUEUE_SIZE> {
     }
 }
 
-#[derive(Debug)]
+/// One descriptor's worth of a completed virtqueue chain.
+///
+/// `written_len` is the number of bytes the device actually wrote into this
+/// descriptor. For driver-writable descriptors it equals `dma.len()`. For
+/// device-writable descriptors it is the device-reported length clipped to
+/// this descriptor's allocation, distributed across the chain in order.
+pub struct UsedBufferEntry {
+    pub dma: DmaBuffer,
+    pub written_len: usize,
+}
+
 pub struct UsedBuffer {
     pub index: u16,
-    pub buffers: NonEmptyVec<Vec<u8>>,
+    pub buffers: NonEmptyVec<UsedBufferEntry>,
 }
 
 /* This marks a buffer as continuing via the next field. */

@@ -1,6 +1,7 @@
 use alloc::{boxed::Box, collections::BTreeMap, string::String, sync::Arc, vec, vec::Vec};
 use core::{
     future::Future,
+    mem::size_of,
     pin::Pin,
     sync::atomic::{AtomicU64, Ordering},
     task::{Context, Poll, Waker},
@@ -8,8 +9,8 @@ use core::{
 use headers::errno::Errno;
 
 use driver_api::{
-    BarIndex, BusContext, DriverFactory, DriverInstance, PciCapabilityHeaderExt, ProbeError,
-    bus::pci_command,
+    BarIndex, BusContext, DmaBuffer, DriverFactory, DriverInstance, PciCapabilityHeaderExt,
+    ProbeError, bus::pci_command,
 };
 
 use console::info;
@@ -261,16 +262,16 @@ async fn read(index: usize, offset: usize, buf: &mut [u8]) -> Result<usize, Errn
 
     let result = wait_for_completion(index, head_index).await;
     assert!(result.buffers.len() == 3, "Expected 3-descriptor chain");
-    let status = result.buffers[2][0];
+    let status = result.buffers[2].dma.as_slice()[0];
     assert!(
         status == VIRTIO_BLK_S_OK,
         "Block read failed with status {}",
         status
     );
 
-    buf[..read_len].copy_from_slice(
-        &result.buffers[1][offset_in_first_sector..offset_in_first_sector + read_len],
-    );
+    let data = result.buffers[1].dma.as_slice();
+    buf[..read_len]
+        .copy_from_slice(&data[offset_in_first_sector..offset_in_first_sector + read_len]);
     Ok(read_len)
 }
 
@@ -308,13 +309,13 @@ async fn write(index: usize, offset: usize, data: &[u8]) -> Result<usize, Errno>
         };
         let result = wait_for_completion(index, head_index).await;
         assert!(result.buffers.len() == 3, "Expected 3-descriptor chain");
-        let status = result.buffers[2][0];
+        let status = result.buffers[2].dma.as_slice()[0];
         assert!(
             status == VIRTIO_BLK_S_OK,
             "Block read (for RMW) failed with status {}",
             status
         );
-        sector_buf.copy_from_slice(&result.buffers[1]);
+        sector_buf.copy_from_slice(result.buffers[1].dma.as_slice());
     }
 
     sector_buf[offset_in_first_sector..offset_in_first_sector + write_len]
@@ -331,7 +332,7 @@ async fn write(index: usize, offset: usize, data: &[u8]) -> Result<usize, Errno>
 
     let result = wait_for_completion(index, head_index).await;
     assert!(result.buffers.len() == 3, "Expected 3-descriptor chain");
-    let status = result.buffers[2][0];
+    let status = result.buffers[2].dma.as_slice()[0];
     assert!(
         status == VIRTIO_BLK_S_OK,
         "Block write failed with status {}",
@@ -536,9 +537,11 @@ impl BlockDevice {
             sector: start_sector,
         };
 
-        let header_buf = header.as_slice().to_vec();
-        let data_buf = vec![0u8; buf_len];
-        let status_buf = vec![0u8; 1];
+        let mut header_buf =
+            DmaBuffer::new_coherent(size_of::<VirtioBlkReqHeader>()).expect("header DMA buffer");
+        header_buf.as_mut_slice().copy_from_slice(header.as_slice());
+        let data_buf = DmaBuffer::new_coherent(buf_len).expect("data DMA buffer");
+        let status_buf = DmaBuffer::new_coherent(1).expect("status DMA buffer");
 
         let chain = NonEmptyVec::new((header_buf, BufferDirection::DriverWritable))
             .push((data_buf, BufferDirection::DeviceWritable))
@@ -569,9 +572,12 @@ impl BlockDevice {
             sector: start_sector,
         };
 
-        let header_buf = header.as_slice().to_vec();
-        let data_buf = data.to_vec();
-        let status_buf = vec![0u8; 1];
+        let mut header_buf =
+            DmaBuffer::new_coherent(size_of::<VirtioBlkReqHeader>()).expect("header DMA buffer");
+        header_buf.as_mut_slice().copy_from_slice(header.as_slice());
+        let mut data_buf = DmaBuffer::new_coherent(data.len()).expect("data DMA buffer");
+        data_buf.as_mut_slice().copy_from_slice(data);
+        let status_buf = DmaBuffer::new_coherent(1).expect("status DMA buffer");
 
         let chain = NonEmptyVec::new((header_buf, BufferDirection::DriverWritable))
             .push((data_buf, BufferDirection::DriverWritable))

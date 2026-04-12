@@ -1,7 +1,7 @@
-use alloc::{collections::VecDeque, string::String, sync::Arc, vec};
+use alloc::{collections::VecDeque, string::String, sync::Arc};
 use driver_api::{
-    BarIndex, BusContext, DriverFactory, DriverInstance, InputDevice as InputTrait, InputEvent,
-    IrqHandler, PciCapabilityHeaderExt, ProbeError, bus::pci_command,
+    BarIndex, BusContext, DmaBuffer, DriverFactory, DriverInstance, InputDevice as InputTrait,
+    InputEvent, IrqHandler, PciCapabilityHeaderExt, ProbeError, bus::pci_command,
 };
 
 use console::info;
@@ -244,11 +244,16 @@ impl InputDevice {
     }
 
     fn fill_event_queue(&mut self) {
-        while self
-            .event_queue
-            .put_buffer(vec![0u8; EVENT_SIZE], BufferDirection::DeviceWritable)
-            .is_ok()
-        {}
+        loop {
+            let buf = DmaBuffer::new_coherent(EVENT_SIZE).expect("event DMA buffer");
+            if self
+                .event_queue
+                .put_buffer(buf, BufferDirection::DeviceWritable)
+                .is_err()
+            {
+                break;
+            }
+        }
         self.event_queue.notify();
     }
 
@@ -260,7 +265,8 @@ impl InputDevice {
 
         let mut events = EVENT_BUFFER.lock();
         for used in &received {
-            let data = &used.buffers[0];
+            let entry = &used.buffers[0];
+            let data = &entry.dma.as_slice()[..entry.written_len];
             if data.len() >= EVENT_SIZE {
                 let event: VirtioInputEvent = klib::util::read_from_bytes(data);
                 if events.len() < MAX_BUFFERED_EVENTS {

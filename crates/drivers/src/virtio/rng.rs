@@ -1,7 +1,7 @@
-use alloc::{string::String, sync::Arc, vec};
+use alloc::{string::String, sync::Arc};
 use driver_api::{
-    BarIndex, BusContext, DriverFactory, DriverInstance, IoError, PciCapabilityHeaderExt,
-    ProbeError, RngDevice as RngTrait, bus::pci_command,
+    BarIndex, BusContext, DmaBuffer, DriverFactory, DriverInstance, IoError,
+    PciCapabilityHeaderExt, ProbeError, RngDevice as RngTrait, bus::pci_command,
 };
 
 use console::info;
@@ -196,7 +196,7 @@ impl RngDevice {
         let mut filled = 0;
         while filled < buf.len() {
             let request_len = core::cmp::min(buf.len() - filled, 256);
-            let request_buf = vec![0u8; request_len];
+            let request_buf = DmaBuffer::new_coherent(request_len).expect("RNG DMA buffer");
             self.request_queue
                 .put_buffer(request_buf, BufferDirection::DeviceWritable)
                 .expect("Must be able to submit RNG request");
@@ -211,7 +211,8 @@ impl RngDevice {
             };
 
             for used in received {
-                let data = used.buffers.into_first();
+                let entry = used.buffers.into_first();
+                let data = &entry.dma.as_slice()[..entry.written_len];
                 let copy_len = core::cmp::min(data.len(), buf.len() - filled);
                 buf[filled..filled + copy_len].copy_from_slice(&data[..copy_len]);
                 filled += copy_len;

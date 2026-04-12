@@ -1,8 +1,8 @@
 use abi::static_assert_size;
-use alloc::{string::String, sync::Arc, vec, vec::Vec};
+use alloc::{string::String, sync::Arc, vec::Vec};
 use console::{debug, info};
 use driver_api::{
-    BarIndex, BusContext, DriverFactory, DriverInstance, MacAddress, MmioRegion,
+    BarIndex, BusContext, DmaBuffer, DriverFactory, DriverInstance, MacAddress, MmioRegion,
     PciCapabilityHeaderExt, ProbeError, bus::pci_command,
 };
 use hal::{mmio::MMIO, mmio_struct, spinlock::Spinlock};
@@ -304,18 +304,19 @@ impl NetworkDevice {
 
     fn fill_receive_buffers(receive_queue: &mut VirtQueue<EXPECTED_QUEUE_SIZE>) {
         for _ in 0..EXPECTED_QUEUE_SIZE {
-            let receive_buffer = vec![0xffu8; 1526];
+            let receive_buffer = DmaBuffer::new_coherent(1526).expect("rx DMA buffer");
             receive_queue
                 .put_buffer(receive_buffer, BufferDirection::DeviceWritable)
                 .expect("Receive buffer must be insertable to the queue");
         }
     }
 
-    fn fill_net_header(mut data: Vec<u8>) -> Vec<u8> {
+    fn build_tx_buffer(frame: &[u8]) -> DmaBuffer {
         assert!(
-            data.len() >= VIRTIO_NET_HDR_LEN,
+            frame.len() >= VIRTIO_NET_HDR_LEN,
             "Packet must have pre-reserved driver header space"
         );
+        let mut buf = DmaBuffer::new_coherent(frame.len()).expect("tx DMA buffer");
         let header = virtio_net_hdr {
             flags: 0,
             gso_type: VIRTIO_NET_HDR_GSO_NONE,
@@ -325,8 +326,10 @@ impl NetworkDevice {
             csum_offset: 0,
             num_buffers: 0,
         };
-        data[..VIRTIO_NET_HDR_LEN].copy_from_slice(header.as_slice());
-        data
+        let bytes = buf.as_mut_slice();
+        bytes[VIRTIO_NET_HDR_LEN..].copy_from_slice(&frame[VIRTIO_NET_HDR_LEN..]);
+        bytes[..VIRTIO_NET_HDR_LEN].copy_from_slice(header.as_slice());
+        buf
     }
 }
 
@@ -340,8 +343,9 @@ impl NetworkDevice {
                 receive_buffer.buffers.len() == 1,
                 "Net receive uses single-descriptor buffers"
             );
-            let buffer = receive_buffer.buffers.into_first();
-            let (net_hdr, data_bytes) = buffer.split_as::<virtio_net_hdr>();
+            let entry = receive_buffer.buffers.into_first();
+            let bytes = &entry.dma.as_slice()[..entry.written_len];
+            let (net_hdr, data_bytes) = bytes.split_as::<virtio_net_hdr>();
 
             assert!(net_hdr.gso_type == VIRTIO_NET_HDR_GSO_NONE);
             assert!(net_hdr.flags == 0);
@@ -350,7 +354,7 @@ impl NetworkDevice {
             received_packets.push(data);
 
             // Put a fresh buffer back into receive queue
-            let receive_buffer = vec![0xffu8; 1526];
+            let receive_buffer = DmaBuffer::new_coherent(1526).expect("rx DMA buffer");
             self.receive_queue
                 .put_buffer(receive_buffer, BufferDirection::DeviceWritable)
                 .expect("Receive buffer must be insertable into the queue.");
@@ -367,9 +371,9 @@ impl NetworkDevice {
             drop(transmitted_packet);
         }
 
-        let data = Self::fill_net_header(data);
+        let buf = Self::build_tx_buffer(&data);
         self.transmit_queue
-            .put_buffer(data, BufferDirection::DriverWritable)
+            .put_buffer(buf, BufferDirection::DriverWritable)
             .expect("Packet must be sendable");
 
         // Notify device
