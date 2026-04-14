@@ -32,14 +32,15 @@ jobs:
             pkg-config \
             rsync \
             e2fsprogs \
-            qemu-system-misc qemu-system-data ipxe-qemu
-          # qemu-system-data provides /usr/share/qemu/vgabios-bochs-display.bin
+            qemu-system-misc qemu-system-data seabios ipxe-qemu
+          # seabios provides /usr/share/seabios/vgabios-bochs-display.bin
           # (needed by the framebuffer + doom tests which use -device
-          # bochs-display). ipxe-qemu provides efi-virtio.rom and other PCI
-          # option ROMs that QEMU loads unconditionally for virtio-net-pci;
-          # it is a Recommends of qemu-system-misc, so --no-install-recommends
-          # drops it and we have to list it explicitly. e2fsprogs provides
-          # mkfs.ext2 for the ext2 tests.
+          # bochs-display); on Ubuntu 24.04 this file is no longer in
+          # qemu-system-data. ipxe-qemu provides efi-virtio.rom and other
+          # PCI option ROMs that QEMU loads unconditionally for
+          # virtio-net-pci; it is a Recommends of qemu-system-misc, so
+          # --no-install-recommends drops it and we have to list it
+          # explicitly. e2fsprogs provides mkfs.ext2 for the ext2 tests.
           # Keep this list in sync with README.md's host-prereq section.
 
       - name: Install Rust toolchain from rust-toolchain.toml

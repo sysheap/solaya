@@ -99,7 +99,7 @@ sudo apt-get install -y --no-install-recommends \
     pkg-config \
     rsync \
     e2fsprogs \
-    qemu-system-misc qemu-system-data ipxe-qemu
+    qemu-system-misc qemu-system-data seabios ipxe-qemu
 ```
 
 **Fedora.**  Same tools, Fedora package names:
@@ -120,9 +120,9 @@ sudo dnf install -y \
 ```
 
 `e2fsprogs` is needed by the ext2 system tests (they shell out to
-`mkfs.ext2`).  The `qemu-system-data` (Ubuntu) / `seavgabios-bin`
-(Fedora) package ships `vgabios-bochs-display.bin`, which the
-framebuffer + doom system tests need for `-device bochs-display`.
+`mkfs.ext2`).  The `seabios` (Ubuntu) / `seavgabios-bin` (Fedora)
+package ships `vgabios-bochs-display.bin`, which the framebuffer +
+doom system tests need for `-device bochs-display`.
 The `ipxe-qemu` (Ubuntu) / `ipxe-roms-qemu` (Fedora) package ships
 `efi-virtio.rom` and the other PCI option ROMs that QEMU loads
 unconditionally for `virtio-net-pci`; without it QEMU aborts with
