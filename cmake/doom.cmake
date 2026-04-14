@@ -37,7 +37,6 @@ set(_wad_file      "${SOLAYA_TC_ROOT}/_dl/doom1.wad")
 ExternalProject_Add(doom-src
     GIT_REPOSITORY    "${SOLAYA_DOOMGENERIC_REPO}"
     GIT_TAG           "${SOLAYA_DOOMGENERIC_REV}"
-    GIT_SHALLOW       TRUE
     SOURCE_DIR        "${_doom_src}"
     USES_TERMINAL_DOWNLOAD ON
     CONFIGURE_COMMAND ""
