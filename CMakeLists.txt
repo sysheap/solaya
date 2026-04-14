@@ -24,11 +24,16 @@ include(kconfig)
 include(cargo_targets)
 
 # Derive arch + toolchain prefix/triple from .config so every subdirectory
-# (toolchain, userspace, kernel) agrees on where the cross-toolchain lives
-# without having to re-parse Kconfig.  toolchain/CMakeLists.txt populates the
-# tree under ${SOLAYA_TC_PREFIX}/bin via ExternalProject; kernel and userspace
-# consume binaries from there.
+# (toolchain, userspace, kernel) agrees on the sysroot layout without having
+# to re-parse Kconfig.  toolchain/CMakeLists.txt populates the sysroot at
+# ${SOLAYA_TC_PREFIX}/${SOLAYA_TC_TRIPLE}/ (musl + linux-headers) via
+# ExternalProject.  The compiler toolchain itself (clang/lld/llvm-*) is
+# distro-provided: llvm_tools.cmake probes PATH for LLVM >= 18, and
+# clang_wrapper.cmake emits thin `riscv64-linux-musl-*` wrappers under
+# ${SOLAYA_CROSS_BIN} (build dir) that consumers invoke by name.
 include(arch)
+include(llvm_tools)
+include(clang_wrapper)
 
 # Shared path for userspace artefacts. Defined at the top level (before the
 # tests/qemu includes reference it) so the value is baked into every

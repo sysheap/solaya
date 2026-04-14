@@ -5,21 +5,28 @@
 #   patch-symbols      nm + objcopy --update-section; rewrites ELF in-place
 #   solaya-bin         objcopy -O binary -> build/kernel/solaya.bin
 #
-# SOLAYA_NM / SOLAYA_OBJCOPY point at the cross-toolchain binaries produced by
-# the toolchain-all target.  They are NOT validated at configure time: on a
-# fresh checkout `cmake --preset ...` runs before `toolchain-all`, so the
-# binaries don't exist yet.  The paths resolve at build time.
+# SOLAYA_NM / SOLAYA_OBJCOPY point at the clang_wrapper.cmake-generated
+# shells under ${SOLAYA_CROSS_BIN}.  The wrappers exist at configure time
+# (clang_wrapper.cmake runs before add_subdirectory(crates/kernel)), but
+# they forward to distro `llvm-nm-N` / `llvm-objcopy-N` binaries that must
+# be on $PATH at build time.
 
 cmake_minimum_required(VERSION 3.25)
 project(solaya_kernel LANGUAGES NONE)
 
-set(SOLAYA_NM      "${SOLAYA_TC_BIN}/${SOLAYA_TC_TRIPLE}-nm")
-set(SOLAYA_OBJCOPY "${SOLAYA_TC_BIN}/${SOLAYA_TC_TRIPLE}-objcopy")
+set(SOLAYA_NM      "${SOLAYA_CROSS_BIN}/riscv64-linux-musl-nm")
+set(SOLAYA_OBJCOPY "${SOLAYA_CROSS_BIN}/riscv64-linux-musl-objcopy")
 
 set(_kernel_target "riscv64gc-unknown-none-elf")
 set(_kernel_elf    "${CMAKE_SOURCE_DIR}/target/${_kernel_target}/release/boot")
 set(_kernel_bin    "${CMAKE_BINARY_DIR}/kernel/solaya.bin")
 set(_symbols_file  "${CMAKE_BINARY_DIR}/kernel/symbols")
+# Must match the `symbols` section size reserved in crates/kernel/riscv64.ld.
+# `patch-symbols` pads the nm output with NUL bytes up to this size so
+# llvm-objcopy's --update-section accepts it without resizing the section
+# (the section is part of a LOAD segment and llvm-objcopy refuses to grow
+# those, unlike GNU objcopy).
+set(_symbols_section_size "4194304")
 
 add_custom_target(solaya-kernel-elf
     COMMAND ${SOLAYA_CARGO} build --release
@@ -50,6 +57,16 @@ add_custom_target(patch-symbols
          ${SOLAYA_NM} --demangle --numeric-sort --line-numbers ${_kernel_elf} \
             | grep -e ' t ' -e ' T ' > ${_symbols_file}.new; \
          printf '\\0' >> ${_symbols_file}.new; \
+         nm_bytes=$(wc -c < ${_symbols_file}.new); \
+         if [ $nm_bytes -gt ${_symbols_section_size} ]; then \
+             echo \"error: symbol table ($nm_bytes bytes) exceeds reserved\" \
+                  \"section size (${_symbols_section_size}); bump the\" \
+                  \"reservation in crates/kernel/riscv64.ld and\" \
+                  \"_symbols_section_size in crates/kernel/CMakeLists.txt\" >&2; \
+             exit 1; \
+         fi; \
+         pad=$(( ${_symbols_section_size} - nm_bytes )); \
+         head -c $pad /dev/zero >> ${_symbols_file}.new; \
          ${SOLAYA_OBJCOPY} --dump-section symbols=${_symbols_file}.current ${_kernel_elf}; \
          if cmp -s ${_symbols_file}.new ${_symbols_file}.current; then \
              rm ${_symbols_file}.new ${_symbols_file}.current; \

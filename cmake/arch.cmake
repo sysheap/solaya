@@ -6,14 +6,17 @@
 # Outputs, visible in every subdirectory:
 #
 #   SOLAYA_ARCH        riscv64 (only arch supported today)
-#   SOLAYA_TC_TRIPLE   riscv64-unknown-linux-musl
-#   SOLAYA_TC_ROOT     where the cross-toolchain installs land. Default
+#   SOLAYA_TC_TRIPLE   riscv64-unknown-linux-musl (sysroot dir + rust target id)
+#   SOLAYA_TC_ROOT     where the musl + linux-headers sysroot lands. Default
 #                      ${CMAKE_SOURCE_DIR}/.toolchain so `rm -rf build` does
-#                      NOT discard the ~1h toolchain build. Override with
+#                      NOT discard the sysroot build. Override with
 #                      -DSOLAYA_TC_ROOT=/path/to/shared/toolchains.
 #   SOLAYA_TC_PREFIX   ${SOLAYA_TC_ROOT}/${SOLAYA_ARCH}
-#   SOLAYA_TC_BIN      ${SOLAYA_TC_PREFIX}/bin
 #   SOLAYA_RUST_CHANNEL  channel string from rust-toolchain.toml
+#
+# The cross-toolchain binaries themselves (clang/lld/llvm-*) come from the
+# host distro; cmake/llvm_tools.cmake probes PATH and cmake/clang_wrapper.cmake
+# emits per-target wrapper scripts under ${SOLAYA_CROSS_BIN}.
 #
 # Paths are NOT validated here — toolchain-all has not run yet on first
 # configure.  Consumers reference the paths; cargo / objcopy / nm invocations
@@ -56,7 +59,6 @@ if(NOT DEFINED SOLAYA_TC_ROOT)
     )
 endif()
 set(SOLAYA_TC_PREFIX "${SOLAYA_TC_ROOT}/${SOLAYA_ARCH}")
-set(SOLAYA_TC_BIN    "${SOLAYA_TC_PREFIX}/bin")
 
 # rust-toolchain.toml is respected by rustup only when the CWD is inside the
 # project tree.  `cargo install <crate>` builds under the cargo registry dir,

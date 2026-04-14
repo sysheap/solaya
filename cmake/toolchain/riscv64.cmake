@@ -1,10 +1,9 @@
 # cmake/toolchain/riscv64.cmake — CMake toolchain file for RISC-V 64 targets.
 #
-# Used with `-DCMAKE_TOOLCHAIN_FILE=cmake/toolchain/riscv64.cmake` by stage-6+
-# consumers (kernel, userspace, out-of-tree builds).  Expects the cross
-# toolchain to already be installed under ${SOLAYA_TC_ROOT}/riscv64 (default
-# ${CMAKE_SOURCE_DIR}/.toolchain/riscv64) by
-# `cmake --build build --target toolchain-all`.
+# Used with `-DCMAKE_TOOLCHAIN_FILE=cmake/toolchain/riscv64.cmake` by
+# external CMake consumers (out-of-tree builds).  Expects the clang-wrapper
+# scripts and the musl + linux-headers sysroot produced by
+# `cmake --build build --target toolchain-all` to already exist.
 
 set(CMAKE_SYSTEM_NAME      Generic)
 set(CMAKE_SYSTEM_PROCESSOR riscv64)
@@ -12,40 +11,51 @@ set(CMAKE_SYSTEM_PROCESSOR riscv64)
 set(SOLAYA_TC_TRIPLE "riscv64-unknown-linux-musl")
 
 # CMAKE_BINARY_DIR is not defined when a toolchain file is processed in a
-# child project configure phase, so we accept SOLAYA_TC_PREFIX as an input
-# and fall back to a deterministic default relative to the source tree.
+# child project configure phase, so we accept SOLAYA_TC_PREFIX + SOLAYA_CROSS_BIN
+# as inputs (envs or -D) and fall back to deterministic defaults relative to
+# the source tree.
 if(NOT DEFINED SOLAYA_TC_PREFIX)
     if(DEFINED ENV{SOLAYA_TC_PREFIX})
         set(SOLAYA_TC_PREFIX "$ENV{SOLAYA_TC_PREFIX}")
     else()
-        # Standard layout: the toolchain lives at <repo-root>/.toolchain/riscv64
-        # (moved out of build/ so `rm -rf build` does not nuke ~1h of work).
+        # Standard layout: the sysroot lives at <repo-root>/.toolchain/riscv64
+        # (moved out of build/ so `rm -rf build` does not nuke minutes of work).
         get_filename_component(_this_dir "${CMAKE_CURRENT_LIST_DIR}" DIRECTORY)
         get_filename_component(_src_root "${_this_dir}"              DIRECTORY)
         set(SOLAYA_TC_PREFIX "${_src_root}/.toolchain/riscv64")
     endif()
 endif()
 
-set(_bin "${SOLAYA_TC_PREFIX}/bin")
-set(_cc  "${_bin}/${SOLAYA_TC_TRIPLE}-gcc")
+if(NOT DEFINED SOLAYA_CROSS_BIN)
+    if(DEFINED ENV{SOLAYA_CROSS_BIN})
+        set(SOLAYA_CROSS_BIN "$ENV{SOLAYA_CROSS_BIN}")
+    else()
+        get_filename_component(_this_dir "${CMAKE_CURRENT_LIST_DIR}" DIRECTORY)
+        get_filename_component(_src_root "${_this_dir}"              DIRECTORY)
+        set(SOLAYA_CROSS_BIN "${_src_root}/build/toolchain/bin")
+    endif()
+endif()
+
+set(_cc  "${SOLAYA_CROSS_BIN}/riscv64-linux-musl-clang")
 
 if(NOT EXISTS "${_cc}")
     message(FATAL_ERROR
-        "riscv64 cross-toolchain not found at ${_cc}. "
-        "Run `cmake --build build --target toolchain-all` first "
-        "(≈1h build time on first invocation)."
+        "riscv64-linux-musl-clang wrapper not found at ${_cc}. "
+        "Run the top-level configure first (cmake --preset riscv64-virt), "
+        "then `cmake --build build --target toolchain-all` to stage the musl "
+        "sysroot."
     )
 endif()
 
-set(CMAKE_C_COMPILER    "${_bin}/${SOLAYA_TC_TRIPLE}-gcc")
-set(CMAKE_CXX_COMPILER  "${_bin}/${SOLAYA_TC_TRIPLE}-g++")
-set(CMAKE_AR            "${_bin}/${SOLAYA_TC_TRIPLE}-ar"        CACHE FILEPATH "")
-set(CMAKE_NM            "${_bin}/${SOLAYA_TC_TRIPLE}-nm"        CACHE FILEPATH "")
-set(CMAKE_RANLIB        "${_bin}/${SOLAYA_TC_TRIPLE}-ranlib"    CACHE FILEPATH "")
-set(CMAKE_OBJCOPY       "${_bin}/${SOLAYA_TC_TRIPLE}-objcopy"   CACHE FILEPATH "")
-set(CMAKE_OBJDUMP       "${_bin}/${SOLAYA_TC_TRIPLE}-objdump"   CACHE FILEPATH "")
-set(CMAKE_ADDR2LINE     "${_bin}/${SOLAYA_TC_TRIPLE}-addr2line" CACHE FILEPATH "")
-set(CMAKE_STRIP         "${_bin}/${SOLAYA_TC_TRIPLE}-strip"     CACHE FILEPATH "")
+set(CMAKE_C_COMPILER    "${SOLAYA_CROSS_BIN}/riscv64-linux-musl-clang")
+set(CMAKE_CXX_COMPILER  "${SOLAYA_CROSS_BIN}/riscv64-linux-musl-clang++")
+set(CMAKE_AR            "${SOLAYA_CROSS_BIN}/riscv64-linux-musl-ar"        CACHE FILEPATH "")
+set(CMAKE_NM            "${SOLAYA_CROSS_BIN}/riscv64-linux-musl-nm"        CACHE FILEPATH "")
+set(CMAKE_RANLIB        "${SOLAYA_CROSS_BIN}/riscv64-linux-musl-ranlib"    CACHE FILEPATH "")
+set(CMAKE_OBJCOPY       "${SOLAYA_CROSS_BIN}/riscv64-linux-musl-objcopy"   CACHE FILEPATH "")
+set(CMAKE_OBJDUMP       "${SOLAYA_CROSS_BIN}/riscv64-linux-musl-objdump"   CACHE FILEPATH "")
+set(CMAKE_ADDR2LINE     "${SOLAYA_CROSS_BIN}/riscv64-linux-musl-addr2line" CACHE FILEPATH "")
+set(CMAKE_STRIP         "${SOLAYA_CROSS_BIN}/riscv64-linux-musl-strip"     CACHE FILEPATH "")
 
 set(CMAKE_SYSROOT       "${SOLAYA_TC_PREFIX}/${SOLAYA_TC_TRIPLE}")
 set(CMAKE_FIND_ROOT_PATH "${CMAKE_SYSROOT}")
