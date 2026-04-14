@@ -25,14 +25,21 @@ jobs:
             build-essential \
             cmake ninja-build \
             python3 \
-            libclang-dev clang \
+            clang-18 lld-18 llvm-18 libclang-dev \
             tmux \
             flex bison bc \
-            texinfo gawk \
             pkg-config \
             rsync \
             e2fsprogs \
             qemu-system-misc qemu-system-data seabios ipxe-qemu
+          # clang-18 / lld-18 / llvm-18 are the cross-toolchain; Ubuntu
+          # 24.04 ships LLVM 18 as versioned packages, which cmake/llvm_tools
+          # picks via its clang-18..clang-22 fallback chain. libclang-dev is
+          # for the host bindgen-driver, not the cross compile. texinfo,
+          # gawk and cross-gcc host deps are no longer needed now that the
+          # toolchain bootstrap only compiles musl + linux-headers +
+          # compiler-rt with distro clang.
+          #
           # seabios provides /usr/share/seabios/vgabios-bochs-display.bin
           # (needed by the framebuffer + doom tests which use -device
           # bochs-display); on Ubuntu 24.04 this file is no longer in
@@ -72,12 +79,14 @@ jobs:
             tools/bindgen-driver -> target
           shared-key: solaya-riscv64
 
-      # The cross-toolchain build is reproducible from the SHA256-pinned
-      # tarballs declared in cmake/checksums.cmake; cache the installed
-      # output keyed on the hash of those pins plus the bootstrap script.
-      # Using restore + explicit save (instead of actions/cache@v4) so the
-      # cache persists even when a later CI step fails — toolchain-all takes
-      # ~1h on cache miss and we don't want to rebuild it every failed run.
+      # The cross-toolchain sysroot (musl + linux-headers + compiler-rt
+      # builtins) is reproducible from the SHA256-pinned tarballs declared
+      # in cmake/checksums.cmake; cache the installed output keyed on the
+      # hash of those pins plus the bootstrap script. Using restore +
+      # explicit save (instead of actions/cache@v4) so the cache persists
+      # even when a later CI step fails — on cache miss toolchain-all takes
+      # ~2 min (musl + compiler-rt), which we'd still rather not re-run on
+      # every failed CI retry.
       - name: Restore cross-toolchain cache
         id: cache-toolchain
         uses: actions/cache/restore@v4
@@ -88,7 +97,7 @@ jobs:
       - name: Configure CMake
         run: cmake -S . -B "$BUILD_DIR" --preset riscv64-virt
 
-      - name: Build cross-toolchain (cache miss only, about 1h first time)
+      - name: Build cross-toolchain (cache miss only, about 2 min first time)
         id: build-toolchain
         if: steps.cache-toolchain.outputs.cache-hit != 'true'
         run: cmake --build "$BUILD_DIR" --target toolchain-all
