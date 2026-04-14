@@ -3,7 +3,8 @@
 #
 # Previously provided by the nix flake's shellHook (symlinking a nix-store
 # dash into kernel/compiled_userspace_nix/).  Now the tarball is fetched +
-# cross-compiled against the bootstrapped gcc/musl chain.
+# cross-compiled against distro clang via the cmake/clang_wrapper.cmake
+# shims that target riscv64-linux-musl and link with lld.
 #
 # The init process (userspace/src/bin/init.rs) hard-codes `spawn("dash", …)`,
 # so without this target `cmake --build build --target run` and every
@@ -16,17 +17,17 @@
 include(ExternalProject)
 include(${CMAKE_SOURCE_DIR}/cmake/checksums.cmake)
 
-if(NOT DEFINED SOLAYA_TC_PREFIX)
+if(NOT DEFINED SOLAYA_CROSS_BIN)
     message(FATAL_ERROR
-        "cmake/dash.cmake: SOLAYA_TC_PREFIX not defined. "
-        "cmake/arch.cmake must run before include(dash)."
+        "cmake/dash.cmake: SOLAYA_CROSS_BIN not defined. "
+        "cmake/clang_wrapper.cmake must run before include(dash)."
     )
 endif()
 
 set(_dash_prefix   "${CMAKE_BINARY_DIR}/userspace/dash-prefix")
 set(_dash_install  "${_dash_prefix}/install")
 set(_dash_bin      "${_dash_install}/bin/dash")
-set(_dash_cc       "${SOLAYA_TC_BIN}/${SOLAYA_TC_TRIPLE}-gcc")
+set(_dash_cc       "${SOLAYA_CROSS_BIN}/riscv64-linux-musl-clang")
 
 # Build flags: static link against musl. --host= gets dash's autotools to
 # produce a riscv64 binary; --with-libs="" avoids pulling in host libs.
@@ -39,14 +40,14 @@ ExternalProject_Add(dash-build
     USES_TERMINAL_CONFIGURE    ON
     USES_TERMINAL_BUILD        ON
     USES_TERMINAL_INSTALL      ON
-    DEPENDS                    gcc-stage2 musl
+    DEPENDS                    musl compiler-rt-builtins
     CONFIGURE_COMMAND
         ${CMAKE_COMMAND} -E env
             "CC=${_dash_cc}"
             "CFLAGS=-static -Os"
             "LDFLAGS=-static"
         <SOURCE_DIR>/configure
-            --host=${SOLAYA_TC_TRIPLE}
+            --host=${SOLAYA_CROSS_TRIPLE}
             --prefix=${_dash_install}
             --enable-static
     BUILD_COMMAND     make -j${SOLAYA_BUILD_PARALLEL}

@@ -5,7 +5,10 @@ target = "riscv64gc-unknown-linux-musl"
 rustflags = ["-Ctarget-feature=+relax"]
 
 [target.riscv64gc-unknown-linux-musl]
-linker = "riscv64-unknown-linux-musl-gcc"
+# Resolved on $PATH via cmake/clang_wrapper.cmake's generated shell scripts
+# under ${SOLAYA_CROSS_BIN}; userspace/CMakeLists.txt prepends that dir to
+# PATH for every cargo invocation.
+linker = "riscv64-linux-musl-clang"
 rustflags = ["-C", "target-feature=+crt-static"]
 
 [target.x86_64-unknown-linux-gnu]

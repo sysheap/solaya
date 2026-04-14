@@ -42,11 +42,19 @@ SECTIONS
     . = . + 512K;
   }
 
-  # This section will contain the symbols of the binary
-  # We patch them in after the binary is built via objcopy
-  # The heap start directly after this section
+  # This section will contain the symbols of the binary, patched in after
+  # the link by `patch-symbols` (see crates/kernel/CMakeLists.txt).  The
+  # heap starts directly after this section.
+  #
+  # Reserve 4 MiB so llvm-objcopy's --update-section can fit the demangled
+  # symbol table without resizing — llvm-objcopy, unlike GNU objcopy,
+  # refuses to grow sections that are part of a LOAD segment.  The symbol
+  # table today is ~1.6 MiB; patch-symbols pads the file to 4 MiB before
+  # writing, so the section size stays constant.  The runtime treats the
+  # contents as a null-terminated string, so trailing zero padding is
+  # invisible to readers (crates/kernel/src/debugging/symbols.rs).
   symbols : ALIGN(4K) {
-    BYTE(0);
+    . = . + 4M;
   }
 
   PROVIDE(_end = .);

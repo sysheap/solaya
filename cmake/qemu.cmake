@@ -42,7 +42,7 @@ add_custom_target(attach
 )
 
 add_custom_target(disasm
-    COMMAND ${SOLAYA_TC_BIN}/${SOLAYA_TC_TRIPLE}-objdump
+    COMMAND ${SOLAYA_CROSS_BIN}/riscv64-linux-musl-objdump
         -d --demangle
         --disassembler-color=on --visualize-jumps=extended-color
         ${CMAKE_SOURCE_DIR}/target/riscv64gc-unknown-none-elf/release/boot

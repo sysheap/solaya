@@ -11,17 +11,10 @@
 # Do NOT guess a hash.  ExternalProject_Add verifies SHA256 before extracting,
 # so a bad pin aborts the build with a clear diff.
 
-set(SOLAYA_BINUTILS_URL    "https://ftp.gnu.org/gnu/binutils/binutils-2.43.1.tar.xz")
-set(SOLAYA_BINUTILS_SHA256 "13f74202a3c4c51118b797a39ea4200d3f6cfbe224da6d1d95bb938480132dfd")
-# source: sha512 of this tarball matches
-#   https://sourceware.org/pub/binutils/releases/sha512.sum (binutils-2.43.1.tar.xz)
-#   — cross-hash confirms the sha256 above.
-
-set(SOLAYA_GCC_URL         "https://ftp.gnu.org/gnu/gcc/gcc-14.2.0/gcc-14.2.0.tar.xz")
-set(SOLAYA_GCC_SHA256      "a7b39bc69cbf9e25826c5a60ab26477001f7c08d85cec04bc0e29cabed6f3cc9")
-# source: sha512 of this tarball matches
-#   https://sourceware.org/pub/gcc/releases/gcc-14.2.0/sha512.sum (gcc-14.2.0.tar.xz)
-#   — cross-hash confirms the sha256 above.
+set(SOLAYA_COMPILER_RT_URL    "https://github.com/llvm/llvm-project/releases/download/llvmorg-18.1.8/compiler-rt-18.1.8.src.tar.xz")
+set(SOLAYA_COMPILER_RT_SHA256 "e054e99a9c9240720616e927cb52363abbc8b4f1ef0286bad3df79ec8fdf892f")
+# source: github.com/llvm/llvm-project/releases/tag/llvmorg-18.1.8 — the
+# release page lists the SHA256 in the download grid.
 
 set(SOLAYA_MUSL_URL        "https://musl.libc.org/releases/musl-1.2.5.tar.gz")
 set(SOLAYA_MUSL_SHA256     "a9a118bbe84d8764da0ea0d28b3ab3fae8477fc7e4085d90102b8596fc7c75e4")

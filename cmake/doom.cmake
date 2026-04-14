@@ -1,9 +1,10 @@
 # cmake/doom.cmake — build the Solaya port of doomgeneric.
 #
 # Replaces the nix flake's doom-riscv derivation.  Cross-compiles
-# github.com/ozkl/doomgeneric against the bootstrapped riscv64-musl
-# toolchain, embeds doom1.wad as a binary object, and stages the resulting
-# static ELF as ${SOLAYA_USERSPACE_ARTIFACT_DIR}/doom.
+# github.com/ozkl/doomgeneric with distro clang (--target=riscv64-linux-musl)
+# via the cmake/clang_wrapper.cmake shims, embeds doom1.wad as a binary
+# object using `ld.lld -r -b binary`, and stages the resulting static ELF
+# as ${SOLAYA_USERSPACE_ARTIFACT_DIR}/doom.
 #
 # doomgeneric provides the renderer abstraction; Solaya supplies two custom
 # translation units (userspace/doom/{dg_solaya.c,i_video_solaya.c}) that
@@ -18,10 +19,10 @@
 include(ExternalProject)
 include(${CMAKE_SOURCE_DIR}/cmake/checksums.cmake)
 
-if(NOT DEFINED SOLAYA_TC_PREFIX)
+if(NOT DEFINED SOLAYA_CROSS_BIN)
     message(FATAL_ERROR
-        "cmake/doom.cmake: SOLAYA_TC_PREFIX not defined. "
-        "cmake/arch.cmake must run before include(doom)."
+        "cmake/doom.cmake: SOLAYA_CROSS_BIN not defined. "
+        "cmake/clang_wrapper.cmake must run before include(doom)."
     )
 endif()
 
@@ -29,8 +30,7 @@ set(_doom_prefix   "${CMAKE_BINARY_DIR}/userspace/doom-prefix")
 set(_doom_src      "${_doom_prefix}/src/doom-src")
 set(_doom_build    "${_doom_prefix}/build")
 set(_doom_bin      "${_doom_build}/doom")
-set(_doom_cc       "${SOLAYA_TC_BIN}/${SOLAYA_TC_TRIPLE}-gcc")
-set(_doom_ld       "${SOLAYA_TC_BIN}/${SOLAYA_TC_TRIPLE}-ld")
+set(_doom_cc       "${SOLAYA_CROSS_BIN}/riscv64-linux-musl-clang")
 set(_wad_file      "${SOLAYA_TC_ROOT}/_dl/doom1.wad")
 
 # Stage 1: fetch doomgeneric source (pinned commit) into _doom_src.
@@ -98,7 +98,6 @@ ADAPTER=\"${_solaya_doom_adapter}\"
 WAD=\"${_wad_file}\"
 OUT_DIR=\"${_doom_build}\"
 CC=\"${_doom_cc}\"
-LD=\"${_doom_ld}\"
 CFLAGS=\"-static -O3 -DNORMALUNIX -DLINUX -D_DEFAULT_SOURCE -I.\"
 
 rm -rf \"$OUT_DIR/obj\" \"$OUT_DIR/wad_obj\"
@@ -112,7 +111,23 @@ for f in $SRC_DIR/*.{c,h}; do cp \"$f\" .; done
 cp \"$ADAPTER/dg_solaya.c\"      ./dg_solaya.c
 cp \"$ADAPTER/i_video_solaya.c\" ./i_video.c
 cp \"$WAD\" ./doom1.wad
-$LD -r -b binary -o ../wad_obj/doom1_wad.o doom1.wad
+# Embed the WAD as a relocatable object.  `llvm-objcopy -I binary` produces
+# an ELF with no RISC-V FP-ABI property, which lld refuses to mix with
+# lp64d objects; `ld.lld -r -b binary` has the same gap.  Assembling a tiny
+# .S file with .incbin lets the assembler stamp the matching ABI flags.
+cat > doom1_wad.S <<WADEOF
+.section .rodata
+.globl _binary_doom1_wad_start
+.globl _binary_doom1_wad_end
+.globl _binary_doom1_wad_size
+.type  _binary_doom1_wad_start, @object
+.type  _binary_doom1_wad_end,   @object
+_binary_doom1_wad_start:
+.incbin \"doom1.wad\"
+_binary_doom1_wad_end:
+.set _binary_doom1_wad_size, _binary_doom1_wad_end - _binary_doom1_wad_start
+WADEOF
+$CC -c doom1_wad.S -o ../wad_obj/doom1_wad.o
 
 ")
 
@@ -139,7 +154,7 @@ add_custom_command(
     OUTPUT  "${_doom_bin}"
     COMMAND ${CMAKE_COMMAND} -E make_directory "${_doom_build}"
     COMMAND bash "${_doom_build_script}"
-    DEPENDS doom-src doom-wad gcc-stage2 musl
+    DEPENDS doom-src doom-wad musl compiler-rt-builtins
             "${_solaya_doom_adapter}/dg_solaya.c"
             "${_solaya_doom_adapter}/i_video_solaya.c"
             "${_doom_build_script}"
