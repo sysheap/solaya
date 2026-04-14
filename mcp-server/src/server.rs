@@ -363,7 +363,7 @@ impl QemuMcpServer {
     }
 
     #[tool(
-        description = "Run system tests (runs 'just system-test'). Optionally run a specific test by name."
+        description = "Run system tests (cmake --build build --target test-system). Optionally run a specific test by name."
     )]
     async fn run_system_tests(
         &self,
@@ -389,8 +389,9 @@ impl QemuMcpServer {
                     c
                 }
                 None => {
-                    let mut c = Command::new("just");
-                    c.arg("system-test").current_dir(&root);
+                    let mut c = Command::new("cmake");
+                    c.args(["--build", "build", "--target", "test-system"])
+                        .current_dir(&root);
                     c
                 }
             };

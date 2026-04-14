@@ -57,21 +57,22 @@ See `plans/` for the roadmap and strategy.
 
 ## How Do I Run It?
 
-The build system is CMake + Kconfig, driven through a thin `Makefile`
+The build system is CMake + Kconfig, driven through a thin `justfile`
 passthrough.  Three steps on a fresh clone:
 
 ```bash
-make configure    # cmake --preset riscv64-virt (seeds build/.config)
-make toolchain    # builds binutils/gcc/musl/linux-headers (~1h, cached)
-make              # builds the kernel binary (build/kernel/solaya.bin)
-make run          # boot the kernel in QEMU
+just configure    # cmake --preset riscv64-virt (seeds build/.config)
+just toolchain    # stages musl + linux-headers + compiler-rt (~2 min, cached)
+just              # builds the kernel binary (build/kernel/solaya.bin)
+just run          # boot the kernel in QEMU
 ```
 
-The cross-toolchain builds from pinned source tarballs into
-`.toolchain/riscv64/` (outside `build/` so `rm -rf build` does not nuke
-the ~1h compile), so the only host deps are the packages that
-bootstrap binutils/gcc/musl, drive the Rust build, and provide
-`qemu-system-riscv64` for running the kernel.
+The cross-toolchain itself (clang / lld / llvm-*) comes from the host
+distro and must be LLVM >= 18.  `just toolchain` only stages the musl
+sysroot + linux UAPI headers + compiler-rt builtins into
+`.toolchain/riscv64/` (outside `build/` so `rm -rf build` doesn't nuke
+it), so the only host deps are distro LLVM, rustup, and the packages
+listed below.
 
 ### Host prerequisites
 
@@ -92,14 +93,15 @@ sudo apt-get install -y --no-install-recommends \
     build-essential \
     cmake ninja-build \
     python3 \
-    libclang-dev clang \
+    clang-18 lld-18 llvm-18 libclang-dev \
     tmux \
     flex bison bc \
-    texinfo gawk \
     pkg-config \
     rsync \
     e2fsprogs \
     qemu-system-misc qemu-system-data seabios ipxe-qemu
+# `just` is not packaged on 24.04; install via rustup's cargo:
+cargo install just --locked
 ```
 
 **Fedora.**  Same tools, Fedora package names:
@@ -109,13 +111,13 @@ sudo dnf install -y \
     gcc gcc-c++ make \
     cmake ninja-build \
     python3 \
-    clang-devel clang \
+    clang lld llvm clang-devel \
     tmux \
     flex bison bc \
-    texinfo gawk \
     pkgconf-pkg-config \
     rsync \
     e2fsprogs \
+    just \
     qemu-system-riscv seavgabios-bin ipxe-roms-qemu
 ```
 
@@ -157,19 +159,25 @@ plans/            Roadmap and strategy documents
 
 ## Useful Commands
 
-The `Makefile` at the root is a one-line passthrough to
-`cmake --build build --target ...`; use whichever form you prefer.
+The `justfile` at the root is a one-line passthrough to
+`cmake --build build --target ...` for the common targets, plus a few
+arg-taking recipes that are awkward to express as CMake targets.
 
 ```bash
-make                # Build kernel binary
-make run            # Build and run in QEMU
-make run-fb         # Run with framebuffer
-make debug          # QEMU (paused) + GDB attached in tmux
-make attach         # Attach GDB to an already-running QEMU
-make test           # Run all tests (unit + system)
-make clippy         # Run linter across every workspace
-make fmt-check      # cargo fmt --check across every workspace
-make miri           # Undefined-behavior detector
-make ci             # Full pre-merge gate (fmt + clippy + tests + miri + system)
-make menuconfig     # Kconfig TUI to edit build/.config
+just                       # Build kernel binary
+just run                   # Build and run in QEMU
+just run-fb                # Run with framebuffer
+just debug                 # QEMU (paused) + GDB attached in tmux
+just debug FUNC            # … with a breakpoint on FUNC
+just debug USERBIN FUNC    # Debug inside a userspace binary
+just attach                # Attach GDB to an already-running QEMU
+just disasm                # Disassemble the boot ELF
+just addr2line 0xADDR      # Resolve an address in the kernel ELF
+just test                  # Run all tests (unit + system)
+just test-system TEST      # Run a single system test
+just clippy                # Run linter across every workspace
+just fmt-check             # cargo fmt --check across every workspace
+just miri                  # Undefined-behavior detector
+just ci                    # Full pre-merge gate (fmt + clippy + tests + miri + system)
+just menuconfig            # Kconfig TUI to edit build/.config
 ```

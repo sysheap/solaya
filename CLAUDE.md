@@ -2,44 +2,53 @@
 
 RISC-V 64-bit hobby OS kernel written in Rust. No third-party runtime dependencies.
 
+## Host Prerequisites
+
+LLVM >= 18 (clang, lld, llvm-tools), cmake, ninja, qemu-system-riscv64,
+`just`. On Ubuntu: `apt install clang-18 lld-18 llvm-18 libclang-dev
+cmake ninja-build qemu-system-misc just`. On Fedora: `dnf install clang
+lld llvm cmake ninja-build qemu-system-riscv just`. The cross-toolchain
+(clang/lld/llvm-*) is distro-provided; only the musl sysroot + compiler-rt
+builtins are bootstrapped locally.
+
 ## Quick Commands
 
 The build system is CMake + Kconfig. On first configure, CMake seeds
-`build/.config` from `configs/riscv64_virt_defconfig`. `cmake --build build
---target menuconfig` opens the Kconfig TUI to change options.
+`build/.config` from `configs/riscv64_virt_defconfig`. `just menuconfig`
+opens the Kconfig TUI to change options.
 
 ```bash
 # First-time setup
-cmake --preset riscv64-virt                    # Configure
-cmake --build build --target toolchain-all     # Build cross-toolchain (~1h, cached after)
+just configure                     # cmake --preset riscv64-virt
+just toolchain                     # Build riscv64-musl sysroot + compiler-rt (~2 min, cached after)
 
 # Common workflow
-cmake --build build --target solaya-bin        # Build kernel + patch symbols + emit binary
-cmake --build build --target run               # Build and run in QEMU
-cmake --build build --target run-fb            # Run with framebuffer
-cmake --build build --target debug             # tmux: kernel paused + GDB attached
-cmake --build build --target attach            # Attach GDB to an already-running QEMU
-cmake --build build --target disasm            # Disassemble boot ELF
+just                               # Default: build kernel + patch symbols + emit binary
+just run                           # Build and run in QEMU
+just run-fb                        # Run with framebuffer
+just debug                         # tmux: kernel paused + GDB attached
+just debug FUNC                    # … with a breakpoint on FUNC
+just debug USERBIN FUNC            # Debug inside a userspace binary
+just attach                        # Attach GDB to an already-running QEMU
+just disasm                        # Disassemble boot ELF
+just addr2line 0xADDR              # Resolve an address in the kernel ELF
 
 # Tests + lints
-cmake --build build --target test-unit         # Unit tests (solaya / klib / hal / driver-api)
-cmake --build build --target test-system       # System tests via cargo-nextest
-cmake --build build --target miri              # Undefined-behavior detection
-cmake --build build --target clippy            # Lint all workspaces
-cmake --build build --target fmt-check         # cargo fmt --check
-cmake --build build --target ci                # Full pre-merge gate
+just test-unit                     # Unit tests (solaya / klib / hal / driver-api)
+just test-system                   # Full system-test suite via cargo-nextest
+just test-system TEST              # Filter to a single test
+just miri                          # Undefined-behavior detection
+just clippy                        # Lint all workspaces
+just fmt-check                     # cargo fmt --check
+just ci                            # Full pre-merge gate
 
 # Config
-cmake --build build --target menuconfig        # Edit build/.config
-cmake --build build --target savedefconfig     # Write build/savedefconfig
-
-# Scripts (take args; invoke directly)
-./scripts/debug.sh [FUNC | USERBIN FUNC]       # Debug session with optional breakpoint
-./scripts/attach.sh                            # Attach GDB to running QEMU
+just menuconfig                    # Edit build/.config
+just savedefconfig                 # Write build/savedefconfig
 ```
 
-A thin top-level `Makefile` aliases the common targets (`make`, `make run`,
-`make test`, `make ci`, …) for muscle memory.
+CMake still owns the build graph; `just` is a thin wrapper. For anything
+the justfile doesn't cover, use `cmake --build build --target <X>`.
 
 ## Project Structure
 
