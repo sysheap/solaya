@@ -46,13 +46,14 @@ SECTIONS
   # the link by `patch-symbols` (see crates/kernel/CMakeLists.txt).  The
   # heap starts directly after this section.
   #
-  # Reserve 4 MiB so llvm-objcopy's --update-section can fit the demangled
-  # symbol table without resizing — llvm-objcopy, unlike GNU objcopy,
-  # refuses to grow sections that are part of a LOAD segment.  The symbol
-  # table today is ~1.6 MiB; patch-symbols pads the file to 4 MiB before
-  # writing, so the section size stays constant.  The runtime treats the
-  # contents as a null-terminated string, so trailing zero padding is
-  # invisible to readers (crates/kernel/src/debugging/symbols.rs).
+  # The reservation below is the single source of truth for the section
+  # size: `patch-symbols` reads it back from the linked ELF and pads the
+  # nm output to match before `llvm-objcopy --update-section` (llvm-objcopy,
+  # unlike GNU objcopy, refuses to grow sections that are part of a LOAD
+  # segment).  Bump this value if the demangled symbol table outgrows it.
+  # The runtime treats the contents as a null-terminated string, so
+  # trailing zero padding is invisible to readers
+  # (crates/kernel/src/debugging/symbols.rs).
   symbols : ALIGN(4K) {
     . = . + 16M;
   }
