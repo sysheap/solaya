@@ -174,9 +174,12 @@ ExternalProject_Add(musl
 #    -rtlib=compiler-rt -resource-dir wiring in cmake/clang_wrapper.cmake
 #    expects them.
 #
-#    Source is the compiler-rt standalone tarball from an LLVM release;
-#    the version is decoupled from the host's clang because builtin ABI is
-#    stable across LLVM releases.
+#    Source is the llvm-project monorepo tarball from an LLVM release
+#    (compiler-rt is no longer published standalone); the version is
+#    decoupled from the host's clang because builtin ABI is stable across
+#    LLVM releases.  The build script is pointed at <SOURCE_DIR>/compiler-rt
+#    so it finds the same lib/builtins/ layout as the old standalone
+#    tarball exposed at the root.
 # ----------------------------------------------------------------------------
 set(_crt_install "${SOLAYA_COMPILER_RT_DIR}/lib/riscv64-unknown-linux-musl")
 set(_crt_legacy  "${SOLAYA_COMPILER_RT_DIR}/lib/linux")
@@ -194,7 +197,7 @@ ExternalProject_Add(compiler-rt-builtins
         ${CMAKE_COMMAND} -E make_directory "${_crt_install}"
         COMMAND bash
             "${CMAKE_SOURCE_DIR}/cmake/build_compiler_rt_builtins.sh"
-            "<SOURCE_DIR>"
+            "<SOURCE_DIR>/compiler-rt"
             "${SOLAYA_CROSS_BIN}/riscv64-linux-musl-clang"
             "${SOLAYA_CROSS_BIN}/riscv64-linux-musl-ar"
             "${_crt_install}"
