@@ -27,7 +27,12 @@ if(NOT DEFINED SOLAYA_CROSS_BIN)
 endif()
 
 set(_doom_prefix   "${CMAKE_BINARY_DIR}/userspace/doom-prefix")
-set(_doom_src      "${_doom_prefix}/src/doom-src")
+# SOURCE_DIR under SOLAYA_TC_ROOT (cached in CI) so the git clone and its
+# step-done markers survive a fresh build/ — otherwise every CI run re-clones
+# doomgeneric and every downstream `cmake --build` reruns `git fetch` via the
+# update step. See toolchain_bootstrap.cmake for the matching rationale on
+# the tarball-based externals.
+set(_doom_src      "${SOLAYA_TC_ROOT}/_src/doom-src")
 set(_doom_build    "${_doom_prefix}/build")
 set(_doom_bin      "${_doom_build}/doom")
 set(_doom_cc       "${SOLAYA_CROSS_BIN}/riscv64-linux-musl-clang")
@@ -38,6 +43,7 @@ ExternalProject_Add(doom-src
     GIT_REPOSITORY    "${SOLAYA_DOOMGENERIC_REPO}"
     GIT_TAG           "${SOLAYA_DOOMGENERIC_REV}"
     SOURCE_DIR        "${_doom_src}"
+    STAMP_DIR         "${SOLAYA_TC_ROOT}/_stamp/doom-src"
     USES_TERMINAL_DOWNLOAD ON
     CONFIGURE_COMMAND ""
     BUILD_COMMAND     ""
@@ -176,3 +182,9 @@ add_custom_command(
 add_custom_target(doom ALL
     DEPENDS "${SOLAYA_USERSPACE_ARTIFACT_DIR}/doom"
 )
+
+# Pull the doomgeneric clone and doom1.wad into .toolchain/ as part of
+# `toolchain-all` so the CI cache save (which runs right after that target)
+# captures them. Without this both re-download on every CI run even with a
+# full cache hit.
+add_dependencies(toolchain-all doom-src doom-wad)

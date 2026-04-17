@@ -92,12 +92,15 @@ set(_linux_arch "riscv")
 ExternalProject_Add(linux-headers
     URL       "${SOLAYA_LINUX_HEADERS_URL}"
     URL_HASH  SHA256=${SOLAYA_LINUX_HEADERS_SHA256}
-    # STAMP_DIR lives under the install prefix (cached in CI) so step-done
-    # markers survive across builds with a fresh ${CMAKE_BINARY_DIR}; without
-    # this, a cache-restored install dir still triggers a full rebuild because
-    # the default stamps in build/toolchain/<pkg>-prefix/src/<pkg>-stamp/ are
-    # missing. Same rationale for the musl ExternalProject_Add block below.
-    STAMP_DIR "${SOLAYA_TC_ROOT}/_stamp/linux-headers"
+    # SOURCE_DIR + STAMP_DIR both live under SOLAYA_TC_ROOT (cached in CI) so
+    # step-done markers AND the extracted tree survive a fresh
+    # ${CMAKE_BINARY_DIR}. Without pinning SOURCE_DIR, a fresh build/ forces
+    # re-extract, which re-touches the download stamp and invalidates every
+    # downstream step (install reruns from scratch even though the installed
+    # outputs under .toolchain/riscv64/ are already correct). Same rationale
+    # for the musl + compiler-rt-builtins ExternalProject_Add blocks below.
+    SOURCE_DIR "${SOLAYA_TC_ROOT}/_src/linux-headers"
+    STAMP_DIR  "${SOLAYA_TC_ROOT}/_stamp/linux-headers"
     ${_EP_COMMON}
     CONFIGURE_COMMAND ""
     BUILD_IN_SOURCE   TRUE
@@ -130,7 +133,8 @@ set(_musl_ranlib "${SOLAYA_CROSS_BIN}/riscv64-linux-musl-ranlib")
 ExternalProject_Add(musl
     URL       "${SOLAYA_MUSL_URL}"
     URL_HASH  SHA256=${SOLAYA_MUSL_SHA256}
-    STAMP_DIR "${SOLAYA_TC_ROOT}/_stamp/musl"
+    SOURCE_DIR "${SOLAYA_TC_ROOT}/_src/musl"
+    STAMP_DIR  "${SOLAYA_TC_ROOT}/_stamp/musl"
     ${_EP_COMMON}
     DEPENDS   linux-headers
     CONFIGURE_COMMAND
@@ -180,7 +184,8 @@ set(_crt_legacy  "${SOLAYA_COMPILER_RT_DIR}/lib/linux")
 ExternalProject_Add(compiler-rt-builtins
     URL       "${SOLAYA_COMPILER_RT_URL}"
     URL_HASH  SHA256=${SOLAYA_COMPILER_RT_SHA256}
-    STAMP_DIR "${SOLAYA_TC_ROOT}/_stamp/compiler-rt"
+    SOURCE_DIR "${SOLAYA_TC_ROOT}/_src/compiler-rt-builtins"
+    STAMP_DIR  "${SOLAYA_TC_ROOT}/_stamp/compiler-rt"
     ${_EP_COMMON}
     DEPENDS   musl
     CONFIGURE_COMMAND ""
