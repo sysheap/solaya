@@ -20,6 +20,11 @@ project(solaya LANGUAGES NONE)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 
+# Override find_program() before anything else can call it (directly or
+# via find_package). Caches bare names instead of absolute paths so the
+# same build/ dir works from both the host and the podman devcontainer.
+include(portable_find_program)
+
 include(kconfig)
 include(cargo_targets)
 

@@ -1,12 +1,11 @@
 # cmake/llvm_tools.cmake — discover distro LLVM (>= 18) as bare command names.
 #
-# Why not find_program(): find_program caches an absolute path into
-# CMakeCache.txt and bakes it into build.ninja.  When the same build/ dir is
-# shared between a podman container and the host, the absolute path from one
-# side ('/root/.cargo/bin/…' etc.) isn't executable on the other, and ninja
-# fails with exit 126.  Commits ed010412 / dd5c89b0 / 490c0845 worked around
-# this for cargo by emitting the bare command name instead.  We apply the
-# same pattern to clang/lld/llvm-* here.
+# Note: cmake/portable_find_program.cmake now rewrites all find_program()
+# results to bare names automatically, so a vanilla find_program() would
+# work for the host/container portability part. We still avoid it here
+# because we need version probing (`<name> --version`, parse, gate on
+# major >= SOLAYA_LLVM_MIN_MAJOR) and a versioned->unversioned probe
+# order that find_program doesn't express.
 #
 # We only use the discovered names to:
 #   1. Verify at configure time that a compatible LLVM is installed (fail
