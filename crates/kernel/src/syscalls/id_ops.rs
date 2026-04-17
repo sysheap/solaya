@@ -2,7 +2,9 @@ use alloc::{string::String, vec::Vec};
 use core::ffi::{c_int, c_uint, c_ulong};
 use headers::{
     errno::Errno,
-    syscall_types::{FUTEX_PRIVATE_FLAG, FUTEX_WAIT, FUTEX_WAKE, PR_GET_NAME, PR_SET_NAME},
+    syscall_types::{
+        FUTEX_PRIVATE_FLAG, FUTEX_WAIT, FUTEX_WAKE, PR_GET_AUXV, PR_GET_NAME, PR_SET_NAME,
+    },
 };
 
 use crate::processes::{
@@ -234,7 +236,7 @@ impl LinuxSyscallHandler {
         &self,
         option: c_int,
         arg2: c_ulong,
-        _arg3: c_ulong,
+        arg3: c_ulong,
         _arg4: c_ulong,
         _arg5: c_ulong,
     ) -> Result<isize, Errno> {
@@ -269,6 +271,24 @@ impl LinuxSyscallHandler {
                     LinuxUserspaceArg::<*mut u8>::new(arg2 as usize, self.current_process.clone());
                 ptr.write_slice(&buf)?;
                 Ok(0)
+            }
+            // Linux ≥ 6.4: copy out the process's saved auxv so libc/rustix can
+            // discover AT_PAGESZ, AT_RANDOM, etc. without walking the initial
+            // stack. arg2 = user buffer, arg3 = buffer length. Return the total
+            // auxv byte size so a caller whose buffer was too small can retry
+            // with a larger allocation.
+            PR_GET_AUXV => {
+                let auxv = self.current_process.with_lock(|p| p.saved_auxv().to_vec());
+                let buflen = arg3 as usize;
+                let copy_len = buflen.min(auxv.len());
+                if copy_len > 0 {
+                    let ptr = LinuxUserspaceArg::<*mut u8>::new(
+                        arg2 as usize,
+                        self.current_process.clone(),
+                    );
+                    ptr.write_slice(&auxv[..copy_len])?;
+                }
+                Ok(auxv.len() as isize)
             }
             _ => Err(Errno::EINVAL),
         }

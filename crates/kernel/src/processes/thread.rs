@@ -162,6 +162,7 @@ impl Thread {
             allocated_pages,
             args_start,
             brk,
+            auxv_bytes,
         } = loader::load_elf(elf_file, name, args, env)?;
 
         let mut register_state = TrapFrame::zero();
@@ -169,7 +170,7 @@ impl Thread {
         register_state[Register::sp] = args_start.as_usize();
 
         let tid = get_next_tid();
-        Ok(Self::new_process(
+        let thread = Self::new_process(
             name,
             tid,
             register_state,
@@ -181,7 +182,9 @@ impl Thread {
             parent_tid,
             tid,
             tid,
-        ))
+        );
+        thread.lock().process().lock().set_saved_auxv(auxv_bytes);
+        Ok(thread)
     }
 
     #[allow(clippy::too_many_arguments)]

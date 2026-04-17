@@ -59,6 +59,9 @@ pub struct Process {
     umask: u32,
     cwd: String,
     credentials: Credentials,
+    // Raw auxv bytes captured at exec time; served to userspace via
+    // prctl(PR_GET_AUXV). Empty for kernel-internal threads (powersave).
+    saved_auxv: Vec<u8>,
 }
 
 impl Debug for Process {
@@ -105,7 +108,16 @@ impl Process {
             umask: 0o022,
             cwd: String::from("/"),
             credentials: Credentials::root(),
+            saved_auxv: Vec::new(),
         }
+    }
+
+    pub fn saved_auxv(&self) -> &[u8] {
+        &self.saved_auxv
+    }
+
+    pub fn set_saved_auxv(&mut self, auxv: Vec<u8>) {
+        self.saved_auxv = auxv;
     }
 
     pub fn brk(&mut self, brk: VirtAddr) -> VirtAddr {

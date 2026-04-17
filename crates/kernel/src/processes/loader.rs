@@ -1,6 +1,8 @@
 use abi::errors::LoaderError;
 use alloc::{collections::BTreeMap, string::ToString, vec::Vec};
-use headers::syscall_types::{AT_NULL, AT_PAGESZ, AT_PHDR, AT_PHENT, AT_PHNUM, AT_RANDOM};
+use headers::syscall_types::{
+    AT_EXECFN, AT_NULL, AT_PAGESZ, AT_PHDR, AT_PHENT, AT_PHNUM, AT_RANDOM,
+};
 
 use crate::{
     debug,
@@ -31,6 +33,12 @@ pub struct LoadedElf {
     pub allocated_pages: BTreeMap<VirtAddr, PinnedHeapPages>,
     pub args_start: VirtAddr,
     pub brk: Brk,
+    /// Raw auxv bytes (pairs of [tag, value] as native-endian usize, terminated
+    /// by AT_NULL, 0) ready to be returned from prctl(PR_GET_AUXV). Same
+    /// contents as what's pushed onto the initial stack, captured at load
+    /// time so the process can answer PR_GET_AUXV after userspace has grown
+    /// its stack past the original auxv region.
+    pub auxv_bytes: Vec<u8>,
 }
 
 struct AuxvInfo {
@@ -41,13 +49,18 @@ struct AuxvInfo {
 
 const AT_RANDOM_SIZE: usize = 16;
 
+struct ArgumentsResult {
+    args_start: VirtAddr,
+    auxv_bytes: Vec<u8>,
+}
+
 fn set_up_arguments(
     stack: &mut [u8],
     name: &str,
     args: &[&str],
     env: &[&str],
     auxv_info: &AuxvInfo,
-) -> Result<VirtAddr, LoaderError> {
+) -> Result<ArgumentsResult, LoaderError> {
     // layout:
     // [argc, argv[0]..argv[n], NULL, envp[0]..envp[m], NULL, auxv..., name\0, args\0..., env\0..., random(16)]
     let argc = 1 + args.len(); // name + amount of args
@@ -69,6 +82,12 @@ fn set_up_arguments(
         AT_PHNUM as usize,
         auxv_info.phnum,
         AT_RANDOM as usize,
+        0, // placeholder, patched below
+        // AT_EXECFN points at the argv[0] copy of `name` on the stack. rustix
+        // (used by recent coreutils) reads it into a static and unconditionally
+        // strlen()s the pointer; a missing/NULL AT_EXECFN crashes the program
+        // before main even runs.
+        AT_EXECFN as usize,
         0, // placeholder, patched below
         AT_NULL as usize,
         0,
@@ -101,6 +120,14 @@ fn set_up_arguments(
         .position(|pair| pair[0] == AT_RANDOM as usize)
         .expect("AT_RANDOM must be in auxv");
     auxv[at_random_pair_idx * 2 + 1] = (real_start + random_bytes_offset).as_usize();
+
+    // AT_EXECFN points at the same `name` bytes that argv[0] does, which sit
+    // at the very start of the string area on the stack.
+    let at_execfn_pair_idx = auxv
+        .chunks(2)
+        .position(|pair| pair[0] == AT_EXECFN as usize)
+        .expect("AT_EXECFN must be in auxv");
+    auxv[at_execfn_pair_idx * 2 + 1] = (real_start + start_of_strings_offset).as_usize();
 
     let mut addr_current_string = real_start + start_of_strings_offset;
 
@@ -155,8 +182,19 @@ fn set_up_arguments(
         .write_slice(&random_bytes)
         .map_err(|_| LoaderError::StackToSmall)?;
 
+    // Capture the auxv as a flat byte buffer for prctl(PR_GET_AUXV). Must
+    // happen AFTER the AT_RANDOM patch above so the stored bytes match
+    // exactly what's on the stack.
+    let mut auxv_bytes = Vec::with_capacity(auxv.in_bytes());
+    for aux in &auxv {
+        auxv_bytes.extend_from_slice(&aux.to_ne_bytes());
+    }
+
     // We want to point into the arguments
-    Ok(STACK_START - total_length + 1)
+    Ok(ArgumentsResult {
+        args_start: STACK_START - total_length + 1,
+        auxv_bytes,
+    })
 }
 
 pub fn load_elf(
@@ -191,7 +229,10 @@ pub fn load_elf(
 
     let mut stack = PinnedHeapPages::new(STACK_SIZE_PAGES);
 
-    let args_start = set_up_arguments(stack.as_u8_slice(), name, args, env, &auxv_info)?;
+    let ArgumentsResult {
+        args_start,
+        auxv_bytes,
+    } = set_up_arguments(stack.as_u8_slice(), name, args, env, &auxv_info)?;
 
     let stack_addr = stack.addr();
     let prev = allocated_pages.insert(STACK_END, stack);
@@ -293,5 +334,6 @@ pub fn load_elf(
         allocated_pages,
         args_start,
         brk,
+        auxv_bytes,
     })
 }
