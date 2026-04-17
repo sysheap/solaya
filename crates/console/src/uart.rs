@@ -101,14 +101,14 @@ impl Uart {
     /// On the DW APB UART, this includes the "Busy Detect" interrupt
     /// (triggered by writing LCR while busy), which can only be cleared
     /// by reading the USR register.
+    ///
+    /// Does NOT touch RBR: offset 0 is THR on write but RBR on read, and
+    /// reading RBR pops a byte from the RX FIFO. Received-Data-Available
+    /// and Character-Timeout interrupts are cleared by draining the FIFO
+    /// through `read()` instead.
     pub fn clear_pending_interrupts(&self) {
-        // Read IIR to clear THR Empty interrupt
         let _ = self.read_reg(IIR);
-        // Read LSR to clear Line Status interrupt
         let _ = self.read_reg(LSR);
-        // Read RBR to clear Received Data Available / Character Timeout
-        let _ = self.read_reg(THR);
-        // Read USR to clear DW APB UART Busy Detect interrupt
         if self.reg_shift >= 2 {
             let _ = self.read_reg(USR);
         }
