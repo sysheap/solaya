@@ -1,19 +1,28 @@
 # Solaya top-level build file.
 #
-# User entry points (invoke via `make X` or `cmake --build build --target X`):
+# User entry points via `just X` (see justfile — thin wrappers over cmake):
 #
-#   solaya           default — build kernel ELF + patch symbols
-#   solaya-bin       emit the flat boot binary (build/kernel/solaya.bin)
-#   userspace-all    build userspace rust bins + coreutils
-#   headers-generated  run bindgen-driver -> build/headers/generated/
-#   toolchain-all    build cross-toolchain from source (~1h first time)
+#   build            default — flat boot binary (cmake: solaya-bin)
+#   configure        cmake --preset riscv64-virt
+#   toolchain        build cross-toolchain (cmake: toolchain-all, ~1h first time)
 #   run, run-fb      run in QEMU
-#   debug, attach    tmux + GDB flows (see scripts/debug.sh for arg forms)
+#   debug [ARGS]     tmux + GDB (see scripts/debug.sh for arg forms)
+#   attach           attach GDB to a running QEMU
+#   addr2line ADDR   resolve a kernel address to file:line
 #   disasm           objdump the boot ELF
-#   test-unit, test-system, miri, clippy, fmt-check, ci
+#   test, test-unit, test-system [TEST]
+#   miri, clippy, fmt-check, ci
 #   menuconfig, savedefconfig, olddefconfig   Kconfig UI
-#   mcp-server, fetch-deps
-#   tftp-deploy, reboot-hw, picocom           hardware deploy flows
+#   mcp-server, gdb-mcp-server, mcp-servers   AI agent MCP servers
+#   clean            remove build/
+#
+# Additional cmake-only targets (invoke via `cmake --build build --target X`):
+#
+#   solaya                    kernel ELF + patch symbols (default of `build`)
+#   userspace-all             userspace rust bins + coreutils
+#   headers-generated         run bindgen-driver -> build/headers/generated/
+#   fetch-deps                prefetch cargo deps
+#   tftp-deploy, reboot-hw, picocom   hardware deploy flows
 
 cmake_minimum_required(VERSION 3.25)
 project(solaya LANGUAGES NONE)
