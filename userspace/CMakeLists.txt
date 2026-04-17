@@ -85,7 +85,7 @@ add_custom_command(
 RUSTUP_TOOLCHAIN=\"${SOLAYA_RUST_CHANNEL}\" \
 CARGO_TARGET_RISCV64GC_UNKNOWN_LINUX_MUSL_LINKER=riscv64-linux-musl-clang \
 CARGO_TARGET_RISCV64GC_UNKNOWN_LINUX_MUSL_RUSTFLAGS=\"-C target-feature=+crt-static\" \
-exec ${SOLAYA_CARGO} install coreutils@0.7.0 \
+exec ${SOLAYA_CARGO} install coreutils@0.8.0 \
 --target ${_rust_target} \
 --no-default-features \
 --features \"${_coreutils_features}\" \

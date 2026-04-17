@@ -5,11 +5,14 @@
 # helps review.  When you bump a version here, you must also update the URL +
 # SHA256 pair in cmake/checksums.cmake.
 
-set(SOLAYA_MUSL_VERSION          "1.2.5")
-set(SOLAYA_LINUX_HEADERS_VERSION "6.12.7")
+set(SOLAYA_MUSL_VERSION          "1.2.6")
+set(SOLAYA_LINUX_HEADERS_VERSION "6.18.22")
 set(SOLAYA_DASH_VERSION          "0.5.12")
 # compiler-rt builtins: pinned to a released LLVM version (not the host's),
 # since builtin ABI is stable across LLVM releases.  Built against the musl
 # sysroot with the host's distro clang — no external prebuilt artefacts.
-set(SOLAYA_COMPILER_RT_VERSION   "18.1.8")
+# From LLVM 22 on, upstream stopped publishing a standalone compiler-rt
+# tarball; we fetch the full llvm-project source and point the builder at
+# its compiler-rt/ subdirectory (see cmake/toolchain_bootstrap.cmake).
+set(SOLAYA_COMPILER_RT_VERSION   "22.1.3")
 # doomgeneric has no tags; pin by commit hash in cmake/checksums.cmake.
