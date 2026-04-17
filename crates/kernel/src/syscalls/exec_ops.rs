@@ -109,6 +109,7 @@ impl LinuxSyscallHandler {
             np.set_fd_table(inherited_fd_table);
             np.set_cwd(old_cwd);
             np.set_credentials(old_creds);
+            np.set_saved_auxv(loaded.auxv_bytes);
         }
 
         let current_thread = self.current_thread.clone();
