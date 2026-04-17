@@ -64,6 +64,7 @@ add_custom_target(index
 # Hardware-deploy targets delegate to small scripts in scripts/.
 add_custom_target(tftp-deploy
     COMMAND ${CMAKE_SOURCE_DIR}/scripts/tftp-deploy.sh
+            ${CMAKE_BINARY_DIR}/kernel/solaya.bin
     DEPENDS solaya-bin
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     USES_TERMINAL
