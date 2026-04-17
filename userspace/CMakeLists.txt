@@ -52,9 +52,16 @@ exec ${SOLAYA_CARGO} build \
 # -----------------------------------------------------------------------------
 # coreutils: one multicall binary, symlinked for each applet name.
 # Feature list matches the justfile's build-coreutils recipe verbatim.
+#
+# Driven by a stamp file so cargo install + symlink creation only run when
+# this file (or compiler-rt) actually changes. Unconditional re-runs would
+# bump the symlinks' mtimes and invalidate the kernel's build.rs
+# (cargo:rerun-if-changed=build/userspace/artifacts), forcing a full kernel
+# recompile on every no-op build.
 # -----------------------------------------------------------------------------
 set(_coreutils_features "cat,echo,false,ls,mkdir,pwd,rm,touch,true")
 set(_coreutils_root     "${CMAKE_BINARY_DIR}/userspace/coreutils-root")
+set(_coreutils_stamp    "${CMAKE_BINARY_DIR}/userspace/coreutils.stamp")
 
 string(REPLACE "," ";" _coreutils_applets "${_coreutils_features}")
 
@@ -68,7 +75,8 @@ foreach(_applet IN LISTS _coreutils_applets)
     )
 endforeach()
 
-add_custom_target(coreutils
+add_custom_command(
+    OUTPUT ${_coreutils_stamp}
     COMMAND ${CMAKE_COMMAND} -E make_directory "${SOLAYA_USERSPACE_ARTIFACT_DIR}"
     # `cargo install` compiles under ~/.cargo/registry/..., outside the
     # project tree, so rustup can't find rust-toolchain.toml there — pin
@@ -88,12 +96,15 @@ exec ${SOLAYA_CARGO} install coreutils@0.7.0 \
         "${_coreutils_root}/bin/coreutils"
         "${SOLAYA_USERSPACE_ARTIFACT_DIR}/coreutils"
     ${_symlink_commands}
-    DEPENDS compiler-rt-builtins
+    COMMAND ${CMAKE_COMMAND} -E touch ${_coreutils_stamp}
+    DEPENDS compiler-rt-builtins ${CMAKE_CURRENT_LIST_FILE}
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
     USES_TERMINAL
     VERBATIM
     COMMENT "Building coreutils (${_coreutils_features})"
 )
+
+add_custom_target(coreutils DEPENDS ${_coreutils_stamp})
 
 # -----------------------------------------------------------------------------
 # Aggregate: everything a kernel build needs from userspace.
