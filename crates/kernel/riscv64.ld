@@ -54,7 +54,7 @@ SECTIONS
   # contents as a null-terminated string, so trailing zero padding is
   # invisible to readers (crates/kernel/src/debugging/symbols.rs).
   symbols : ALIGN(4K) {
-    . = . + 4M;
+    . = . + 16M;
   }
 
   PROVIDE(_end = .);
