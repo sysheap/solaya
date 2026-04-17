@@ -30,6 +30,7 @@ jobs:
             flex bison bc \
             pkg-config \
             rsync \
+            shellcheck \
             e2fsprogs \
             qemu-system-misc qemu-system-data seabios ipxe-qemu
           # clang-18 / lld-18 / llvm-18 are the cross-toolchain; Ubuntu
@@ -123,6 +124,9 @@ jobs:
 
       - name: Clippy
         run: cmake --build "$BUILD_DIR" --target clippy
+
+      - name: Shellcheck
+        run: cmake --build "$BUILD_DIR" --target shellcheck
 
       - name: Unit tests
         run: cmake --build "$BUILD_DIR" --target test-unit
