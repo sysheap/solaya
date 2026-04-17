@@ -45,7 +45,7 @@ jobs:
             instructions in your system prompt. Post exactly one
             summary comment using the template and then stop.
           claude_args: |
-            --model claude-opus-4-6
+            --model claude-opus-4-7
             --max-turns 200
             --append-system-prompt "$(cat .github/ai-review-prompt.md)"
             --allowedTools "Read,Write,Edit,Grep,Glob,Bash,mcp__indxr__*"
