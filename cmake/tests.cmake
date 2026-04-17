@@ -113,9 +113,32 @@ add_custom_target(fmt-check
 )
 
 # -----------------------------------------------------------------------------
+# shellcheck: static analysis of every project-authored shell script.
+# Keep this list in sync with the pre-commit hook. Third-party scripts
+# under .toolchain/ and build/ are gitignored and not our code.
+# -----------------------------------------------------------------------------
+set(SOLAYA_SHELL_SCRIPTS
+    ${CMAKE_SOURCE_DIR}/.githooks/pre-commit
+    ${CMAKE_SOURCE_DIR}/cmake/build_compiler_rt_builtins.sh
+    ${CMAKE_SOURCE_DIR}/qemu_wrapper.sh
+    ${CMAKE_SOURCE_DIR}/scripts/attach.sh
+    ${CMAKE_SOURCE_DIR}/scripts/debug.sh
+    ${CMAKE_SOURCE_DIR}/scripts/picocom.sh
+    ${CMAKE_SOURCE_DIR}/scripts/reboot-hw.sh
+    ${CMAKE_SOURCE_DIR}/scripts/tftp-deploy.sh
+)
+add_custom_target(shellcheck
+    COMMAND shellcheck ${SOLAYA_SHELL_SCRIPTS}
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    USES_TERMINAL
+    VERBATIM
+    COMMENT "shellcheck across every project-authored shell script"
+)
+
+# -----------------------------------------------------------------------------
 # ci: the full pre-merge gate.
 # -----------------------------------------------------------------------------
 add_custom_target(ci
-    DEPENDS fmt-check clippy test-unit miri test-system
-    COMMENT "All CI checks (fmt, clippy, unit, miri, system)"
+    DEPENDS fmt-check clippy shellcheck test-unit miri test-system
+    COMMENT "All CI checks (fmt, clippy, shellcheck, unit, miri, system)"
 )

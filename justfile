@@ -72,6 +72,9 @@ test-system *TEST:
 clippy:
     cmake --build {{BUILD_DIR}} --target clippy
 
+shellcheck:
+    cmake --build {{BUILD_DIR}} --target shellcheck
+
 miri:
     cmake --build {{BUILD_DIR}} --target miri
 
