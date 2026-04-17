@@ -10,8 +10,10 @@ add_custom_target(clippy
     # userspace — lives in its own workspace so run from userspace/
     COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_SOURCE_DIR}/userspace
             ${SOLAYA_CARGO} clippy -- -D warnings
-    # boot + solaya + driver-api — main workspace
-    COMMAND ${SOLAYA_CARGO} clippy -p boot -p solaya -p driver-api -- -D warnings
+    # boot + solaya + driver-api — main workspace. --release matches the
+    # profile used by solaya-kernel-elf / test-unit, so cargo's fingerprint
+    # tree stays cache-compatible when alternating between them.
+    COMMAND ${SOLAYA_CARGO} clippy --release -p boot -p solaya -p driver-api -- -D warnings
     # system-tests — separate workspace, x86_64 host
     COMMAND ${SOLAYA_CARGO} clippy --release
             --manifest-path ${CMAKE_SOURCE_DIR}/system-tests/Cargo.toml
@@ -20,10 +22,12 @@ add_custom_target(clippy
     COMMAND ${SOLAYA_CARGO} clippy --release
             --manifest-path ${CMAKE_SOURCE_DIR}/mcp-server/Cargo.toml
             --target x86_64-unknown-linux-gnu --no-deps -- -D warnings
-    # solaya tests (separate feature set)
-    COMMAND ${SOLAYA_CARGO} clippy -p solaya --tests -- -D warnings
+    # solaya tests (separate feature set) — --release for the same reason.
+    COMMAND ${SOLAYA_CARGO} clippy --release -p solaya --tests -- -D warnings
     # driver-api host tests (different target so the trait tests compile)
-    COMMAND ${SOLAYA_CARGO} clippy -p driver-api --tests
+    # — --release matches test-unit's `-p driver-api --target x86_64-...` so
+    # the two commands share cargo's fingerprint cache.
+    COMMAND ${SOLAYA_CARGO} clippy --release -p driver-api --tests
             --target x86_64-unknown-linux-gnu -- -D warnings
     DEPENDS headers-generated
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
