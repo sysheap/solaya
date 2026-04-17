@@ -44,7 +44,7 @@ add_custom_target(attach
 add_custom_target(disasm
     COMMAND ${SOLAYA_CROSS_BIN}/riscv64-linux-musl-objdump
         -d --demangle
-        --disassembler-color=on --visualize-jumps=extended-color
+        --disassembler-color=on
         ${CMAKE_SOURCE_DIR}/target/riscv64gc-unknown-none-elf/release/boot
     DEPENDS solaya-bin
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
