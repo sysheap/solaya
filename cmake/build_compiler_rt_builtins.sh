@@ -53,13 +53,13 @@ SKIP_RE='^(gcc_personality_v0|emutls|enable_execute_stack|eprintf|apple_versioni
 # linked into both -static and PIE final binaries.  -DVISIBILITY_HIDDEN
 # matches compiler-rt's upstream build (keeps internal helpers out of the
 # final executable's dynamic symbol table where applicable).
-CFLAGS="-fPIC -O2 -DVISIBILITY_HIDDEN -Wno-unused-command-line-argument"
+CFLAGS=(-fPIC -O2 -DVISIBILITY_HIDDEN -Wno-unused-command-line-argument)
 
 compile_one() {
     # $1 = src file (relative to $SRC), $2 = output .o path.  Uses `||` so
     # a single file's failure doesn't take down all the background jobs;
     # we audit the final object count against the source count afterwards.
-    "$CC" $CFLAGS -c "$SRC/$1" -o "$2" || {
+    "$CC" "${CFLAGS[@]}" -c "$SRC/$1" -o "$2" || {
         echo "FAIL: $1" >&2
         return 1
     }
@@ -86,7 +86,7 @@ for f in "$SRC"/*.c; do
     fi
     compiled=$((compiled + 1))
     throttle
-    ( compile_one "${f#$SRC/}" "$WORK/${base}.o" || echo "$base" >> "$FAILED_LIST" ) &
+    ( compile_one "${f#"$SRC"/}" "$WORK/${base}.o" || echo "$base" >> "$FAILED_LIST" ) &
 done
 
 echo "compiler-rt-builtins: compiling riscv builtins"
@@ -110,9 +110,11 @@ echo "compiler-rt-builtins: compiling crtbegin / crtend"
 compile_one "crtbegin.c" "$OUT/clang_rt.crtbegin.o"
 compile_one "crtend.c"   "$OUT/clang_rt.crtend.o"
 
-objcount=$(ls "$WORK" | grep -v '^\.' | wc -l)
+shopt -s nullglob
+objs=("$WORK"/*.o)
+objcount=${#objs[@]}
 echo "compiler-rt-builtins: archiving $objcount objects (of $compiled attempted) into libclang_rt.builtins.a"
 rm -f "$OUT/libclang_rt.builtins.a"
-"$AR" rcs "$OUT/libclang_rt.builtins.a" "$WORK"/*.o
+"$AR" rcs "$OUT/libclang_rt.builtins.a" "${objs[@]}"
 
 echo "compiler-rt-builtins: done ($OUT)"

@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 set -e
 
-repo_root=$(git rev-parse --show-toplevel)
-
 # Format only staged Rust files to avoid touching unstaged work
 staged_rs_files=$(git diff --name-only --cached --diff-filter=d -- '*.rs')
 if [ -n "$staged_rs_files" ]; then
