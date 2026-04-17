@@ -85,5 +85,3 @@ add_custom_target(solaya-bin
     VERBATIM
     COMMENT "Emitting ${_kernel_bin}"
 )
-
-add_dependencies(solaya-bin index)
