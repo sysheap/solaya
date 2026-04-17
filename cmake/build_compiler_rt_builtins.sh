@@ -15,10 +15,11 @@
 #   $2  riscv64-linux-musl-clang wrapper
 #   $3  riscv64-linux-musl-ar wrapper
 #   $4  output dir (resource-dir/lib/<triple>/)
+#   $5  (optional) max concurrent compile jobs (defaults to nproc)
 set -euo pipefail
 
-if [ $# -ne 4 ]; then
-    echo "usage: $0 <compiler-rt-src> <clang> <ar> <outdir>" >&2
+if [ $# -lt 4 ] || [ $# -gt 5 ]; then
+    echo "usage: $0 <compiler-rt-src> <clang> <ar> <outdir> [jobs]" >&2
     exit 64
 fi
 
@@ -26,6 +27,7 @@ SRC="$1/lib/builtins"
 CC="$2"
 AR="$3"
 OUT="$4"
+JOBS="${5:-$(nproc 2>/dev/null || echo 1)}"
 
 if [ ! -d "$SRC" ]; then
     echo "error: compiler-rt source not found: $SRC" >&2
@@ -66,7 +68,16 @@ compile_one() {
 FAILED_LIST="$WORK/.failed"
 : > "$FAILED_LIST"
 
-echo "compiler-rt-builtins: compiling generic builtins in $SRC"
+# Throttle: block until fewer than $JOBS background compile jobs are running.
+# Uses `wait -n` (bash 4.3+); the toolchain already requires bash for this
+# script to be invoked at all, so no portability loss.
+throttle() {
+    while [ "$(jobs -pr | wc -l)" -ge "$JOBS" ]; do
+        wait -n
+    done
+}
+
+echo "compiler-rt-builtins: compiling generic builtins in $SRC (-j$JOBS)"
 compiled=0
 for f in "$SRC"/*.c; do
     base="$(basename "${f%.c}")"
@@ -74,6 +85,7 @@ for f in "$SRC"/*.c; do
         continue
     fi
     compiled=$((compiled + 1))
+    throttle
     ( compile_one "${f#$SRC/}" "$WORK/${base}.o" || echo "$base" >> "$FAILED_LIST" ) &
 done
 
@@ -82,6 +94,7 @@ for f in "$SRC/riscv"/*.S "$SRC/riscv"/*.c; do
     [ -e "$f" ] || continue
     base="$(basename "${f%.*}")"
     compiled=$((compiled + 1))
+    throttle
     ( compile_one "riscv/$(basename "$f")" "$WORK/riscv_${base}.o" || echo "riscv/$base" >> "$FAILED_LIST" ) &
 done
 

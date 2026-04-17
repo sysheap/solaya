@@ -193,6 +193,7 @@ ExternalProject_Add(compiler-rt-builtins
             "${SOLAYA_CROSS_BIN}/riscv64-linux-musl-clang"
             "${SOLAYA_CROSS_BIN}/riscv64-linux-musl-ar"
             "${_crt_install}"
+            "${SOLAYA_BUILD_PARALLEL}"
         # Clang's legacy (pre-per-target) search path is
         # <resource-dir>/lib/linux/libclang_rt.builtins-<arch>.a; populate it
         # too so both lookup schemes resolve.
