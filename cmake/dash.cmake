@@ -34,6 +34,11 @@ set(_dash_cc       "${SOLAYA_CROSS_BIN}/riscv64-linux-musl-clang")
 ExternalProject_Add(dash-build
     URL       "${SOLAYA_DASH_URL}"
     URL_HASH  SHA256=${SOLAYA_DASH_SHA256}
+    # SOURCE_DIR + STAMP_DIR under SOLAYA_TC_ROOT so the extracted tarball and
+    # step-done markers survive a fresh build/. See toolchain_bootstrap.cmake
+    # for the rationale.
+    SOURCE_DIR                 "${SOLAYA_TC_ROOT}/_src/dash"
+    STAMP_DIR                  "${SOLAYA_TC_ROOT}/_stamp/dash"
     # Preserve the tarball's mtimes so make sees aclocal.m4 / Makefile.in as
     # newer than configure.ac and skips the autoreconf regen path — otherwise
     # the `missing` script demands the exact upstream automake (aclocal-1.16)
@@ -79,3 +84,9 @@ add_custom_target(dash ALL
     DEPENDS "${SOLAYA_USERSPACE_ARTIFACT_DIR}/dash"
             "${SOLAYA_USERSPACE_ARTIFACT_DIR}/sh"
 )
+
+# Pull the dash tarball into .toolchain/_dl/ as part of the `toolchain-all`
+# target so the CI cache save (which fires right after that target) captures
+# it. Without this the tarball is only fetched later, during `solaya-bin`,
+# and every subsequent CI run re-downloads from gondor.apana.org.au.
+add_dependencies(toolchain-all dash-build)
