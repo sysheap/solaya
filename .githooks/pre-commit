@@ -11,6 +11,20 @@ fi
 # Auto-fix what clippy can, fail on remaining warnings
 cargo clippy --fix --allow-dirty --allow-staged -- -D warnings
 
+# Shellcheck staged shell scripts. Hard-fail if shellcheck is missing so
+# this gate can't silently skip. Include edits to the hook itself so a
+# broken pre-commit can't sneak through.
+staged_sh_files=$(git diff --name-only --cached --diff-filter=d -- '*.sh' '.githooks/pre-commit')
+if [ -n "$staged_sh_files" ]; then
+    if ! command -v shellcheck >/dev/null 2>&1; then
+        echo "error: shellcheck not installed." >&2
+        echo "  Fedora:  sudo dnf install -y shellcheck" >&2
+        echo "  Ubuntu:  sudo apt-get install -y shellcheck" >&2
+        exit 1
+    fi
+    echo "$staged_sh_files" | xargs shellcheck
+fi
+
 # Rebuild INDEX.md and stage it if changed
 indxr -o INDEX.md
 if ! git diff --quiet -- INDEX.md; then
