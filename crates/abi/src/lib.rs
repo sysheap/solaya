@@ -5,9 +5,6 @@
 //! program link against this?" If no, it doesn't belong.
 #![no_std]
 #![allow(unused_variables)]
-#![feature(auto_traits)]
-#![feature(negative_impls)]
-#![feature(str_from_raw_parts)]
 
 pub mod cpu;
 pub mod errors;
