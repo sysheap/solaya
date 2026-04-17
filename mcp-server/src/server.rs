@@ -325,7 +325,9 @@ impl QemuMcpServer {
         }
     }
 
-    #[tool(description = "Build the kernel (runs 'just build'). Optionally run clippy too.")]
+    #[tool(
+        description = "Build the kernel (runs 'cmake --build build'). Optionally run clippy too."
+    )]
     async fn build_kernel(
         &self,
         Parameters(params): Parameters<BuildKernelParams>,
@@ -333,8 +335,8 @@ impl QemuMcpServer {
         let root = project_root().map_err(|e| mcp_err(format!("{e}")))?;
 
         let output = tokio::time::timeout(Duration::from_secs(30), {
-            let mut cmd = Command::new("just");
-            cmd.arg("build").current_dir(&root);
+            let mut cmd = Command::new("cmake");
+            cmd.args(["--build", "build"]).current_dir(&root);
             run_command(cmd)
         })
         .await
@@ -345,8 +347,9 @@ impl QemuMcpServer {
 
         if params.clippy.unwrap_or(false) {
             let clippy_output = tokio::time::timeout(Duration::from_secs(30), {
-                let mut cmd = Command::new("just");
-                cmd.arg("clippy").current_dir(&root);
+                let mut cmd = Command::new("cmake");
+                cmd.args(["--build", "build", "--target", "clippy"])
+                    .current_dir(&root);
                 run_command(cmd)
             })
             .await
