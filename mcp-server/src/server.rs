@@ -410,18 +410,18 @@ impl QemuMcpServer {
 
 impl ServerHandler for QemuMcpServer {
     fn get_info(&self) -> ServerInfo {
-        ServerInfo {
-            protocol_version: ProtocolVersion::V_2024_11_05,
-            capabilities: ServerCapabilities::builder().enable_tools().build(),
-            server_info: Implementation::from_build_env(),
-            instructions: Some(
-                "MCP server for interacting with Solaya kernel running in QEMU. \
-                 Use boot_qemu to start, then send_command to interact, \
-                 and shutdown_qemu when done. build_kernel and run_system_tests \
-                 handle the build/test cycle."
-                    .into(),
-            ),
-        }
+        // ServerInfo (== InitializeResult) is #[non_exhaustive] in rmcp 1.x,
+        // so we fill it through the constructor + field assignment.
+        let mut info = ServerInfo::new(ServerCapabilities::builder().enable_tools().build());
+        info.protocol_version = ProtocolVersion::V_2024_11_05;
+        info.instructions = Some(
+            "MCP server for interacting with Solaya kernel running in QEMU. \
+             Use boot_qemu to start, then send_command to interact, \
+             and shutdown_qemu when done. build_kernel and run_system_tests \
+             handle the build/test cycle."
+                .into(),
+        );
+        info
     }
 
     async fn call_tool(
