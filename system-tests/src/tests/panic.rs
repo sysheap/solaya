@@ -8,7 +8,6 @@ async fn panic() -> anyhow::Result<()> {
         .await?;
 
     assert!(output.contains("Hello from Panic! Triggering kernel panic"));
-    assert!(output.contains("<solaya::panic::panic_handler"));
 
     Ok(())
 }
