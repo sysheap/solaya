@@ -92,7 +92,10 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: ${{ github.workspace }}/.toolchain
-          key: toolchain-${{ runner.os }}-${{ hashFiles('cmake/checksums.cmake', 'cmake/toolchain_bootstrap.cmake', 'toolchain/pins.cmake') }}
+          # Include every CMake file whose contents affect the toolchain
+          # output so edits invalidate the cache. Without this, edits to
+          # e.g. build_compiler_rt_builtins.sh hit a stale cache.
+          key: toolchain-${{ runner.os }}-${{ hashFiles('cmake/checksums.cmake', 'cmake/toolchain_bootstrap.cmake', 'cmake/build_compiler_rt_builtins.sh', 'cmake/fetch_file.cmake', 'cmake/dash.cmake', 'cmake/doom.cmake', 'cmake/clang_wrapper.cmake', 'toolchain/pins.cmake') }}
 
       - name: Configure CMake
         run: cmake -S . -B "$BUILD_DIR" --preset riscv64-virt
@@ -110,7 +113,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: ${{ github.workspace }}/.toolchain
-          key: toolchain-${{ runner.os }}-${{ hashFiles('cmake/checksums.cmake', 'cmake/toolchain_bootstrap.cmake', 'toolchain/pins.cmake') }}
+          key: toolchain-${{ runner.os }}-${{ hashFiles('cmake/checksums.cmake', 'cmake/toolchain_bootstrap.cmake', 'cmake/build_compiler_rt_builtins.sh', 'cmake/fetch_file.cmake', 'cmake/dash.cmake', 'cmake/doom.cmake', 'cmake/clang_wrapper.cmake', 'toolchain/pins.cmake') }}
 
       - name: Build kernel
         run: cmake --build "$BUILD_DIR" --target solaya-bin
