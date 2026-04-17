@@ -34,7 +34,11 @@ set(_dash_cc       "${SOLAYA_CROSS_BIN}/riscv64-linux-musl-clang")
 ExternalProject_Add(dash-build
     URL       "${SOLAYA_DASH_URL}"
     URL_HASH  SHA256=${SOLAYA_DASH_SHA256}
-    DOWNLOAD_EXTRACT_TIMESTAMP OFF
+    # Preserve the tarball's mtimes so make sees aclocal.m4 / Makefile.in as
+    # newer than configure.ac and skips the autoreconf regen path — otherwise
+    # the `missing` script demands the exact upstream automake (aclocal-1.16)
+    # even if the host ships a newer one.
+    DOWNLOAD_EXTRACT_TIMESTAMP ON
     DOWNLOAD_DIR               "${SOLAYA_TC_ROOT}/_dl"
     USES_TERMINAL_DOWNLOAD     ON
     USES_TERMINAL_CONFIGURE    ON
