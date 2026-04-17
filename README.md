@@ -98,6 +98,7 @@ sudo apt-get install -y --no-install-recommends \
     flex bison bc \
     pkg-config \
     rsync \
+    shellcheck \
     e2fsprogs \
     qemu-system-misc qemu-system-data seabios ipxe-qemu
 # `just` is not packaged on 24.04; install via rustup's cargo:
@@ -116,6 +117,7 @@ sudo dnf install -y \
     flex bison bc \
     pkgconf-pkg-config \
     rsync \
+    ShellCheck \
     e2fsprogs \
     just \
     qemu-system-riscv seavgabios-bin ipxe-roms-qemu

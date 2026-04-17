@@ -335,7 +335,7 @@ Solaya is licensed under **MIT**. To keep it that way:
 
 **Commit automatically.** After completing a task, commit without waiting for user intervention. Before committing:
 - Remove any dead or unused code introduced by your changes
-- The pre-commit hook runs `cargo fmt` and `cargo clippy --fix` automatically; it will block the commit if clippy finds unfixable warnings.
+- The pre-commit hook runs `cargo fmt`, `cargo clippy --fix`, and `shellcheck` (on any staged `*.sh` or edits to `.githooks/pre-commit`) automatically; it blocks the commit if clippy has unfixable warnings or shellcheck reports any finding. Install `shellcheck` via `dnf install shellcheck` (Fedora) / `apt install shellcheck` (Ubuntu).
 
 **Commit incrementally.** Commit each small working step toward a larger goal. Include test code in commits. This enables incremental progress verification rather than large, hard-to-debug changesets.
 
