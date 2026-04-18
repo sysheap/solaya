@@ -25,18 +25,15 @@ impl LinuxSyscallHandler {
         typ: c_int,
         _protocol: c_int,
     ) -> Result<isize, Errno> {
-        if domain != AF_INET {
-            // Userspace (busybox init) probes AF_UNIX and friends;
-            // returning EAFNOSUPPORT lets it fall back cleanly instead of
-            // taking down the kernel.  socketpair(AF_UNIX, ...) is handled
-            // separately in do_socketpair.
-            return Err(Errno::EAFNOSUPPORT);
-        }
+        assert!(
+            domain == AF_INET,
+            "socket: only AF_INET supported (got domain={domain})"
+        );
         let masked_type = typ & !SOCK_CLOEXEC;
         let descriptor = match masked_type {
             SOCK_DGRAM => FileDescriptor::UnboundUdpSocket,
             SOCK_STREAM => FileDescriptor::UnboundTcpSocket,
-            _ => return Err(Errno::EPROTONOSUPPORT),
+            _ => panic!("socket: unsupported type {typ:#x}"),
         };
         let fd = self
             .current_process
