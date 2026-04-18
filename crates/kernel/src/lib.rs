@@ -132,8 +132,13 @@ pub extern "C" fn kernel_init(hart_id: usize, device_tree_pointer: *const ()) ->
     }
 
     let device_tree_range = get_devicetree_range();
-
-    memory::init_page_allocator(&[device_tree_range]);
+    let initrd_range = initramfs::find_initrd_range();
+    // Heap isn't up yet — can't allocate. Build the reserved-range slice
+    // on the stack with a small fixed-size array.
+    match initrd_range.as_ref() {
+        Some(initrd) => memory::init_page_allocator(&[device_tree_range, initrd.clone()]),
+        None => memory::init_page_allocator(&[device_tree_range]),
+    }
 
     backtrace::init();
     plic::discover_from_device_tree(boot_cpu_id);
@@ -186,9 +191,10 @@ pub extern "C" fn kernel_init(hart_id: usize, device_tree_pointer: *const ()) ->
         io::tty_device::TtyDeviceInner::new(),
     )));
 
-    process_table::init();
     processes::syscall_runner::install();
     fs::init();
+    initramfs::extract();
+    process_table::init();
     io::uart::register_console_char_device();
 
     hal::cpu::write_sscratch(Cpu::init(boot_cpu_id, num_cpus) as usize);
