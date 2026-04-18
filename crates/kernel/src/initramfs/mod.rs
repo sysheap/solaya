@@ -139,7 +139,12 @@ fn extract_into(archive: &[u8], root: VfsNodeRef) -> Result<usize, ExtractError>
             _ => continue,
         };
 
-        let _ = node.set_mode(entry.mode);
+        if let Err(e) = node.set_mode(entry.mode) {
+            warn!(
+                "initramfs: set_mode(0o{:o}) failed for {}: {:?}",
+                entry.mode, path, e
+            );
+        }
 
         if entry.nlink > 1 && file_type == S_IFREG {
             by_ino.insert(entry.ino, node);
