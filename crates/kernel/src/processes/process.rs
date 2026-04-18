@@ -62,9 +62,10 @@ pub struct Process {
     // Raw auxv bytes captured at exec time; served to userspace via
     // prctl(PR_GET_AUXV). Empty for kernel-internal threads (powersave).
     saved_auxv: Vec<u8>,
-    // ELF image bytes of the currently-loaded binary. Populated at exec /
-    // fork-from-parent; used by the syscall tracer to resolve userspace
-    // symbols for backtraces without needing to re-read the file.
+    // ELF image bytes, retained only for processes listed in
+    // TRACED_PROCESSES. The syscall tracer needs them to symbolicate
+    // userspace backtraces; untraced processes would waste hundreds of
+    // KB per fork (Arc-cloned) for no benefit.
     elf_bytes: Option<Arc<[u8]>>,
 }
 
@@ -124,6 +125,9 @@ impl Process {
     }
 
     pub fn set_elf_bytes(&mut self, bytes: Arc<[u8]>) {
+        if !crate::syscalls::trace_config::is_traced(&self.name) {
+            return;
+        }
         self.elf_bytes = Some(bytes);
     }
 
