@@ -81,6 +81,7 @@ impl Debug for Process {
 }
 
 impl Process {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         name: Arc<String>,
         page_table: RootPageTableHolder,
@@ -89,6 +90,7 @@ impl Process {
         main_thread: Tid,
         pgid: Tid,
         sid: Tid,
+        saved_auxv: Vec<u8>,
     ) -> Self {
         let mappings = allocated_pages
             .into_iter()
@@ -108,16 +110,12 @@ impl Process {
             umask: 0o022,
             cwd: String::from("/"),
             credentials: Credentials::root(),
-            saved_auxv: Vec::new(),
+            saved_auxv,
         }
     }
 
     pub fn saved_auxv(&self) -> &[u8] {
         &self.saved_auxv
-    }
-
-    pub fn set_saved_auxv(&mut self, auxv: Vec<u8>) {
-        self.saved_auxv = auxv;
     }
 
     pub fn brk(&mut self, brk: VirtAddr) -> VirtAddr {
