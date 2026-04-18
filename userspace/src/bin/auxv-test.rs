@@ -2,22 +2,17 @@
 // auxv consumers (rustix, getauxval, …) so a failure here points at the
 // kernel path rather than at whichever library happens to wrap it.
 
+use headers::syscall_types::{AT_EXECFN, AT_NULL, AT_PAGESZ, AT_PHDR, AT_RANDOM, PR_GET_AUXV};
+
 unsafe extern "C" {
     fn prctl(option: i32, arg2: u64, arg3: u64, arg4: u64, arg5: u64) -> i32;
     fn strlen(s: *const u8) -> usize;
 }
 
-const PR_GET_AUXV: i32 = 0x41555856;
-const AT_NULL: usize = 0;
-const AT_PHDR: usize = 3;
-const AT_PAGESZ: usize = 6;
-const AT_RANDOM: usize = 25;
-const AT_EXECFN: usize = 31;
-
 fn get_auxv(buf: &mut [u64]) -> i32 {
     let ptr = buf.as_mut_ptr() as u64;
     let len = core::mem::size_of_val(buf) as u64;
-    unsafe { prctl(PR_GET_AUXV, ptr, len, 0, 0) }
+    unsafe { prctl(PR_GET_AUXV as i32, ptr, len, 0, 0) }
 }
 
 fn main() {
@@ -43,7 +38,7 @@ fn main() {
     let mut random = 0u64;
     let mut execfn = 0u64;
     for i in 0..pairs {
-        let tag = buf[i * 2] as usize;
+        let tag = buf[i * 2] as u32;
         let val = buf[i * 2 + 1];
         match tag {
             AT_PAGESZ => pagesz = val,
