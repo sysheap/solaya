@@ -1,6 +1,6 @@
 use std::io::Read;
 
-const AT_RANDOM: u64 = 25;
+use headers::syscall_types::AT_RANDOM;
 
 unsafe extern "C" {
     fn getauxval(typ: u64) -> usize;
@@ -27,7 +27,7 @@ fn main() {
 
     // Test 2: AT_RANDOM from auxiliary vector
     {
-        let ptr = unsafe { getauxval(AT_RANDOM) };
+        let ptr = unsafe { getauxval(AT_RANDOM.into()) };
         assert!(ptr != 0, "AT_RANDOM should be non-zero");
         let random = unsafe { core::slice::from_raw_parts(ptr as *const u8, 16) };
         assert!(
