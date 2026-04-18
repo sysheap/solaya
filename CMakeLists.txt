@@ -2,7 +2,7 @@
 #
 # User entry points via `just X` (see justfile — thin wrappers over cmake):
 #
-#   build            default — flat boot binary (cmake: solaya-bin)
+#   build            default — kernel binary + buildroot rootfs (cmake: solaya)
 #   configure        cmake --preset riscv64-virt
 #   toolchain        build cross-toolchain (cmake: toolchain-all, ~1h first time)
 #   run, run-fb      run in QEMU
@@ -18,7 +18,8 @@
 #
 # Additional cmake-only targets (invoke via `cmake --build build --target X`):
 #
-#   solaya                    kernel ELF + patch symbols (default of `build`)
+#   solaya                    kernel ELF + buildroot cpio (default of `build`)
+#   solaya-bin                kernel ELF only, no rootfs
 #   userspace-all             userspace rust bins + dash + doom
 #   headers-generated         run bindgen-driver -> build/headers/generated/
 #   fetch-deps                prefetch cargo deps
@@ -73,6 +74,8 @@ add_subdirectory(userspace)
 include(buildroot)
 add_subdirectory(crates/kernel)
 
-# `solaya` (default target) — just an alias for solaya-bin so bare
-# `cmake --build build` builds the kernel.
-add_custom_target(solaya ALL DEPENDS solaya-bin)
+# `solaya` (default target) — bare `cmake --build build` produces both
+# the kernel binary and the buildroot rootfs cpio that QEMU's -initrd
+# needs at runtime.  Without this dependency, first-time users had to
+# remember to run `--target buildroot-all` separately.
+add_custom_target(solaya ALL DEPENDS solaya-bin buildroot-all)
