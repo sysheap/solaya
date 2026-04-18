@@ -9,8 +9,8 @@ set(SOLAYA_MUSL_VERSION          "1.2.6")
 set(SOLAYA_LINUX_HEADERS_VERSION "6.18.22")
 set(SOLAYA_DASH_VERSION          "0.5.12")
 # Buildroot LTS we consume for busybox init + dash + GNU coreutils + rootfs
-# cpio packaging.  Use the latest 2025.02.x point release.
-set(SOLAYA_BUILDROOT_VERSION     "2025.02.x")
+# cpio packaging.  Latest 2025.02.x point release as of pinning.
+set(SOLAYA_BUILDROOT_VERSION     "2025.02.12")
 # compiler-rt builtins: pinned to a released LLVM version (not the host's),
 # since builtin ABI is stable across LLVM releases.  Built against the musl
 # sysroot with the host's distro clang — no external prebuilt artefacts.

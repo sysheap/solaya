@@ -14,8 +14,10 @@
 # .toolchain/ policy introduced in commit c94bf499.
 
 include(ExternalProject)
-include(${CMAKE_SOURCE_DIR}/cmake/checksums.cmake)
+# Order matters: checksums.cmake references SOLAYA_BUILDROOT_VERSION from
+# pins.cmake when building the tarball URL.
 include(${CMAKE_SOURCE_DIR}/toolchain/pins.cmake)
+include(${CMAKE_SOURCE_DIR}/cmake/checksums.cmake)
 
 # Tarball SHA256 gate.  Configure-time check — if the pin is still the
 # placeholder string, emit a stub `buildroot-all` that fails loudly at

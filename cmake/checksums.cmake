@@ -50,9 +50,12 @@ set(SOLAYA_DOOM_WAD_SHA256   "1d7d43be501e67d927e415e0b8f3e29c3bf33075e859721816
 # source: slitaz distro mirror, the same URL the retired nix flake used.
 
 # Buildroot source tarball — pin the exact 2025.02.x point release and its
-# SHA256 before enabling the buildroot-all target.  Placeholder values here;
-# replace from https://buildroot.org/downloads/ + the accompanying .sha256
-# file on the same page (the release SHA is published next to the tarball).
+# SHA256.  Bump SOLAYA_BUILDROOT_VERSION in toolchain/pins.cmake, then
+# refresh the hash here from the buildroot.org .sign file published
+# alongside the tarball (the SHA256 line inside that signed manifest is
+# the authoritative source).
 set(SOLAYA_BUILDROOT_URL     "https://buildroot.org/downloads/buildroot-${SOLAYA_BUILDROOT_VERSION}.tar.xz")
-set(SOLAYA_BUILDROOT_SHA256  "REPLACE_WITH_ACTUAL_SHA256_FROM_BUILDROOT_ORG")
+set(SOLAYA_BUILDROOT_SHA256  "9c8b7a2a14c74c934ed656988c473b1c01d869cebb5b00525104cc8a65381fb4")
+# source: https://buildroot.org/downloads/buildroot-2025.02.12.tar.xz.sign
+#   released Tue 17 Mar 19:45:00 UTC 2026 — signed by Arnout Vandecappelle.
 
