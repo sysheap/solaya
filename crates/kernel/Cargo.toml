@@ -8,10 +8,10 @@ description.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
-default = ["hal/riscv64", "rootdir_legacy"]
-# Mount `/` as the compile-time PROGRAMS-backed RootDir. Removed once
-# initramfs/cpio extraction is wired into boot; kept ON by default so
-# intermediate commits leave main green.
+default = ["hal/riscv64"]
+# Mount `/` as the compile-time PROGRAMS-backed RootDir. Off by default
+# now that initramfs/cpio extraction is wired into boot; kept as an opt-in
+# so a developer can still build a kernel that boots without buildroot.
 rootdir_legacy = []
 
 [dependencies]
