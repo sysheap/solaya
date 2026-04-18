@@ -7,7 +7,8 @@
 # bootstrapped qemu-system-riscv64 directly.
 
 add_custom_target(run
-    COMMAND ${SOLAYA_CARGO} run --release
+    COMMAND ${CMAKE_COMMAND} -E env SOLAYA_INITRD=${SOLAYA_BUILDROOT_CPIO}
+            ${SOLAYA_CARGO} run --release
     DEPENDS solaya-bin
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     USES_TERMINAL
@@ -16,7 +17,8 @@ add_custom_target(run
 )
 
 add_custom_target(run-fb
-    COMMAND ${SOLAYA_CARGO} run --release -- --fb
+    COMMAND ${CMAKE_COMMAND} -E env SOLAYA_INITRD=${SOLAYA_BUILDROOT_CPIO}
+            ${SOLAYA_CARGO} run --release -- --fb
     DEPENDS solaya-bin
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     USES_TERMINAL
