@@ -32,6 +32,7 @@ jobs:
             rsync \
             shellcheck \
             e2fsprogs \
+            perl cpio \
             qemu-system-misc qemu-system-data seabios ipxe-qemu
           # clang-18 / lld-18 / llvm-18 are the cross-toolchain; Ubuntu
           # 24.04 ships LLVM 18 as versioned packages, which cmake/llvm_tools
