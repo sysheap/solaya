@@ -63,6 +63,9 @@ test-system *TEST:
     if [ -z "{{TEST}}" ]; then
         cmake --build {{BUILD_DIR}} --target test-system
     else
+        # Ensure buildroot cpio exists; tests read SOLAYA_INITRD at runtime.
+        cmake --build {{BUILD_DIR}} --target buildroot-all --target solaya-bin
+        SOLAYA_INITRD="$(pwd)/.buildroot/output/images/rootfs.cpio" \
         cargo nextest run --release \
             --manifest-path system-tests/Cargo.toml \
             --target x86_64-unknown-linux-gnu \
