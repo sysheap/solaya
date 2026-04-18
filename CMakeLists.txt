@@ -69,6 +69,9 @@ add_subdirectory(toolchain)
 include(dash)
 include(doom)
 add_subdirectory(userspace)
+# buildroot consumes the SOLAYA_USERSPACE_ARTIFACT_DIR overlay, so it must
+# come after the userspace subdir where the artifact target is declared.
+include(buildroot)
 add_subdirectory(crates/kernel)
 
 # `solaya` (default target) — just an alias for solaya-bin so bare

@@ -49,3 +49,10 @@ set(SOLAYA_DOOM_WAD_URL      "https://distro.ibiblio.org/slitaz/sources/packages
 set(SOLAYA_DOOM_WAD_SHA256   "1d7d43be501e67d927e415e0b8f3e29c3bf33075e859721816f652a526cac771")
 # source: slitaz distro mirror, the same URL the retired nix flake used.
 
+# Buildroot source tarball — pin the exact 2025.02.x point release and its
+# SHA256 before enabling the buildroot-all target.  Placeholder values here;
+# replace from https://buildroot.org/downloads/ + the accompanying .sha256
+# file on the same page (the release SHA is published next to the tarball).
+set(SOLAYA_BUILDROOT_URL     "https://buildroot.org/downloads/buildroot-${SOLAYA_BUILDROOT_VERSION}.tar.xz")
+set(SOLAYA_BUILDROOT_SHA256  "REPLACE_WITH_ACTUAL_SHA256_FROM_BUILDROOT_ORG")
+

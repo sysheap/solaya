@@ -1,0 +1,6 @@
+#!/bin/dash
+# Solaya sysinit.  Kernel already mounts / (tmpfs via initramfs), /proc,
+# /dev, and /tmp, so this script has little to do for now.  Placeholder
+# exists so inittab's ::sysinit: hook has somewhere to land; add setup
+# steps here as they come up (e.g. setting hostname, seeding /etc/motd).
+:
