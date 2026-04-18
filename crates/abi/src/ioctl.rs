@@ -1,5 +1,4 @@
 pub const SOLAYA_PANIC: u32 = 0x5301;
-pub const SOLAYA_LIST_PROGRAMS: u32 = 0x5302;
 
 pub const SIOCGIFHWADDR: u32 = 0x8927;
 pub const SIOCSIFADDR: u32 = 0x8916;
@@ -19,12 +18,6 @@ unsafe extern "C" {
 pub fn trigger_kernel_panic() {
     unsafe {
         ioctl(1, SOLAYA_PANIC);
-    }
-}
-
-pub fn print_programs() {
-    unsafe {
-        ioctl(1, SOLAYA_LIST_PROGRAMS);
     }
 }
 
