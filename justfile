@@ -96,6 +96,20 @@ savedefconfig:
 olddefconfig:
     cmake --build {{BUILD_DIR}} --target olddefconfig
 
+# Buildroot-side reconfiguration — distinct from the kernel Kconfig
+# wrappers above. menuconfig opens buildroot's TUI; savedefconfig
+# writes the minimal config back to configs/solaya_riscv64_buildroot_defconfig.in
+# (header comments are lost — `git diff` + restore as needed);
+# rebuild wipes .buildroot/output and rebuilds from scratch.
+buildroot-menuconfig:
+    cmake --build {{BUILD_DIR}} --target buildroot-menuconfig
+
+buildroot-savedefconfig:
+    cmake --build {{BUILD_DIR}} --target buildroot-savedefconfig
+
+buildroot-rebuild:
+    cmake --build {{BUILD_DIR}} --target buildroot-rebuild
+
 mcp-server:
     cmake --build {{BUILD_DIR}} --target mcp-server
 
