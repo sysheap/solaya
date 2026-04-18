@@ -5,11 +5,12 @@ RISC-V 64-bit hobby OS kernel written in Rust. No third-party runtime dependenci
 ## Host Prerequisites
 
 LLVM >= 18 (clang, lld, llvm-tools), cmake, ninja, qemu-system-riscv64,
-`just`. On Ubuntu: `apt install clang-18 lld-18 llvm-18 libclang-dev
-cmake ninja-build qemu-system-misc just`. On Fedora: `dnf install clang
-lld llvm cmake ninja-build qemu-system-riscv just`. The cross-toolchain
-(clang/lld/llvm-*) is distro-provided; only the musl sysroot + compiler-rt
-builtins are bootstrapped locally.
+`just`, plus `cpio` (required by the buildroot userspace build). On
+Ubuntu: `apt install clang-18 lld-18 llvm-18 libclang-dev cmake
+ninja-build qemu-system-misc just cpio`. On Fedora: `dnf install clang
+lld llvm cmake ninja-build qemu-system-riscv just cpio`. The
+cross-toolchain (clang/lld/llvm-*) is distro-provided; only the musl
+sysroot + compiler-rt builtins are bootstrapped locally.
 
 ## Quick Commands
 
