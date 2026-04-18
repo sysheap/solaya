@@ -20,6 +20,7 @@ use alloc::{
     collections::BTreeMap,
     string::String,
     sync::{Arc, Weak},
+    vec::Vec,
 };
 use core::{
     ffi::{c_int, c_uint},
@@ -144,6 +145,7 @@ impl Thread {
             POWERSAVE_TID,
             POWERSAVE_TID,
             POWERSAVE_TID,
+            Vec::new(),
         )
     }
 
@@ -170,7 +172,7 @@ impl Thread {
         register_state[Register::sp] = args_start.as_usize();
 
         let tid = get_next_tid();
-        let thread = Self::new_process(
+        Ok(Self::new_process(
             name,
             tid,
             register_state,
@@ -182,9 +184,8 @@ impl Thread {
             parent_tid,
             tid,
             tid,
-        );
-        thread.lock().process().lock().set_saved_auxv(auxv_bytes);
-        Ok(thread)
+            auxv_bytes,
+        ))
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -200,6 +201,7 @@ impl Thread {
         parent_tid: Tid,
         pgid: Tid,
         sid: Tid,
+        saved_auxv: Vec<u8>,
     ) -> ThreadRef {
         let name = Arc::new(name.into());
         let process = Arc::new(Spinlock::new(Process::new(
@@ -210,6 +212,7 @@ impl Thread {
             tid,
             pgid,
             sid,
+            saved_auxv,
         )));
 
         let main_thread = Thread::new(

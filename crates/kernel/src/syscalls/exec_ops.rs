@@ -100,6 +100,7 @@ impl LinuxSyscallHandler {
             self.current_thread.lock().get_tid(),
             old_pgid,
             old_sid,
+            loaded.auxv_bytes,
         )));
 
         let mut inherited_fd_table = self.get_process().with_lock(|p| p.fd_table().clone());
@@ -109,7 +110,6 @@ impl LinuxSyscallHandler {
             np.set_fd_table(inherited_fd_table);
             np.set_cwd(old_cwd);
             np.set_credentials(old_creds);
-            np.set_saved_auxv(loaded.auxv_bytes);
         }
 
         let current_thread = self.current_thread.clone();

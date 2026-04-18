@@ -84,6 +84,7 @@ pub fn create_worker_thread() {
         POWERSAVE_TID,
         tid,
         tid,
+        alloc::vec::Vec::new(),
     );
 
     WORKER_TID.store(tid.as_u64(), Ordering::Relaxed);

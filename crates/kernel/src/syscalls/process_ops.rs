@@ -41,16 +41,6 @@ impl LinuxSyscallHandler {
 
         let forked = parent_process.with_lock(|mut p| p.fork_address_space());
 
-        let child_process = Arc::new(Spinlock::new(Process::new(
-            child_name.clone(),
-            forked.page_table,
-            BTreeMap::new(),
-            forked.brk,
-            child_tid,
-            parent_pgid,
-            parent_sid,
-        )));
-
         let (parent_fd_table, parent_cwd, parent_umask, parent_creds, parent_auxv) = parent_process
             .with_lock(|p| {
                 (
@@ -61,13 +51,24 @@ impl LinuxSyscallHandler {
                     p.saved_auxv().to_vec(),
                 )
             });
+
+        let child_process = Arc::new(Spinlock::new(Process::new(
+            child_name.clone(),
+            forked.page_table,
+            BTreeMap::new(),
+            forked.brk,
+            child_tid,
+            parent_pgid,
+            parent_sid,
+            parent_auxv,
+        )));
+
         {
             let mut child = child_process.lock();
             child.set_fd_table(parent_fd_table);
             child.set_cwd(parent_cwd);
             child.set_umask(parent_umask);
             child.set_credentials(parent_creds);
-            child.set_saved_auxv(parent_auxv);
             child.set_fork_state(forked.cow_pages, forked.free_mmap_address);
         }
 
