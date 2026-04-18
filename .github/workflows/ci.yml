@@ -99,6 +99,25 @@ jobs:
           # e.g. build_compiler_rt_builtins.sh hit a stale cache.
           key: toolchain-${{ runner.os }}-${{ hashFiles('cmake/checksums.cmake', 'cmake/toolchain_bootstrap.cmake', 'cmake/build_compiler_rt_builtins.sh', 'cmake/fetch_file.cmake', 'cmake/dash.cmake', 'cmake/doom.cmake', 'cmake/clang_wrapper.cmake', 'toolchain/pins.cmake') }}
 
+      # Buildroot output is ~780 MB (host toolchain + target rootfs +
+      # per-package build dirs) and takes ~20 min to build cold. Cache
+      # it keyed on the inputs that actually affect what's built — the
+      # recipe, the version/SHA pins, and the defconfig that selects
+      # packages. Overlay content changes don't invalidate the cache;
+      # buildroot re-runs only its rootfs-packaging stage on restore if
+      # the overlay moved.
+      - name: Restore buildroot cache
+        id: cache-buildroot
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ${{ github.workspace }}/.buildroot/_dl
+            ${{ github.workspace }}/.buildroot/src
+            ${{ github.workspace }}/.buildroot/output
+          key: buildroot-${{ runner.os }}-${{ hashFiles('cmake/buildroot.cmake', 'cmake/checksums.cmake', 'configs/solaya_riscv64_buildroot_defconfig.in', 'toolchain/pins.cmake') }}
+          restore-keys: |
+            buildroot-${{ runner.os }}-
+
       - name: Configure CMake
         run: cmake -S . -B "$BUILD_DIR" --preset riscv64-virt
 
@@ -137,3 +156,17 @@ jobs:
 
       - name: System tests
         run: cmake --build "$BUILD_DIR" --target test-system
+
+      # test-system transitively rebuilds buildroot-all, so by this point
+      # .buildroot/output/images/rootfs.cpio is fresh. Save unconditionally
+      # on key miss so a cold CI run re-seeds the cache even if a later
+      # step were to fail.
+      - name: Save buildroot cache
+        if: always() && steps.cache-buildroot.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ${{ github.workspace }}/.buildroot/_dl
+            ${{ github.workspace }}/.buildroot/src
+            ${{ github.workspace }}/.buildroot/output
+          key: buildroot-${{ runner.os }}-${{ hashFiles('cmake/buildroot.cmake', 'cmake/checksums.cmake', 'configs/solaya_riscv64_buildroot_defconfig.in', 'toolchain/pins.cmake') }}
