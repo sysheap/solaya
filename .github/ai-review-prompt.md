@@ -136,6 +136,14 @@ these rules:
 - **Maintainer-ticked items** (`- [x]` on a line you know you wrote
   as `- [ ]`): **never untick.** Treat the maintainer's tick as final
   acknowledgement.
+- **Maintainer-dismissed items** (`- [D]` on a line you know you wrote
+  as `- [ ]`, typically with a ` — _dismissed: <reason>_` suffix):
+  **never modify.** Treat `- [D]` exactly like `- [x]` — final
+  acknowledgement that the maintainer does not want this addressed.
+  Preserve the line verbatim, including the suffix. Do not re-raise
+  the same finding in a later run; if you genuinely believe the
+  concern has changed shape, file it as a new bullet with distinct
+  wording rather than resurrecting the dismissed one.
 - **Newly-discovered items** (issues that only appear in the new
   push): append as fresh `- [ ]` bullets in the appropriate section.
 - **Items that became irrelevant** (e.g. the flagged file was
