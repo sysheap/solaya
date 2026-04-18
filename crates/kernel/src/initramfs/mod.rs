@@ -38,22 +38,24 @@ pub fn find_initrd_range() -> Option<Range<*const u8>> {
     if end <= start {
         return None;
     }
-    assert!(
-        device_tree::range_in_ram(start as usize..end as usize),
-        "initrd range {:#x}..{:#x} from DTB /chosen is not contained in any /memory node — \
-         bootloader advertised an initrd outside RAM",
-        start,
-        end,
-    );
     Some((start as *const u8)..(end as *const u8))
 }
 
 fn find_initrd() -> Option<&'static [u8]> {
     let range = find_initrd_range()?;
-    let len = (range.end as usize).saturating_sub(range.start as usize);
+    let start = range.start as usize;
+    let end = range.end as usize;
+    let len = end.saturating_sub(start);
     if len == 0 {
         return None;
     }
+    assert!(
+        device_tree::range_in_ram(start..end),
+        "initrd range {:#x}..{:#x} from DTB /chosen is not contained in any /memory node — \
+         bootloader advertised an initrd outside RAM",
+        start,
+        end,
+    );
     let ptr = ValidatedPtr::<u8>::from_trusted(range.start);
     Some(ptr.as_static_slice(len))
 }
