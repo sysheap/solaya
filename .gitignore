@@ -3,6 +3,7 @@
 /target-coreutils
 /build
 /.toolchain
+/.buildroot
 qemu-infra/target/
 qemu-infra/Cargo.lock
 mcp-server/target/

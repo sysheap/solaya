@@ -1,0 +1,64 @@
+# Buildroot defconfig for the Solaya userspace.  Expanded from
+# solaya_riscv64_buildroot_defconfig.in via CMake's configure_file();
+# the @PLACEHOLDERS@ resolve to absolute paths at configure time.
+#
+# Outputs rootfs.cpio (uncompressed newc) at
+# ${_br_out}/images/rootfs.cpio — Solaya loads it via QEMU -initrd.
+
+# --- Target architecture (RISC-V 64-bit, rv64gc to match QEMU virt) ------
+BR2_riscv=y
+BR2_RISCV_64=y
+BR2_RISCV_ABI_LP64D=y
+BR2_riscv_custom=y
+BR2_RISCV_ISA_CUSTOM_RVI=y
+BR2_RISCV_ISA_CUSTOM_RVM=y
+BR2_RISCV_ISA_CUSTOM_RVA=y
+BR2_RISCV_ISA_CUSTOM_RVF=y
+BR2_RISCV_ISA_CUSTOM_RVD=y
+BR2_RISCV_ISA_CUSTOM_RVC=y
+
+# --- Toolchain -----------------------------------------------------------
+# Solaya's cross-toolchain is LLVM-only (clang wrappers under
+# build/toolchain/bin/), which buildroot's external-toolchain path doesn't
+# integrate with cleanly — buildroot assumes GCC wrappers and probes
+# lib/gcc/<triple>/<version>/ layouts.  Let buildroot build its own GCC
+# internally; adds ~20 min on cold CI, but CI cache makes warm builds fast
+# and keeps the build decoupled from host LLVM churn.
+BR2_TOOLCHAIN_BUILDROOT=y
+BR2_TOOLCHAIN_BUILDROOT_MUSL=y
+BR2_TOOLCHAIN_BUILDROOT_CXX=y
+
+# --- Init system: busybox (init applet only) -----------------------------
+BR2_INIT_BUSYBOX=y
+BR2_PACKAGE_BUSYBOX=y
+# Use our minimal busybox config — only CONFIG_INIT plus the reboot/poweroff
+# helpers busybox init invokes internally.  Keeps busybox from shadowing
+# GNU coreutils on PATH.
+BR2_PACKAGE_BUSYBOX_CONFIG="@SOLAYA_BUSYBOX_CONFIG@"
+BR2_PACKAGE_BUSYBOX_CONFIG_FRAGMENT_FILES=""
+# Do NOT enable busybox applets — our command set comes from dash + GNU
+# coreutils below.
+
+# --- Shell + coreutils ---------------------------------------------------
+BR2_PACKAGE_DASH=y
+BR2_PACKAGE_COREUTILS=y
+# buildroot's default /bin/sh symlink points at busybox ash; the
+# post-build script relinks it to /bin/dash (below).
+
+# --- Skip networking packages; Solaya's Rust daemons cover dhcpd etc. ----
+# BR2_PACKAGE_DHCPCD is not set
+# BR2_PACKAGE_IPROUTE2 is not set
+
+# --- Rootfs delivery: uncompressed cpio newc -----------------------------
+BR2_TARGET_ROOTFS_CPIO=y
+# BR2_TARGET_ROOTFS_CPIO_GZIP is not set
+# BR2_TARGET_ROOTFS_TAR is not set
+# BR2_TARGET_ROOTFS_EXT2 is not set
+
+# --- Skip kernel + bootloader (Solaya IS the kernel) --------------------
+# BR2_LINUX_KERNEL is not set
+# BR2_TARGET_UBOOT is not set
+
+# --- Overlay: inject Solaya Rust binaries + /etc skeleton at rootfs time -
+BR2_ROOTFS_OVERLAY="@SOLAYA_BUILDROOT_OVERLAY_DIR@"
+BR2_ROOTFS_POST_BUILD_SCRIPT="@SOLAYA_BUILDROOT_POST_BUILD_SCRIPT@"

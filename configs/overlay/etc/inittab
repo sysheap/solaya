@@ -1,0 +1,17 @@
+# /etc/inittab — Solaya
+#
+# Format: <id>:<runlevels>:<action>:<process>
+# busybox init ignores <id> and <runlevels>.
+
+# Run rcS once at boot (mounts /proc, etc.).
+::sysinit:/etc/init.d/rcS
+
+# Configure networking via Solaya's Rust dhcpd; block until it exits so
+# the shell sees a configured interface (matches old Rust init flow).
+::wait:/bin/dhcpd
+
+# Spawn the shell on the serial console; respawn on exit.
+console::respawn:/bin/dash -i
+
+# Busybox init handles SIGINT / shutdown / reboot internally; no halt
+# hooks here since our busybox config omits mount/umount applets.
