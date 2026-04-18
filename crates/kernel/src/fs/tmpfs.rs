@@ -197,6 +197,16 @@ impl VfsNode for TmpfsDir {
         Ok(node)
     }
 
+    fn create_symlink(&self, name: &str, target: &str) -> Result<VfsNodeRef, Errno> {
+        let mut children = self.children.lock();
+        if children.contains_key(name) {
+            return Err(Errno::EEXIST);
+        }
+        let node: VfsNodeRef = TmpfsSymlink::new(target.to_string());
+        children.insert(name.to_string(), node.clone());
+        Ok(node)
+    }
+
     fn unlink(&self, name: &str) -> Result<(), Errno> {
         let mut children = self.children.lock();
         let node = children.remove(name).ok_or(Errno::ENOENT)?;
@@ -265,5 +275,60 @@ impl VfsNode for TmpfsSymlink {
 
     fn readlink(&self) -> Result<String, Errno> {
         Ok(self.target.clone())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test_case]
+    fn create_symlink_stores_target_and_shows_up_in_lookup() {
+        let dir = TmpfsDir::new();
+        let link = dir.create_symlink("sh", "/bin/dash").expect("create");
+        assert_eq!(link.node_type(), NodeType::Symlink);
+        assert_eq!(link.readlink().expect("readlink"), "/bin/dash");
+
+        let found = dir.lookup("sh").expect("lookup");
+        assert_eq!(found.ino(), link.ino());
+        assert_eq!(found.readlink().expect("readlink"), "/bin/dash");
+    }
+
+    #[test_case]
+    fn create_symlink_rejects_duplicates() {
+        let dir = TmpfsDir::new();
+        dir.create_symlink("sh", "/bin/dash").expect("first");
+        let err = dir
+            .create_symlink("sh", "/bin/ash")
+            .err()
+            .expect("second must fail");
+        assert_eq!(err, Errno::EEXIST);
+    }
+
+    #[test_case]
+    fn link_shares_file_and_increments_nlink() {
+        // Simulates what initramfs::extract does for a hardlink: the second
+        // cpio entry with the same ino reuses the Arc of the first.
+        let dir = TmpfsDir::new();
+        let original = dir.create("cat", NodeType::File).expect("create");
+        original.write(0, b"BIN").expect("write");
+        original.inc_nlink();
+        dir.link("head", original.clone()).expect("link");
+
+        let looked_up = dir.lookup("head").expect("lookup");
+        assert_eq!(looked_up.ino(), original.ino());
+        assert_eq!(looked_up.nlink(), 2);
+
+        let mut buf = [0u8; 3];
+        let n = looked_up.read(0, &mut buf).expect("read");
+        assert_eq!(&buf[..n], b"BIN");
+    }
+
+    #[test_case]
+    fn link_rejects_duplicate_name() {
+        let dir = TmpfsDir::new();
+        let file = dir.create("a", NodeType::File).expect("create");
+        let err = dir.link("a", file).err().expect("link must fail");
+        assert_eq!(err, Errno::EEXIST);
     }
 }
