@@ -22,7 +22,7 @@ configure:
     cmake --preset riscv64-virt
 
 build:
-    cmake --build {{BUILD_DIR}} --target solaya-bin
+    cmake --build {{BUILD_DIR}} --target solaya
 
 toolchain:
     cmake --build {{BUILD_DIR}} --target toolchain-all
