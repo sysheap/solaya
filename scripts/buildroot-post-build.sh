@@ -14,6 +14,13 @@ TARGET_DIR="$1"
 rm -f "${TARGET_DIR}/bin/sh"
 ln -sf dash "${TARGET_DIR}/bin/sh"
 
+# Rewrite /sbin/init as an absolute symlink.  Buildroot emits it as
+# ../bin/busybox (relative), and Solaya's VFS walker currently doesn't
+# resolve `..` in paths — tracked as a separate kernel bug.  Absolute
+# symlinks sidestep the issue and cost nothing.
+rm -f "${TARGET_DIR}/sbin/init"
+ln -sf /bin/busybox "${TARGET_DIR}/sbin/init"
+
 # Ensure /etc/init.d/rcS is executable in case git permissions were
 # mangled through the overlay copy.
 if [ -f "${TARGET_DIR}/etc/init.d/rcS" ]; then
