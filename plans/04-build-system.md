@@ -13,7 +13,6 @@ The current build system is a three-layer stack:
 3. **Cargo workspace** -- 5 crates (kernel, arch, common, headers, userspace) in the main workspace, plus 3 standalone workspaces (system-tests, mcp-server, qemu-infra). The kernel uses `per-package-target` to set `default-target = "riscv64gc-unknown-none-elf"`, and userspace uses `forced-target = "riscv64gc-unknown-linux-musl"`.
 
 Additional build-time machinery:
-- `kernel/build.rs` -- generates `userspace_programs.rs` with `include_bytes!` for all userspace binaries
 - `headers/build.rs` -- runs bindgen against Linux UAPI and musl headers to generate syscall numbers, errno, socket types, fs types
 - `kernel/qemu.ld` -- RISC-V linker script (entry at 0x80200000, SBI convention)
 - `qemu_wrapper.sh` -- 140-line bash script configuring QEMU flags (GDB, network, SMP, framebuffer, block devices)
