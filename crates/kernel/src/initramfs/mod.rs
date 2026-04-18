@@ -96,17 +96,19 @@ fn extract_into(archive: &[u8], root: VfsNodeRef) -> Result<usize, ExtractError>
 
         // Hardlink: subsequent references to the same inode carry no data
         // (nlink > 1, empty data); reuse the Arc we stored on first sight.
-        if entry.nlink > 1 && file_type == S_IFREG && entry.data.is_empty() {
-            if let Some(existing) = by_ino.get(&entry.ino).cloned() {
-                let (parent_path, name) = split_parent(path);
-                let parent = ensure_dir(root.clone(), parent_path)?;
-                parent
-                    .link(name, existing.clone())
-                    .map_err(ExtractError::Vfs)?;
-                existing.inc_nlink();
-                count += 1;
-                continue;
-            }
+        if entry.nlink > 1
+            && file_type == S_IFREG
+            && entry.data.is_empty()
+            && let Some(existing) = by_ino.get(&entry.ino).cloned()
+        {
+            let (parent_path, name) = split_parent(path);
+            let parent = ensure_dir(root.clone(), parent_path)?;
+            parent
+                .link(name, existing.clone())
+                .map_err(ExtractError::Vfs)?;
+            existing.inc_nlink();
+            count += 1;
+            continue;
         }
 
         let (parent_path, name) = split_parent(path);
