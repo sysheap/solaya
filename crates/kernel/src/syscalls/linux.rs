@@ -103,7 +103,6 @@ linux_syscalls! {
     SYSCALL_NR_READ => read(fd: c_int, buf: *mut u8, count: usize);
     SYSCALL_NR_READLINKAT => readlinkat(dirfd: c_int, pathname: *const u8, buf: *mut u8, bufsiz: usize);
     SYSCALL_NR_READV => readv(fd: c_int, iov: *const iovec, iovcnt: c_int);
-    SYSCALL_NR_REBOOT => reboot(magic1: c_int, magic2: c_int, cmd: c_uint, arg: usize);
     SYSCALL_NR_RECVFROM => recvfrom(fd: c_int, buf: *mut u8, len: usize, flags: c_int, src_addr: Option<*mut u8>, addrlen: Option<*mut c_uint>);
     SYSCALL_NR_RENAMEAT2 => renameat2(olddirfd: c_int, oldpath: *const u8, newdirfd: c_int, newpath: *const u8, flags: c_uint);
     SYSCALL_NR_RT_SIGACTION => rt_sigaction(sig: c_uint, act: Option<*const sigaction>, oact: Option<*mut sigaction>, sigsetsize: usize);
@@ -584,21 +583,6 @@ impl LinuxSyscalls for LinuxSyscallHandler {
     ) -> Result<isize, Errno> {
         self.do_recvfrom(fd, buf, len, flags, src_addr, addrlen)
             .await
-    }
-
-    async fn reboot(
-        &mut self,
-        _magic1: c_int,
-        _magic2: c_int,
-        _cmd: c_uint,
-        _arg: usize,
-    ) -> Result<isize, Errno> {
-        // Stub: busybox init and some libc error paths invoke reboot(2) on
-        // conditions where we'd rather just let the process continue.
-        // Return success without actually rebooting; a proper implementation
-        // would validate the magic numbers and route LINUX_REBOOT_CMD_*
-        // through platform::emergency_reset.
-        Ok(0)
     }
 
     async fn connect(
