@@ -54,6 +54,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --log          Log qemu events to /tmp/solaya.log"
             echo "  --capture      Capture network traffic into network.pcap"
             echo "  --net [PORT]   Enable network card with host port PORT (default: dynamic)"
+            echo "  --initrd PATH  Attach a cpio initramfs image (buildroot rootfs.cpio)"
             echo "  -h, --help     Show this help message"
             echo "  --wait         Wait cpu until gdb is attached"
             exit 0
@@ -91,6 +92,12 @@ while [[ $# -gt 0 ]]; do
             QEMU_CMD+=" -smp $(nproc)"
             shift
             ;;
+        --initrd)
+            shift
+            INITRD_PATH="$1"
+            shift
+            QEMU_CMD+=" -initrd $INITRD_PATH"
+            ;;
         --wait)
             QEMU_CMD+=" -S"
             shift
@@ -120,6 +127,17 @@ elif [[ "$NEED_DISPLAY" == "true" ]] && [[ -n "$DISPLAY" || -n "$WAYLAND_DISPLAY
     QEMU_CMD+=" -display gtk"
 else
     QEMU_CMD+=" -display none"
+fi
+
+# Fall back to SOLAYA_INITRD env var if --initrd wasn't passed — lets the
+# CMake run/test targets inject the buildroot cpio without every caller
+# having to know the flag.
+if [[ -z "$INITRD_PATH" && -n "${SOLAYA_INITRD:-}" ]]; then
+    if [[ -f "$SOLAYA_INITRD" ]]; then
+        QEMU_CMD+=" -initrd $SOLAYA_INITRD"
+    else
+        echo "Warning: SOLAYA_INITRD=$SOLAYA_INITRD not found; booting without initramfs" >&2
+    fi
 fi
 
 # Add the kernel option
