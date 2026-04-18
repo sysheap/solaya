@@ -27,6 +27,13 @@ BR2_TOOLCHAIN_EXTERNAL=y
 BR2_TOOLCHAIN_EXTERNAL_BOOTLIN=y
 BR2_TOOLCHAIN_EXTERNAL_BOOTLIN_RISCV64_LP64D_MUSL_STABLE=y
 
+# --- Non-PIE binaries ----------------------------------------------------
+# Solaya's ELF loader accepts ET_EXEC only, not ET_DYN (PIE).  Disable
+# PIC/PIE globally so buildroot's busybox/dash/coreutils link as plain
+# ET_EXEC.  Kernel PIE support is a separate feature — tracked as
+# follow-up work.
+# BR2_PIC_PIE is not set
+
 # --- Init system: busybox (init applet only) -----------------------------
 BR2_INIT_BUSYBOX=y
 BR2_PACKAGE_BUSYBOX=y
