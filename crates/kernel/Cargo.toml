@@ -8,7 +8,11 @@ description.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
-default = ["hal/riscv64"]
+default = ["hal/riscv64", "rootdir_legacy"]
+# Mount `/` as the compile-time PROGRAMS-backed RootDir. Removed once
+# initramfs/cpio extraction is wired into boot; kept ON by default so
+# intermediate commits leave main green.
+rootdir_legacy = []
 
 [dependencies]
 hal = { path = "../hal", default-features = false }
