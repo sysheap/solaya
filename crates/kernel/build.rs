@@ -47,6 +47,9 @@ fn generate_userspace_programs_include() -> Result<(), Box<dyn Error>> {
 
     let mut content = String::new();
 
+    // Only the unit-test fixtures (INIT, PROG1) are consumed; the rest
+    // are embedded for symmetry so the PROGRAMS array stays complete.
+    writeln!(content, "#![allow(dead_code)]")?;
     writeln!(content, "use abi::include_bytes_align_as;\n")?;
 
     // Use BTreeMap to have the program names in a sorted order

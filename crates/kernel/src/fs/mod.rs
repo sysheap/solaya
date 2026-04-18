@@ -12,11 +12,7 @@ pub use vfs::{
 };
 
 pub fn init() {
-    #[cfg(feature = "rootdir_legacy")]
-    vfs::mount("/", vfs::RootDir::new());
-    #[cfg(not(feature = "rootdir_legacy"))]
     vfs::mount("/", tmpfs::TmpfsDir::new());
-
     vfs::mount("/tmp", tmpfs::TmpfsDir::new());
     vfs::mount("/proc", procfs::new());
     vfs::mount("/dev", devfs::new());
