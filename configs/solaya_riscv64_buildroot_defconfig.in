@@ -35,22 +35,21 @@ BR2_TOOLCHAIN_EXTERNAL_BOOTLIN_RISCV64_LP64D_MUSL_STABLE=y
 # are separate follow-up features.
 BR2_STATIC_LIBS=y
 
-# --- Init system: busybox (init applet only) -----------------------------
-BR2_INIT_BUSYBOX=y
-BR2_PACKAGE_BUSYBOX=y
-# Use our minimal busybox config — only CONFIG_INIT plus the reboot/poweroff
-# helpers busybox init invokes internally.  Keeps busybox from shadowing
-# GNU coreutils on PATH.
-BR2_PACKAGE_BUSYBOX_CONFIG="@SOLAYA_BUSYBOX_CONFIG@"
-BR2_PACKAGE_BUSYBOX_CONFIG_FRAGMENT_FILES=""
-# Do NOT enable busybox applets — our command set comes from dash + GNU
-# coreutils below.
+# --- Init system: Solaya's Rust init stays PID 1 -------------------------
+# Buildroot provides no init (we don't use busybox init yet — needs kernel
+# AF_UNIX socketpair + shebang execve support).  Our Rust init.rs runs
+# as PID 1 from /bin/init and execs /bin/dash directly.
+BR2_INIT_NONE=y
+# BR2_PACKAGE_BUSYBOX is not set  — dropping busybox entirely also
+# auto-enables BR2_PACKAGE_BUSYBOX_SHOW_OTHERS, which is required by the
+# coreutils package selection below.
 
 # --- Shell + coreutils ---------------------------------------------------
 BR2_PACKAGE_DASH=y
 BR2_PACKAGE_COREUTILS=y
-# buildroot's default /bin/sh symlink points at busybox ash; the
-# post-build script relinks it to /bin/dash (below).
+# GNU coreutils installs a single `coreutils` binary at /usr/bin/ with
+# symlinks (cat, ls, echo, head, tail, ...).  PATH in process_table::init
+# has /usr/bin listed so dash bare-name lookup finds them.
 
 # --- Skip networking packages; Solaya's Rust daemons cover dhcpd etc. ----
 # BR2_PACKAGE_DHCPCD is not set

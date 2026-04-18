@@ -13,8 +13,9 @@ endif()
 file(MAKE_DIRECTORY "${DST}")
 
 # Copy each artifact.  The overlay goes into /bin regardless of what's in
-# the artifact dir; buildroot applies this on top of its own /bin, so our
-# copies override any coreutils name collision (e.g. Rust `sleep`).
+# the artifact dir; buildroot applies this on top of its own /bin.  GNU
+# coreutils lands in /usr/bin (single-binary-symlinks), so there's no
+# name collision with our Rust daemons under /bin.
 file(GLOB _entries LIST_DIRECTORIES false RELATIVE "${SRC}" "${SRC}/*")
 foreach(_name IN LISTS _entries)
     set(_from "${SRC}/${_name}")
