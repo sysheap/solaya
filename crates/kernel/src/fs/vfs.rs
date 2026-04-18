@@ -214,15 +214,47 @@ fn resolve_path_with_depth(path: &str, depth: u32) -> Result<VfsNodeRef, Errno> 
         let (_, node) = find_mount(&table, "/")?;
         return Ok(node);
     }
-    if !path.starts_with('/') {
-        let abs = alloc::format!("/{path}");
-        return resolve_path_with_depth(&abs, depth);
+    let absolute = if path.starts_with('/') {
+        canonicalize_path(path)
+    } else {
+        canonicalize_path(&alloc::format!("/{path}"))
+    };
+    if absolute == "/" {
+        let table = MOUNT_TABLE.lock();
+        let (_, node) = find_mount(&table, "/")?;
+        return Ok(node);
     }
     let table = MOUNT_TABLE.lock();
-    let (mount_path, node) = find_mount(&table, path)?;
-    let remainder = &path[mount_path.len()..];
+    let (mount_path, node) = find_mount(&table, &absolute)?;
+    let remainder = &absolute[mount_path.len()..];
+    let base_abs = String::from(mount_path);
     drop(table);
-    walk_with_depth(node, remainder, depth)
+    walk_with_depth(node, base_abs, remainder, depth)
+}
+
+/// Resolve `.` and `..` at the string level.  An absolute path in,
+/// absolute path out; `..` above `/` stays at `/`.
+fn canonicalize_path(path: &str) -> String {
+    let mut stack: Vec<&str> = Vec::new();
+    for component in path.split('/') {
+        match component {
+            "" | "." => {}
+            ".." => {
+                stack.pop();
+            }
+            _ => stack.push(component),
+        }
+    }
+    if stack.is_empty() {
+        String::from("/")
+    } else {
+        let mut out = String::new();
+        for c in &stack {
+            out.push('/');
+            out.push_str(c);
+        }
+        out
+    }
 }
 
 pub fn resolve_path_nofollow(path: &str) -> Result<VfsNodeRef, Errno> {
@@ -280,32 +312,71 @@ fn find_mount<'a>(
 }
 
 pub fn resolve_relative(base: VfsNodeRef, path: &str) -> Result<VfsNodeRef, Errno> {
-    walk_with_depth(base, path, 0)
+    // Caller has a base node but no absolute path for it; we can still
+    // walk real components (".." is unsupported without that context).
+    walk_with_depth(base, String::from("/"), path, 0)
 }
 
 const MAX_SYMLINK_DEPTH: u32 = 8;
 
-fn walk_with_depth(mut node: VfsNodeRef, path: &str, mut depth: u32) -> Result<VfsNodeRef, Errno> {
-    for component in path
-        .split('/')
-        .filter(|c| !c.is_empty() && *c != "." && *c != "..")
-    {
+/// Walk `path` relative to `node`, whose absolute path is `base_abs`.
+/// `base_abs` is updated as we descend so relative symlinks (including
+/// ones that contain `..`) can be rewritten to absolute and re-resolved
+/// via [`resolve_path_with_depth`] without losing track of where we are.
+fn walk_with_depth(
+    mut node: VfsNodeRef,
+    mut base_abs: String,
+    path: &str,
+    mut depth: u32,
+) -> Result<VfsNodeRef, Errno> {
+    for component in path.split('/') {
+        match component {
+            "" | "." => continue,
+            ".." => {
+                // Walk up: pop the last segment from base_abs + re-resolve.
+                base_abs = pop_segment(&base_abs);
+                node = resolve_path_with_depth(&base_abs, depth)?;
+                continue;
+            }
+            _ => {}
+        }
         let parent = node.clone();
         node = parent.lookup(component)?;
+        if base_abs.ends_with('/') {
+            base_abs.push_str(component);
+        } else {
+            base_abs.push('/');
+            base_abs.push_str(component);
+        }
         if node.node_type() == NodeType::Symlink {
             if depth >= MAX_SYMLINK_DEPTH {
                 return Err(Errno::ELOOP);
             }
             depth += 1;
             let target = node.readlink()?;
-            if target.starts_with('/') {
-                node = resolve_path_with_depth(&target, depth)?;
+            let abs_target = if target.starts_with('/') {
+                canonicalize_path(&target)
             } else {
-                node = walk_with_depth(parent, &target, depth)?;
-            }
+                // target is relative to the symlink's parent dir.
+                let parent_abs = pop_segment(&base_abs);
+                canonicalize_path(&alloc::format!("{parent_abs}/{target}"))
+            };
+            node = resolve_path_with_depth(&abs_target, depth)?;
+            base_abs = abs_target;
         }
     }
     Ok(node)
+}
+
+fn pop_segment(path: &str) -> String {
+    if path == "/" {
+        return String::from("/");
+    }
+    match path.rfind('/') {
+        Some(0) => String::from("/"),
+        Some(pos) => String::from(&path[..pos]),
+        None => String::from("/"),
+    }
 }
 
 pub(super) struct StaticDir {
