@@ -117,7 +117,7 @@ sudo dnf install -y \
     flex bison bc \
     pkgconf-pkg-config \
     rsync \
-    ShellCheck \
+    shellcheck \
     e2fsprogs \
     just \
     qemu-system-riscv seavgabios-bin ipxe-roms-qemu
