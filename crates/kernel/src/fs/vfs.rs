@@ -149,6 +149,11 @@ pub trait VfsNode: Send + Sync {
         Err(Errno::ENOTDIR)
     }
 
+    #[allow(dead_code)] // wired into initramfs::extract in a later commit
+    fn create_symlink(&self, _name: &str, _target: &str) -> Result<VfsNodeRef, Errno> {
+        Err(Errno::ENOTDIR)
+    }
+
     fn unlink(&self, _name: &str) -> Result<(), Errno> {
         Err(Errno::ENOTDIR)
     }
