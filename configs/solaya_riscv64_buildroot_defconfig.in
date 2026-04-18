@@ -5,17 +5,15 @@
 # Outputs rootfs.cpio (uncompressed newc) at
 # ${_br_out}/images/rootfs.cpio — Solaya loads it via QEMU -initrd.
 
-# --- Target architecture (RISC-V 64-bit, rv64gc to match QEMU virt) ------
+# --- Target architecture (RISC-V 64-bit, rv64g to match Bootlin toolchain)
+# Bootlin's prebuilt riscv64 toolchain targets the "general" ISA profile
+# (IMAFD — no compressed 'C').  Binaries compiled for G run fine on our
+# kernel's GC target since GC is a superset; the tradeoff is slightly
+# larger userspace binaries than a C-enabled build.
 BR2_riscv=y
 BR2_RISCV_64=y
 BR2_RISCV_ABI_LP64D=y
-BR2_riscv_custom=y
-BR2_RISCV_ISA_CUSTOM_RVI=y
-BR2_RISCV_ISA_CUSTOM_RVM=y
-BR2_RISCV_ISA_CUSTOM_RVA=y
-BR2_RISCV_ISA_CUSTOM_RVF=y
-BR2_RISCV_ISA_CUSTOM_RVD=y
-BR2_RISCV_ISA_CUSTOM_RVC=y
+BR2_riscv_g=y
 
 # --- Toolchain -----------------------------------------------------------
 # Buildroot's toolchain infrastructure has no clang/LLVM path — every
