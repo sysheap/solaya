@@ -1,3 +1,4 @@
+mod auxv;
 mod basics;
 mod block;
 mod clocktest;
