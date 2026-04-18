@@ -114,19 +114,25 @@ add_custom_target(fmt-check
 
 # -----------------------------------------------------------------------------
 # shellcheck: static analysis of every project-authored shell script.
-# Keep this list in sync with the pre-commit hook. Third-party scripts
-# under .toolchain/ and build/ are gitignored and not our code.
+# The script list is driven by `git ls-files` so the pre-commit hook's glob
+# (`*.sh` + `.githooks/pre-commit`) and this CMake target can't drift — a new
+# *.sh commit is gated automatically, without a tests.cmake edit. Third-party
+# scripts under .toolchain/ and build/ are excluded by virtue of being
+# gitignored. Snapshot taken at configure time; `cmake` auto-reruns when
+# tests.cmake changes, and CI always re-configures from a fresh checkout, so
+# both gates see the same list as the hook.
 # -----------------------------------------------------------------------------
-set(SOLAYA_SHELL_SCRIPTS
-    ${CMAKE_SOURCE_DIR}/.githooks/pre-commit
-    ${CMAKE_SOURCE_DIR}/cmake/build_compiler_rt_builtins.sh
-    ${CMAKE_SOURCE_DIR}/qemu_wrapper.sh
-    ${CMAKE_SOURCE_DIR}/scripts/attach.sh
-    ${CMAKE_SOURCE_DIR}/scripts/debug.sh
-    ${CMAKE_SOURCE_DIR}/scripts/picocom.sh
-    ${CMAKE_SOURCE_DIR}/scripts/reboot-hw.sh
-    ${CMAKE_SOURCE_DIR}/scripts/tftp-deploy.sh
+execute_process(
+    COMMAND git -C ${CMAKE_SOURCE_DIR} ls-files "*.sh" ".githooks/pre-commit"
+    OUTPUT_VARIABLE _solaya_shell_scripts_raw
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    RESULT_VARIABLE _solaya_shell_scripts_result
 )
+if(NOT _solaya_shell_scripts_result EQUAL 0)
+    message(FATAL_ERROR "git ls-files failed while discovering shell scripts (exit ${_solaya_shell_scripts_result})")
+endif()
+string(REPLACE "\n" ";" SOLAYA_SHELL_SCRIPTS "${_solaya_shell_scripts_raw}")
+list(TRANSFORM SOLAYA_SHELL_SCRIPTS PREPEND "${CMAKE_SOURCE_DIR}/")
 add_custom_target(shellcheck
     COMMAND shellcheck ${SOLAYA_SHELL_SCRIPTS}
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
