@@ -41,14 +41,15 @@ impl LinuxSyscallHandler {
 
         let forked = parent_process.with_lock(|mut p| p.fork_address_space());
 
-        let (parent_fd_table, parent_cwd, parent_umask, parent_creds, parent_auxv) = parent_process
-            .with_lock(|p| {
+        let (parent_fd_table, parent_cwd, parent_umask, parent_creds, parent_auxv, parent_elf) =
+            parent_process.with_lock(|p| {
                 (
                     p.fd_table().clone(),
                     String::from(p.cwd()),
                     p.umask(),
                     p.credentials().clone(),
                     p.saved_auxv().to_vec(),
+                    p.elf_bytes(),
                 )
             });
 
@@ -70,6 +71,9 @@ impl LinuxSyscallHandler {
             child.set_umask(parent_umask);
             child.set_credentials(parent_creds);
             child.set_fork_state(forked.cow_pages, forked.free_mmap_address);
+            if let Some(bytes) = parent_elf {
+                child.set_elf_bytes(bytes);
+            }
         }
 
         let mut child_regs = parent_regs;

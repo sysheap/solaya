@@ -62,6 +62,10 @@ pub struct Process {
     // Raw auxv bytes captured at exec time; served to userspace via
     // prctl(PR_GET_AUXV). Empty for kernel-internal threads (powersave).
     saved_auxv: Vec<u8>,
+    // ELF image bytes of the currently-loaded binary. Populated at exec /
+    // fork-from-parent; used by the syscall tracer to resolve userspace
+    // symbols for backtraces without needing to re-read the file.
+    elf_bytes: Option<Arc<[u8]>>,
 }
 
 impl Debug for Process {
@@ -111,11 +115,20 @@ impl Process {
             cwd: String::from("/"),
             credentials: Credentials::root(),
             saved_auxv,
+            elf_bytes: None,
         }
     }
 
     pub fn saved_auxv(&self) -> &[u8] {
         &self.saved_auxv
+    }
+
+    pub fn set_elf_bytes(&mut self, bytes: Arc<[u8]>) {
+        self.elf_bytes = Some(bytes);
+    }
+
+    pub fn elf_bytes(&self) -> Option<Arc<[u8]>> {
+        self.elf_bytes.clone()
     }
 
     pub fn brk(&mut self, brk: VirtAddr) -> VirtAddr {

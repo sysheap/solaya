@@ -1,6 +1,7 @@
 use abi::pid::Tid;
 use alloc::{
     collections::{BTreeMap, VecDeque},
+    sync::Arc,
     vec::Vec,
 };
 use core::{
@@ -42,6 +43,11 @@ pub fn init() {
     let default_env = ["PATH=/", "HOME=/", "TERM=dumb", "PS1=$ "];
     let thread =
         Thread::from_elf(&elf, "init", &[], &default_env, Tid::new(0)).expect("init must succeed");
+    thread
+        .lock()
+        .process()
+        .lock()
+        .set_elf_bytes(Arc::<[u8]>::from(INIT));
     process_table.add_thread(thread);
 
     THE.initialize(Spinlock::new(process_table));
