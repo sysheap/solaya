@@ -52,6 +52,7 @@ mod device_tree;
 mod drivers;
 mod fs;
 mod init;
+mod initramfs;
 pub mod interrupts;
 mod io;
 mod memory;
