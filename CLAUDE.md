@@ -45,9 +45,14 @@ just clippy                        # Lint all workspaces
 just fmt-check                     # cargo fmt --check
 just ci                            # Full pre-merge gate
 
-# Config
+# Config (kernel Kconfig)
 just menuconfig                    # Edit build/.config
 just savedefconfig                 # Write build/savedefconfig
+
+# Buildroot (userspace rootfs config / rebuild)
+just buildroot-menuconfig          # Buildroot TUI — edits .buildroot/output/.config
+just buildroot-savedefconfig       # Save minimal defconfig back to configs/
+just buildroot-rebuild             # Wipe .buildroot/output; keep .buildroot/_dl
 ```
 
 CMake still owns the build graph; `just` is a thin wrapper. For anything

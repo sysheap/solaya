@@ -120,6 +120,63 @@ add_custom_target(buildroot-all
     COMMENT "Buildroot rootfs cpio ready at ${_br_cpio}"
 )
 
+# --- Interactive reconfiguration targets --------------------------------
+#
+# buildroot-menuconfig / -savedefconfig / -rebuild let developers edit
+# the buildroot configuration without hand-rolling `make -C
+# .buildroot/src/... O=.buildroot/output` invocations.  They depend on
+# buildroot-src so a fresh checkout still works.
+
+# Seed .config on first use.  menuconfig refuses to run without one;
+# defconfig applies our template defconfig so menuconfig opens at a
+# sensible starting point instead of buildroot's bare default.
+set(_br_seed_config "test -f ${_br_out}/.config || make -C ${_br_src} O=${_br_out} defconfig BR2_DEFCONFIG=${_br_defconfig}")
+
+add_custom_target(buildroot-menuconfig
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${_br_out}"
+    COMMAND bash -c "${_br_seed_config}"
+    COMMAND ${CMAKE_COMMAND} -E env BR2_DL_DIR=${_br_dl}
+            make -C ${_br_src} O=${_br_out} menuconfig
+    DEPENDS buildroot-src "${_br_defconfig}"
+    USES_TERMINAL
+    COMMENT "Buildroot menuconfig — edits ${_br_out}/.config; run buildroot-savedefconfig to persist"
+    VERBATIM
+)
+
+# savedefconfig writes the minimal defconfig to BR2_DEFCONFIG.  Our
+# template .in file contains @-placeholders (overlay dir, post-build
+# script) that must survive the round-trip, so we post-process the
+# output: the four concrete paths go back to their placeholder forms.
+add_custom_target(buildroot-savedefconfig
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${_br_out}"
+    COMMAND bash -c "${_br_seed_config}"
+    COMMAND ${CMAKE_COMMAND} -E env BR2_DL_DIR=${_br_dl}
+            make -C ${_br_src} O=${_br_out} savedefconfig BR2_DEFCONFIG=${_br_defconfig}
+    COMMAND ${CMAKE_COMMAND}
+            -DMATERIALIZED=${_br_defconfig}
+            -DTEMPLATE=${CMAKE_SOURCE_DIR}/configs/solaya_riscv64_buildroot_defconfig.in
+            -DOVERLAY=${SOLAYA_BUILDROOT_OVERLAY_DIR}
+            -DPOST_BUILD=${SOLAYA_BUILDROOT_POST_BUILD_SCRIPT}
+            -P ${CMAKE_SOURCE_DIR}/cmake/buildroot_save_template.cmake
+    DEPENDS buildroot-src "${_br_defconfig}"
+    USES_TERMINAL
+    COMMENT "Saved minimal defconfig back to configs/solaya_riscv64_buildroot_defconfig.in"
+    VERBATIM
+)
+
+# Force a full buildroot rebuild without discarding the tarball cache.
+# Useful after editing configs/overlay/* or the post-build script when
+# buildroot's own dependency tracking doesn't notice.
+add_custom_target(buildroot-rebuild
+    COMMAND ${CMAKE_COMMAND} -E rm -rf "${_br_out}"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${_br_out}"
+    COMMAND ${CMAKE_BUILD_TOOL} buildroot-all
+    DEPENDS buildroot-src
+    USES_TERMINAL
+    COMMENT "Wiping .buildroot/output and rebuilding from scratch (keeps .buildroot/_dl)"
+    VERBATIM
+)
+
 # Export the cpio path so qemu.cmake / tests.cmake / etc. can pass it
 # via -initrd without hardcoding.
 set(SOLAYA_BUILDROOT_CPIO "${_br_cpio}" CACHE INTERNAL "Path to buildroot rootfs.cpio")
