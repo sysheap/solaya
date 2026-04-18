@@ -228,7 +228,7 @@ fn resolve_path_with_depth(path: &str, depth: u32) -> Result<VfsNodeRef, Errno> 
 
 /// Resolve `.` and `..` at the string level.  An absolute path in,
 /// absolute path out; `..` above `/` stays at `/`.
-fn canonicalize_path(path: &str) -> String {
+pub fn canonicalize_path(path: &str) -> String {
     let mut stack: Vec<&str> = Vec::new();
     for component in path.split('/') {
         match component {
@@ -305,10 +305,13 @@ fn find_mount<'a>(
     Ok((mp, node.clone()))
 }
 
-pub fn resolve_relative(base: VfsNodeRef, path: &str) -> Result<VfsNodeRef, Errno> {
-    // Caller has a base node but no absolute path for it; we can still
-    // walk real components (".." is unsupported without that context).
-    walk_with_depth(base, String::from("/"), path, 0)
+/// Walk `path` relative to `base`, whose absolute path (in
+/// canonicalized form, e.g. `/foo/bar`) is `base_abs`. The caller
+/// MUST supply the real absolute path for `base` — otherwise `..` and
+/// relative symlinks will resolve from `base_abs` instead of the
+/// actual dirfd location.
+pub fn resolve_relative(base: VfsNodeRef, base_abs: &str, path: &str) -> Result<VfsNodeRef, Errno> {
+    walk_with_depth(base, String::from(base_abs), path, 0)
 }
 
 const MAX_SYMLINK_DEPTH: u32 = 8;

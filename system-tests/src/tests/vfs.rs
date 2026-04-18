@@ -75,6 +75,21 @@ async fn vfs_roundtrip() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
+async fn dirfd_dotdot_and_relative_symlink() -> anyhow::Result<()> {
+    let mut solaya = QemuInstance::start().await?;
+    let output = solaya.run_prog("dirfd-test").await?;
+    assert!(
+        output.contains("OK dotdot"),
+        "openat(dirfd, \"..\") regressed: {output}"
+    );
+    assert!(
+        output.contains("OK relative_symlink"),
+        "openat(dirfd, \"<rel-symlink>\") regressed: {output}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
 async fn devfs_null_and_zero() -> anyhow::Result<()> {
     let mut solaya = QemuInstance::start().await?;
     let output = solaya.run_prog("devfs_test").await?;

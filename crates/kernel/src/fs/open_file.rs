@@ -1,4 +1,4 @@
-use alloc::sync::Arc;
+use alloc::{string::String, sync::Arc};
 use headers::errno::Errno;
 
 use hal::spinlock::Spinlock;
@@ -9,21 +9,30 @@ pub struct VfsOpenFileInner {
     node: VfsNodeRef,
     offset: usize,
     flags: i32,
+    // Absolute, canonicalized path the fd was opened with. Needed so
+    // *at(dirfd, relative, …) syscalls can resolve `..` and relative
+    // symlinks against the dirfd's real location instead of against /.
+    abs_path: String,
 }
 
 pub type VfsOpenFile = Arc<Spinlock<VfsOpenFileInner>>;
 
-pub fn open(node: VfsNodeRef, flags: i32) -> VfsOpenFile {
+pub fn open(node: VfsNodeRef, flags: i32, abs_path: String) -> VfsOpenFile {
     Arc::new(Spinlock::new(VfsOpenFileInner {
         node,
         offset: 0,
         flags,
+        abs_path,
     }))
 }
 
 impl VfsOpenFileInner {
     pub fn node(&self) -> &VfsNodeRef {
         &self.node
+    }
+
+    pub fn abs_path(&self) -> &str {
+        &self.abs_path
     }
 
     pub fn read(&mut self, buf: &mut [u8]) -> Result<usize, Errno> {

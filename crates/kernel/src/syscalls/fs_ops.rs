@@ -10,7 +10,7 @@ use crate::{
     syscalls::linux_validator::LinuxUserspaceArg,
 };
 
-use super::linux::LinuxSyscallHandler;
+use super::{helpers::compose_abs, linux::LinuxSyscallHandler};
 
 impl LinuxSyscallHandler {
     pub(super) fn do_openat(
@@ -23,12 +23,13 @@ impl LinuxSyscallHandler {
         let raw_path = self.read_cstring(&pathname)?;
         let flags_u32 = flags.cast_unsigned();
 
+        let (base_node, base_abs) = self.resolve_openat_base(dirfd)?;
+
         let resolve = |path: &str| -> Result<fs::vfs::VfsNodeRef, Errno> {
-            if dirfd == headers::fs::AT_FDCWD {
-                let abs = self.make_absolute(path);
-                fs::resolve_path(&abs)
+            if path.starts_with('/') {
+                fs::resolve_path(path)
             } else {
-                fs::resolve_relative(self.resolve_dirfd_node(dirfd)?, path)
+                fs::resolve_relative(base_node.clone(), &base_abs, path)
             }
         };
 
@@ -43,23 +44,18 @@ impl LinuxSyscallHandler {
                 n
             }
             Err(Errno::ENOENT) if (flags_u32 & O_CREAT) != 0 => {
-                if dirfd == headers::fs::AT_FDCWD {
-                    let abs = self.make_absolute(&raw_path);
-                    let (parent, name) = fs::resolve_parent(&abs)?;
-                    parent.create(name, fs::vfs::NodeType::File)?
+                let trimmed = raw_path.trim_end_matches('/');
+                let (parent, name) = if trimmed.starts_with('/') {
+                    let (p, n) = fs::resolve_parent(trimmed)?;
+                    (p, String::from(n))
+                } else if let Some(slash) = trimmed.rfind('/') {
+                    let dir_node =
+                        fs::resolve_relative(base_node.clone(), &base_abs, &trimmed[..slash])?;
+                    (dir_node, String::from(&trimmed[slash + 1..]))
                 } else {
-                    let trimmed = raw_path.trim_end_matches('/');
-                    let (base, name) = if let Some(slash) = trimmed.rfind('/') {
-                        let dir_node = fs::resolve_relative(
-                            self.resolve_dirfd_node(dirfd)?,
-                            &trimmed[..slash],
-                        )?;
-                        (dir_node, &trimmed[slash + 1..])
-                    } else {
-                        (self.resolve_dirfd_node(dirfd)?, trimmed)
-                    };
-                    base.create(name, fs::vfs::NodeType::File)?
-                }
+                    (base_node.clone(), String::from(trimmed))
+                };
+                parent.create(&name, fs::vfs::NodeType::File)?
             }
             Err(e) => return Err(e),
         };
@@ -68,7 +64,8 @@ impl LinuxSyscallHandler {
             return Err(Errno::ENOTDIR);
         }
 
-        let open_file = fs::open_file::open(node, flags);
+        let fd_abs = compose_abs(&base_abs, &raw_path);
+        let open_file = fs::open_file::open(node, flags, fd_abs);
         let fd = self
             .current_process
             .with_lock(|p| p.fd_table().allocate(FileDescriptor::VfsFile(open_file)))?;
@@ -129,10 +126,7 @@ impl LinuxSyscallHandler {
             }
         } else {
             let path = self.read_cstring(pathname)?;
-            let base = self.resolve_dirfd_node(dirfd)?;
-            if path == "." || path == ".." {
-                return Ok(base);
-            }
+            let (base, base_abs) = self.resolve_dirfd_node(dirfd)?;
             if nofollow {
                 let (parent_part, name) = if let Some(slash) = path.rfind('/') {
                     (Some(&path[..slash]), &path[slash + 1..])
@@ -140,13 +134,13 @@ impl LinuxSyscallHandler {
                     (None, path.as_str())
                 };
                 let parent = if let Some(pp) = parent_part {
-                    fs::resolve_relative(base, pp)?
+                    fs::resolve_relative(base, &base_abs, pp)?
                 } else {
                     base
                 };
                 parent.lookup(name)
             } else {
-                fs::resolve_relative(base, &path)
+                fs::resolve_relative(base, &base_abs, &path)
             }
         }
     }
@@ -252,7 +246,8 @@ impl LinuxSyscallHandler {
             fs::resolve_path(&path)?
         } else {
             let path = self.read_cstring(&pathname)?;
-            fs::resolve_relative(self.resolve_dirfd_node(dirfd)?, &path)?
+            let (base, base_abs) = self.resolve_dirfd_node(dirfd)?;
+            fs::resolve_relative(base, &base_abs, &path)?
         };
         Ok(0)
     }
@@ -288,10 +283,14 @@ impl LinuxSyscallHandler {
         } else if let Some(slash) = path.rfind('/') {
             let parent_path = &path[..slash];
             let name = &path[slash + 1..];
-            let base = self.resolve_dirfd_node(dirfd)?;
-            (fs::resolve_relative(base, parent_path)?, String::from(name))
+            let (base, base_abs) = self.resolve_dirfd_node(dirfd)?;
+            (
+                fs::resolve_relative(base, &base_abs, parent_path)?,
+                String::from(name),
+            )
         } else {
-            (self.resolve_dirfd_node(dirfd)?, String::from(path))
+            let (base, _base_abs) = self.resolve_dirfd_node(dirfd)?;
+            (base, String::from(path))
         };
 
         if (flags & headers::fs::AT_REMOVEDIR) != 0 {
@@ -456,7 +455,8 @@ impl LinuxSyscallHandler {
             fs::resolve_path(&path)
         } else {
             let path = self.read_cstring(pathname)?;
-            fs::resolve_relative(self.resolve_dirfd_node(dirfd)?, &path)
+            let (base, base_abs) = self.resolve_dirfd_node(dirfd)?;
+            fs::resolve_relative(base, &base_abs, &path)
         }
     }
 
