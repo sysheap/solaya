@@ -63,10 +63,9 @@ include(qemu)
 include(tools)
 
 add_subdirectory(toolchain)
-# dash + doom depend on gcc-stage2 + musl ExternalProject targets declared
-# inside toolchain/, so include them only after that subdir has been
-# processed.
-include(dash)
+# doom depends on compiler-rt-builtins from toolchain/, so include it
+# only after that subdir has been processed.  dash comes from buildroot
+# now (see cmake/buildroot.cmake).
 include(doom)
 add_subdirectory(userspace)
 # buildroot consumes the SOLAYA_USERSPACE_ARTIFACT_DIR overlay, so it must
