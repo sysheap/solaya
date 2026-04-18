@@ -10,6 +10,9 @@ if(NOT DEFINED SRC OR NOT DEFINED DST)
     message(FATAL_ERROR "stage_overlay.cmake: need -DSRC=<artifact_dir> -DDST=<overlay_dir>")
 endif()
 
+# Remove stale entries from a previous build (e.g. old Rust coreutils
+# symlinks that the userspace-rust target no longer produces).
+file(REMOVE_RECURSE "${DST}")
 file(MAKE_DIRECTORY "${DST}")
 
 # Copy each artifact.  The overlay goes into /bin regardless of what's in
