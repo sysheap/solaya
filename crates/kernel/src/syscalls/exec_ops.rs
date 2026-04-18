@@ -79,9 +79,9 @@ impl LinuxSyscallHandler {
         let old_cwd_str = self.get_process().with_lock(|p| String::from(p.cwd()));
 
         // Resolve the filename against the VFS: absolute paths walk the
-        // mount tree, relative paths get rebased against cwd.  If the
-        // file isn't there, ENOENT propagates to userspace.
-        let vfs_bytes = try_read_from_vfs(filename_str, &old_cwd_str).ok_or(Errno::ENOENT)?;
+        // mount tree, relative paths get rebased against cwd.  Errors
+        // (ENOENT, EACCES, ELOOP, EIO, E2BIG) propagate to userspace as-is.
+        let vfs_bytes = try_read_from_vfs(filename_str, &old_cwd_str)?;
         let elf_arc: Arc<[u8]> = Arc::<[u8]>::from(vfs_bytes.as_slice());
 
         let elf = ElfFile::parse(&elf_arc).expect("Cannot parse ELF file");
@@ -137,13 +137,13 @@ impl LinuxSyscallHandler {
     }
 }
 
-/// Read the whole file at `filename` into memory.  Returns `None` on any
-/// lookup/read failure; the caller propagates ENOENT to userspace.
+/// Read the whole file at `filename` into memory, preserving the VFS
+/// errno so userspace can distinguish ENOENT / EACCES / ELOOP / EIO.
 ///
 /// Path resolution follows execve(2): absolute paths resolve against the
 /// VFS root, relative paths against `cwd`.  No PATH search — shells are
 /// expected to do that themselves (dash/busybox ash both do).
-fn try_read_from_vfs(filename: &str, cwd: &str) -> Option<Vec<u8>> {
+fn try_read_from_vfs(filename: &str, cwd: &str) -> Result<Vec<u8>, Errno> {
     let absolute: String = if filename.starts_with('/') {
         filename.to_string()
     } else if cwd.ends_with('/') {
@@ -151,16 +151,16 @@ fn try_read_from_vfs(filename: &str, cwd: &str) -> Option<Vec<u8>> {
     } else {
         alloc::format!("{cwd}/{filename}")
     };
-    let node = fs::resolve_path(&absolute).ok()?;
+    let node = fs::resolve_path(&absolute)?;
     let size = node.size();
     // Refuse outlandish sizes to avoid a rogue or corrupt VFS entry
     // allocating the whole heap; 64 MiB is ~10× the largest userspace
     // binary we produce.
     if size > 64 * 1024 * 1024 {
-        return None;
+        return Err(Errno::E2BIG);
     }
     let mut buf: Vec<u8> = alloc::vec![0u8; size];
-    let n = node.read(0, &mut buf).ok()?;
+    let n = node.read(0, &mut buf)?;
     buf.truncate(n);
-    Some(buf)
+    Ok(buf)
 }
