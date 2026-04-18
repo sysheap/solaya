@@ -203,9 +203,15 @@ impl CpuScheduler {
                 }
                 BlockedAction::None => {}
             }
-            self.current_thread
+            let should_enqueue = self
+                .current_thread
                 .lock()
                 .set_syscall_task_and_suspend(task);
+            if should_enqueue {
+                process_table::RUN_QUEUE
+                    .lock()
+                    .push_back(self.current_thread.clone());
+            }
             false
         }
     }
