@@ -53,6 +53,6 @@ exec ${SOLAYA_CARGO} build \
 # Aggregate: everything a kernel build needs from userspace.
 # -----------------------------------------------------------------------------
 add_custom_target(userspace-all
-    DEPENDS userspace-rust dash doom
-    COMMENT "Userspace artifact set (rust bins + dash/sh + doom)"
+    DEPENDS userspace-rust doom
+    COMMENT "Userspace artifact set (rust bins + doom)"
 )

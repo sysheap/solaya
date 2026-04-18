@@ -30,13 +30,6 @@ set(SOLAYA_LINUX_HEADERS_SHA256 "a23c92faf3657385c2c6b5f4edd8f81b808907ebe603fa3
 # source: https://cdn.kernel.org/pub/linux/kernel/v6.x/sha256sums.asc
 #   (signed by the kernel.org Linux Kernel Archives Automatic Signing Key)
 
-set(SOLAYA_DASH_URL        "http://gondor.apana.org.au/~herbert/dash/files/dash-0.5.12.tar.gz")
-set(SOLAYA_DASH_SHA256     "6a474ac46e8b0b32916c4c60df694c82058d3297d8b385b74508030ca4a8f28a")
-# source: upstream release at gondor.apana.org.au/~herbert/dash/files/ —
-#   the project does not publish a separate checksums manifest, so the URL
-#   above is the canonical reference.  The hash was verified once at pin time
-#   against the tarball mtime on the upstream server.
-
 # doomgeneric — pinned to a specific commit on master rather than a tag;
 # upstream doesn't tag releases. The rev is a concrete commit hash (not a
 # branch name) so the build is reproducible even if master moves.
