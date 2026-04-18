@@ -2,14 +2,14 @@
 
 ## Overview
 
-The VFS layer lives in `kernel/src/fs/`. All filesystems implement the `VfsNode` trait and are mounted into a global mount table. There is no block device layer — all filesystems are in-memory.
+The VFS layer lives in `kernel/src/fs/`. All filesystems implement the `VfsNode` trait and are mounted into a global mount table. Filesystems are in-memory by default (tmpfs, procfs, devfs); ext2 is the one exception and sits on a block device.
 
 ## Files
 
 | File | Purpose |
 |------|---------|
-| `vfs.rs` | `VfsNode` trait, mount table, path resolution, `StaticDir`, `RootDir` |
-| `tmpfs.rs` | Read-write in-memory filesystem (`TmpfsDir`, `TmpfsFile`) |
+| `vfs.rs` | `VfsNode` trait, mount table, path resolution (including `..` and relative symlinks), `StaticDir` |
+| `tmpfs.rs` | Read-write in-memory filesystem (`TmpfsDir`, `TmpfsFile`, `TmpfsSymlink`) |
 | `procfs.rs` | `/proc` — `ProcVersionFile`, builder via `StaticDir` |
 | `devfs.rs` | `/dev` — `DevNull`, `DevZero`, builder via `StaticDir` |
 | `open_file.rs` | `VfsOpenFile` — per-fd state (offset, flags), read/write/seek |
@@ -18,7 +18,8 @@ The VFS layer lives in `kernel/src/fs/`. All filesystems implement the `VfsNode`
 ## Mount Layout
 
 ```
-/         RootDir (virtual — lists mount points as children)
+/         TmpfsDir (populated at boot by initramfs::extract from the
+                    buildroot cpio — /bin, /sbin, /etc, /usr/...)
 /tmp      TmpfsDir (read-write, supports create/unlink)
 /proc     StaticDir { "version" -> ProcVersionFile }
 /dev      StaticDir { "null" -> DevNull, "zero" -> DevZero }

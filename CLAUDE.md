@@ -176,11 +176,27 @@ async fn my_test() -> anyhow::Result<()> {
 ### Unit Tests
 Kernel unit tests use `#[test_case]` macro (custom test framework).
 
-## Adding Userspace Programs
+## Userspace Architecture
+
+Userspace is a buildroot-produced rootfs cpio, loaded at boot via QEMU
+`-initrd` (path from DTB `/chosen/linux,initrd-{start,end}`) and
+extracted into a tmpfs-backed `/` in `initramfs::extract()`:
+
+- **dash** + **GNU coreutils** come from the buildroot package set
+  (`cmake/buildroot.cmake`, `configs/solaya_riscv64_buildroot_defconfig.in`).
+- Solaya's Rust binaries (init, dhcpd, tcp_echo, webserver, test
+  fixtures like `prog1`/`*-test`) are built by `userspace-rust` and
+  layered on top via `BR2_ROOTFS_OVERLAY` — they end up at `/bin/<name>`.
+- PID 1 is Solaya's Rust `init` (read from `/bin/init` by
+  `process_table::load_init_bytes`), which execs `/bin/dhcpd` once then
+  spawns `/bin/dash`.
+
+### Adding a userspace program
 
 1. Create `userspace/src/bin/myprogram.rs`
-2. Run `cmake --build build` (automatically embedded in kernel)
-3. Available in shell as `myprogram`
+2. `just build && cmake --build build --target buildroot-all` (the overlay
+   pulls the new binary into `/bin/myprogram`)
+3. Available in dash as `myprogram` (PATH contains `/bin`)
 
 ## Key Files Quick Reference
 
