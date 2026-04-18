@@ -109,11 +109,16 @@ impl SyscallDispatcher for LinuxSyscallRunner {
                 // When thread suspends, queue_current_process_back won't save registers
                 // (since state is Waiting, not Running), so we must save them here.
                 let sepc = hal::cpu::read_sepc();
-                s.get_current_thread().with_lock(|mut t| {
+                let should_enqueue = s.get_current_thread().with_lock(|mut t| {
                     t.set_register_state(trap_frame);
                     t.set_program_counter(VirtAddr::new(sepc));
-                    t.set_syscall_task_and_suspend(task);
+                    t.set_syscall_task_and_suspend(task)
                 });
+                if should_enqueue {
+                    crate::processes::process_table::RUN_QUEUE
+                        .lock()
+                        .push_back(s.get_current_thread().clone());
+                }
                 s.schedule();
             });
         }

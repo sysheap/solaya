@@ -273,26 +273,42 @@ impl Thread {
         self.thread_name = Some(name);
     }
 
-    pub fn set_syscall_task_and_suspend(&mut self, task: SyscallTask) {
+    /// Store the syscall task and transition the thread off the current CPU.
+    /// Returns `true` if the caller must push the thread onto `RUN_QUEUE`
+    /// (the thread stayed runnable because a wakeup or signal beat the
+    /// suspend). Returns `false` if the thread went to `Waiting` or is
+    /// `Zombie` — nothing to enqueue.
+    #[must_use]
+    pub fn set_syscall_task_and_suspend(&mut self, task: SyscallTask) -> bool {
         assert!(self.syscall_task.is_none(), "syscall task is already set");
         if matches!(self.state, ThreadState::Zombie(_)) {
             // Thread was killed by another CPU between poll() returning Pending
             // and now. Don't store the task or suspend — the thread is dead.
-            return;
+            return false;
         }
         self.syscall_task = Some(task);
         if self.wakeup_pending {
             // A waker fired between poll() returning Pending and now.
             // The thread is still Running so wake_up() couldn't transition
-            // it to Runnable. Don't suspend — stay schedulable.
+            // it to Runnable. Drop to Runnable and let the caller re-queue;
+            // leaving it Running{cpu_id=us} would invite
+            // queue_current_process_back to overwrite its saved userspace
+            // register state with stale CSR values from the trap that kicked
+            // off this scheduling pass.
             self.wakeup_pending = false;
-        } else if self.has_pending_unblocked_signal() {
-            // A signal arrived while the thread was Running (before the syscall
-            // yielded). Don't suspend — stay schedulable so the scheduler can
-            // deliver the signal and return EINTR.
-        } else {
-            self.suspend();
+            self.state = ThreadState::Runnable;
+            return true;
         }
+        if self.has_pending_unblocked_signal() {
+            // A signal arrived while the thread was Running (before the
+            // syscall yielded). Same reasoning as the wakeup_pending branch:
+            // drop to Runnable so the scheduler can re-pick us and deliver
+            // the signal via the normal path.
+            self.state = ThreadState::Runnable;
+            return true;
+        }
+        self.suspend();
+        false
     }
 
     pub fn wake_up(&mut self) -> bool {
