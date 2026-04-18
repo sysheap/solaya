@@ -18,15 +18,16 @@ BR2_RISCV_ISA_CUSTOM_RVD=y
 BR2_RISCV_ISA_CUSTOM_RVC=y
 
 # --- Toolchain -----------------------------------------------------------
-# Solaya's cross-toolchain is LLVM-only (clang wrappers under
-# build/toolchain/bin/), which buildroot's external-toolchain path doesn't
-# integrate with cleanly — buildroot assumes GCC wrappers and probes
-# lib/gcc/<triple>/<version>/ layouts.  Let buildroot build its own GCC
-# internally; adds ~20 min on cold CI, but CI cache makes warm builds fast
-# and keeps the build decoupled from host LLVM churn.
-BR2_TOOLCHAIN_BUILDROOT=y
-BR2_TOOLCHAIN_BUILDROOT_MUSL=y
-BR2_TOOLCHAIN_BUILDROOT_CXX=y
+# Buildroot's toolchain infrastructure has no clang/LLVM path — every
+# external-toolchain option hard-requires GCC wrappers (grep 'clang' in
+# toolchain/ turns up zero matches as of 2025.02.x).  Rather than make
+# buildroot build a second GCC from source (BR2_TOOLCHAIN_BUILDROOT,
+# ~20 min cold), grab Bootlin's pre-built riscv64-lp64d musl GCC — ~80 MB
+# download, ready to use, ABI-compatible with our LLVM-built Rust binaries
+# (both link against musl 1.2.x, same dynamic linker path).
+BR2_TOOLCHAIN_EXTERNAL=y
+BR2_TOOLCHAIN_EXTERNAL_BOOTLIN=y
+BR2_TOOLCHAIN_EXTERNAL_BOOTLIN_RISCV64_LP64D_MUSL_STABLE=y
 
 # --- Init system: busybox (init applet only) -----------------------------
 BR2_INIT_BUSYBOX=y
