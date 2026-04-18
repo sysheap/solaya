@@ -16,7 +16,7 @@ use crate::{
         writable_buffer::WritableBuffer,
     },
 };
-use klib::util::{InBytes, UsizeExt, align_up};
+use klib::util::{InBytes, UsizeExt, align_up, as_byte_slice};
 use mm::util::minimum_amount_of_pages;
 
 pub const STACK_START: VirtAddr = VirtAddr::new(usize::MAX);
@@ -183,12 +183,9 @@ fn set_up_arguments(
         .map_err(|_| LoaderError::StackToSmall)?;
 
     // Capture the auxv as a flat byte buffer for prctl(PR_GET_AUXV). Must
-    // happen AFTER the AT_RANDOM patch above so the stored bytes match
-    // exactly what's on the stack.
-    let mut auxv_bytes = Vec::with_capacity(auxv.in_bytes());
-    for aux in &auxv {
-        auxv_bytes.extend_from_slice(&aux.to_ne_bytes());
-    }
+    // happen AFTER the AT_RANDOM / AT_EXECFN patches above so the stored
+    // bytes match exactly what's on the stack.
+    let auxv_bytes = as_byte_slice(&auxv).to_vec();
 
     // We want to point into the arguments
     Ok(ArgumentsResult {
