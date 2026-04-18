@@ -328,7 +328,7 @@ mod tests {
     fn link_rejects_duplicate_name() {
         let dir = TmpfsDir::new();
         let file = dir.create("a", NodeType::File).expect("create");
-        let err = dir.link("a", file).err().expect("link must fail");
+        let err = dir.link("a", file).expect_err("link must fail");
         assert_eq!(err, Errno::EEXIST);
     }
 }

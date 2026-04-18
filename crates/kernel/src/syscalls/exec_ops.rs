@@ -138,7 +138,7 @@ impl LinuxSyscallHandler {
 }
 
 /// Read the whole file at `filename` into memory.  Returns `None` on any
-/// lookup/read failure; the caller falls back to PROGRAMS-by-basename.
+/// lookup/read failure; the caller propagates ENOENT to userspace.
 ///
 /// Path resolution follows execve(2): absolute paths resolve against the
 /// VFS root, relative paths against `cwd`.  No PATH search — shells are
