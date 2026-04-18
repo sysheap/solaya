@@ -68,7 +68,12 @@ fn load_init_bytes() -> Arc<[u8]> {
 
 #[cfg(not(feature = "rootdir_legacy"))]
 fn load_init_bytes() -> Arc<[u8]> {
-    const INIT_PATHS: &[&str] = &["/sbin/init", "/bin/init", "/init"];
+    // /bin/init is our Rust init (delivered via buildroot rootfs overlay).
+    // /sbin/init is busybox; we don't use it yet because busybox needs
+    // AF_UNIX socketpair + reboot() + shebang execve support we haven't
+    // written.  Keep both paths so swapping back to busybox is just a
+    // reorder + kernel-gap-fixes away.
+    const INIT_PATHS: &[&str] = &["/bin/init", "/sbin/init", "/init"];
     for path in INIT_PATHS {
         let Ok(node) = fs::resolve_path(path) else {
             continue;
