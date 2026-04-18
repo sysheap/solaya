@@ -61,10 +61,11 @@ add_custom_target(test-unit
 # Always depends on the full kernel build (the tests boot the kernel in QEMU).
 # -----------------------------------------------------------------------------
 add_custom_target(test-system
-    COMMAND ${SOLAYA_CARGO} nextest run --release
+    COMMAND ${CMAKE_COMMAND} -E env SOLAYA_INITRD=${SOLAYA_BUILDROOT_CPIO}
+            ${SOLAYA_CARGO} nextest run --release
             --manifest-path ${CMAKE_SOURCE_DIR}/system-tests/Cargo.toml
             --target x86_64-unknown-linux-gnu
-    DEPENDS solaya-bin
+    DEPENDS solaya-bin buildroot-all
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     USES_TERMINAL
     VERBATIM
