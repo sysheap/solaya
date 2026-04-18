@@ -329,6 +329,29 @@ pub struct Reg {
     pub size: usize,
 }
 
+/// Returns true iff `[range.start, range.end)` is fully contained in a
+/// single `reg` entry of a `/memory@*` node. Used to sanity-check
+/// bootloader-provided physical ranges (e.g. initrd) before we hand
+/// them to `ValidatedPtr::from_trusted` — a malformed bootloader
+/// pointing at MMIO would otherwise be treated as RAM.
+pub fn range_in_ram(range: Range<usize>) -> bool {
+    if range.start >= range.end {
+        return false;
+    }
+    for child in THE.root_node().children() {
+        if child.name.split('@').next() != Some("memory") {
+            continue;
+        }
+        for reg in child.parse_all_reg_properties() {
+            let reg_end = reg.address.saturating_add(reg.size);
+            if range.start >= reg.address && range.end <= reg_end {
+                return true;
+            }
+        }
+    }
+    false
+}
+
 pub struct ChildrenIterator<'a> {
     parent: Node<'a>,
 }
