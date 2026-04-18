@@ -19,7 +19,7 @@
 # Additional cmake-only targets (invoke via `cmake --build build --target X`):
 #
 #   solaya                    kernel ELF + patch symbols (default of `build`)
-#   userspace-all             userspace rust bins + coreutils
+#   userspace-all             userspace rust bins + dash + doom
 #   headers-generated         run bindgen-driver -> build/headers/generated/
 #   fetch-deps                prefetch cargo deps
 #   tftp-deploy, reboot-hw, picocom   hardware deploy flows

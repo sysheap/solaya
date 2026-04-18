@@ -54,7 +54,6 @@ set(_br_cpio    "${_br_out}/images/rootfs.cpio")
 
 set(SOLAYA_BUILDROOT_OVERLAY_DIR        "${_br_overlay}")
 set(SOLAYA_BUILDROOT_POST_BUILD_SCRIPT  "${CMAKE_SOURCE_DIR}/scripts/buildroot-post-build.sh")
-set(SOLAYA_BUSYBOX_CONFIG               "${CMAKE_SOURCE_DIR}/configs/busybox-solaya.config")
 
 # Materialize the defconfig template into the build dir; absolute paths
 # (overlay, post-build script, busybox config) get resolved here.
@@ -108,7 +107,6 @@ add_custom_command(
     COMMAND make -C "${_br_src}" O=${_br_out}
     DEPENDS buildroot-src buildroot-overlay
             "${_br_defconfig}"
-            "${SOLAYA_BUSYBOX_CONFIG}"
             "${SOLAYA_BUILDROOT_POST_BUILD_SCRIPT}"
             "${CMAKE_SOURCE_DIR}/configs/overlay/etc/inittab"
             "${CMAKE_SOURCE_DIR}/configs/overlay/etc/init.d/rcS"

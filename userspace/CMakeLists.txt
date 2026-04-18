@@ -1,9 +1,9 @@
-# userspace/CMakeLists.txt — build userspace rust binaries + coreutils.
+# userspace/CMakeLists.txt — build userspace rust binaries.
 #
 # Outputs land in ${SOLAYA_USERSPACE_ARTIFACT_DIR} (build/userspace/artifacts
-# by default). kernel/build.rs reads the same path (hardcoded relative to
-# its CARGO_MANIFEST_DIR, matching the binaryDir pinned by CMakePresets.json)
-# and include_bytes!'s the contents into the kernel ELF.
+# by default).  Buildroot stages these into its rootfs overlay under /bin/;
+# standard POSIX commands (cat, ls, echo, ...) come from GNU coreutils in
+# buildroot, not from a Rust reimplementation.
 
 cmake_minimum_required(VERSION 3.25)
 project(solaya_userspace LANGUAGES NONE)
@@ -50,66 +50,9 @@ exec ${SOLAYA_CARGO} build \
 )
 
 # -----------------------------------------------------------------------------
-# coreutils: one multicall binary, symlinked for each applet name.
-# Feature list matches the justfile's build-coreutils recipe verbatim.
-#
-# Driven by a stamp file so cargo install + symlink creation only run when
-# this file (or compiler-rt) actually changes. Unconditional re-runs would
-# bump the symlinks' mtimes and invalidate the kernel's build.rs
-# (cargo:rerun-if-changed=build/userspace/artifacts), forcing a full kernel
-# recompile on every no-op build.
-# -----------------------------------------------------------------------------
-set(_coreutils_features "cat,echo,false,ls,mkdir,pwd,rm,touch,true")
-set(_coreutils_root     "${CMAKE_BINARY_DIR}/userspace/coreutils-root")
-set(_coreutils_stamp    "${CMAKE_BINARY_DIR}/userspace/coreutils.stamp")
-
-string(REPLACE "," ";" _coreutils_applets "${_coreutils_features}")
-
-# Build the symlink commands as a list so CMake emits one COMMAND per applet.
-set(_symlink_commands "")
-foreach(_applet IN LISTS _coreutils_applets)
-    list(APPEND _symlink_commands
-        COMMAND ${CMAKE_COMMAND} -E create_symlink
-            "coreutils"
-            "${SOLAYA_USERSPACE_ARTIFACT_DIR}/${_applet}"
-    )
-endforeach()
-
-add_custom_command(
-    OUTPUT ${_coreutils_stamp}
-    COMMAND ${CMAKE_COMMAND} -E make_directory "${SOLAYA_USERSPACE_ARTIFACT_DIR}"
-    # `cargo install` compiles under ~/.cargo/registry/..., outside the
-    # project tree, so rustup can't find rust-toolchain.toml there — pin
-    # the toolchain explicitly via RUSTUP_TOOLCHAIN.
-    COMMAND sh -c "PATH=\"${SOLAYA_CROSS_BIN}:$PATH\" \
-RUSTUP_TOOLCHAIN=\"${SOLAYA_RUST_CHANNEL}\" \
-CARGO_TARGET_RISCV64GC_UNKNOWN_LINUX_MUSL_LINKER=riscv64-linux-musl-clang \
-CARGO_TARGET_RISCV64GC_UNKNOWN_LINUX_MUSL_RUSTFLAGS=\"-C target-feature=+crt-static\" \
-exec ${SOLAYA_CARGO} install coreutils@0.8.0 \
---target ${_rust_target} \
---no-default-features \
---features \"${_coreutils_features}\" \
---root \"${_coreutils_root}\" \
---target-dir \"${_coreutils_root}/build\" \
---force"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${_coreutils_root}/bin/coreutils"
-        "${SOLAYA_USERSPACE_ARTIFACT_DIR}/coreutils"
-    ${_symlink_commands}
-    COMMAND ${CMAKE_COMMAND} -E touch ${_coreutils_stamp}
-    DEPENDS compiler-rt-builtins ${CMAKE_CURRENT_LIST_FILE}
-    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-    USES_TERMINAL
-    VERBATIM
-    COMMENT "Building coreutils (${_coreutils_features})"
-)
-
-add_custom_target(coreutils DEPENDS ${_coreutils_stamp})
-
-# -----------------------------------------------------------------------------
 # Aggregate: everything a kernel build needs from userspace.
 # -----------------------------------------------------------------------------
 add_custom_target(userspace-all
-    DEPENDS userspace-rust coreutils dash doom
-    COMMENT "Userspace artifact set (rust bins + coreutils + dash/sh + doom)"
+    DEPENDS userspace-rust dash doom
+    COMMENT "Userspace artifact set (rust bins + dash/sh + doom)"
 )
