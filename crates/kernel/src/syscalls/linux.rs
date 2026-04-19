@@ -101,6 +101,7 @@ linux_syscalls! {
     SYSCALL_NR_PRLIMIT64 => prlimit64(pid: c_int, resource: c_uint, new_limit: Option<*const u8>, old_limit: Option<*mut u8>);
     SYSCALL_NR_PWRITE64 => pwrite64(fd: c_int, buf: *const u8, count: usize, offset: isize);
     SYSCALL_NR_READ => read(fd: c_int, buf: *mut u8, count: usize);
+    SYSCALL_NR_REBOOT => reboot(magic1: c_int, magic2: c_int, cmd: c_uint, _arg: usize);
     SYSCALL_NR_READLINKAT => readlinkat(dirfd: c_int, pathname: *const u8, buf: *mut u8, bufsiz: usize);
     SYSCALL_NR_READV => readv(fd: c_int, iov: *const iovec, iovcnt: c_int);
     SYSCALL_NR_RECVFROM => recvfrom(fd: c_int, buf: *mut u8, len: usize, flags: c_int, src_addr: Option<*mut u8>, addrlen: Option<*mut c_uint>);
@@ -527,6 +528,16 @@ impl LinuxSyscalls for LinuxSyscallHandler {
 
     async fn kill(&mut self, pid: c_int, sig: c_int) -> Result<isize, Errno> {
         self.do_kill(pid, sig)
+    }
+
+    async fn reboot(
+        &mut self,
+        magic1: c_int,
+        magic2: c_int,
+        cmd: c_uint,
+        _arg: usize,
+    ) -> Result<isize, Errno> {
+        self.do_reboot(magic1, magic2, cmd)
     }
 
     async fn tgkill(&mut self, _tgid: c_int, tid: c_int, sig: c_int) -> Result<isize, Errno> {

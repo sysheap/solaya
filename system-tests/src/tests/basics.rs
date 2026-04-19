@@ -23,7 +23,7 @@ async fn shutdown() -> anyhow::Result<()> {
     let mut solaya = QemuInstance::start().await?;
 
     solaya
-        .run_prog_waiting_for("exit", "shutting down system")
+        .run_prog_waiting_for("halt -n", "shutting down system")
         .await?;
 
     assert!(solaya.wait_for_qemu_to_exit().await?.success());
