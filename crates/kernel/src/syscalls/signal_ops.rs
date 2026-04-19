@@ -1,12 +1,21 @@
-use core::ffi::{c_int, c_uint};
+use core::{
+    ffi::{c_int, c_uint},
+    future::Future,
+    pin::Pin,
+    task::{Context, Poll},
+};
 use headers::{
     errno::Errno,
     syscall_types::{
         _NSIG, SIG_BLOCK, SIG_SETMASK, SIG_UNBLOCK, SIGKILL, SIGSTOP, sigaction, sigset_t, stack_t,
+        timespec,
     },
 };
 
-use crate::{processes::process_table, syscalls::linux_validator::LinuxUserspaceArg};
+use crate::{
+    processes::{process_table, thread::ThreadRef},
+    syscalls::linux_validator::LinuxUserspaceArg,
+};
 use abi::pid::Tid;
 
 use super::linux::LinuxSyscallHandler;
@@ -121,5 +130,71 @@ impl LinuxSyscallHandler {
             Ok::<_, Errno>(())
         })?;
         Ok(0)
+    }
+
+    pub(super) async fn do_rt_sigtimedwait(
+        &self,
+        set: LinuxUserspaceArg<*const sigset_t>,
+        info: LinuxUserspaceArg<Option<*mut u8>>,
+        timeout: LinuxUserspaceArg<Option<*const timespec>>,
+        sigsetsize: usize,
+    ) -> Result<isize, Errno> {
+        if sigsetsize != core::mem::size_of::<sigset_t>() {
+            return Err(Errno::EINVAL);
+        }
+        // NULL-info is the only supported caller path for now.
+        if info.arg_nonzero() {
+            return Err(Errno::EINVAL);
+        }
+        let set = set.validate_ptr()?;
+        // SIGKILL/SIGSTOP cannot be waited for — strip them from the wait set.
+        let wait_mask = set.sig[0] & !(1u64 << SIGKILL) & !(1u64 << SIGSTOP);
+
+        if let Some(t) = timeout.validate_ptr()? {
+            if t.tv_sec == 0 && t.tv_nsec == 0 {
+                // Poll: dequeue a matching pending signal, or EAGAIN.
+                return self.current_thread.with_lock(|mut th| {
+                    match th.first_pending_in_set(wait_mask) {
+                        Some(sig) => {
+                            th.clear_pending(sig);
+                            Ok(sig as isize)
+                        }
+                        None => Err(Errno::EAGAIN),
+                    }
+                });
+            }
+            // Finite non-zero timeouts are out of scope for now.
+            return Err(Errno::EINVAL);
+        }
+
+        SigTimedWait {
+            thread: self.current_thread.clone(),
+            wait_mask,
+        }
+        .await
+    }
+}
+
+struct SigTimedWait {
+    thread: ThreadRef,
+    wait_mask: u64,
+}
+
+impl Future for SigTimedWait {
+    type Output = Result<isize, Errno>;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        self.thread.with_lock(|mut t| {
+            if let Some(sig) = t.first_pending_in_set(self.wait_mask) {
+                t.clear_pending(sig);
+                return Poll::Ready(Ok(sig as isize));
+            }
+            // If an unblocked signal not in set is pending, the scheduler's
+            // Interrupt path will deliver EINTR after we return Pending.
+            // Register our waker so send_signal wakes us for blocked signals
+            // in `set`.
+            t.register_signal_waker(cx.waker().clone());
+            Poll::Pending
+        })
     }
 }

@@ -245,6 +245,8 @@ impl ProcessTable {
                     return false;
                 }
                 t.raise_signal(sig);
+                // Wake any waiter (e.g. rt_sigtimedwait) regardless of sigmask.
+                t.wake_signal_waker();
                 // SIGCONT resumes stopped threads
                 if sig == headers::syscall_types::SIGCONT && t.get_state() == ThreadState::Stopped {
                     t.clear_pending_stop_signals();

@@ -27,6 +27,7 @@ use core::{
     fmt::Debug,
     ptr::null_mut,
     sync::atomic::{AtomicU64, Ordering},
+    task::Waker,
 };
 use headers::{
     errno::Errno,
@@ -108,6 +109,7 @@ pub struct Thread {
     pub stopped_notified: bool,
     pub stop_signal: u32,
     thread_name: Option<String>,
+    signal_waker: Option<Waker>,
 }
 
 impl core::fmt::Display for Thread {
@@ -258,6 +260,7 @@ impl Thread {
             stopped_notified: false,
             stop_signal: 0,
             thread_name: None,
+            signal_waker: None,
         }))
     }
 
@@ -521,6 +524,25 @@ impl Thread {
             .first_unblocked(self.signal_state.sigmask.sig[0])?;
         self.signal_state.pending.clear(sig);
         Some(sig)
+    }
+
+    /// Lowest-numbered pending signal that is in `set`, regardless of sigmask.
+    pub fn first_pending_in_set(&self, set: u64) -> Option<u32> {
+        self.signal_state.pending.first_in(set)
+    }
+
+    pub fn clear_pending(&mut self, sig: u32) {
+        self.signal_state.pending.clear(sig);
+    }
+
+    pub fn register_signal_waker(&mut self, waker: Waker) {
+        self.signal_waker = Some(waker);
+    }
+
+    pub fn wake_signal_waker(&mut self) {
+        if let Some(w) = self.signal_waker.take() {
+            w.wake();
+        }
     }
 
     pub fn get_sigaction_raw(&self, sig: u32) -> &sigaction {

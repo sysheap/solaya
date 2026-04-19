@@ -108,6 +108,7 @@ linux_syscalls! {
     SYSCALL_NR_RT_SIGACTION => rt_sigaction(sig: c_uint, act: Option<*const sigaction>, oact: Option<*mut sigaction>, sigsetsize: usize);
     SYSCALL_NR_RT_SIGPROCMASK => rt_sigprocmask(how: c_uint, set: Option<*const sigset_t>, oldset: Option<*mut sigset_t>, sigsetsize: usize);
     SYSCALL_NR_RT_SIGRETURN => rt_sigreturn();
+    SYSCALL_NR_RT_SIGTIMEDWAIT => rt_sigtimedwait(set: *const sigset_t, info: Option<*mut u8>, timeout: Option<*const timespec>, sigsetsize: usize);
     SYSCALL_NR_SENDFILE => sendfile(out_fd: c_int, in_fd: c_int, offset: Option<*mut isize>, count: usize);
     SYSCALL_NR_SENDTO => sendto(fd: c_int, buf: *const u8, len: usize, flags: c_int, dest_addr: *const u8, addrlen: c_uint);
     SYSCALL_NR_SETGID => setgid(gid: c_uint);
@@ -503,6 +504,17 @@ impl LinuxSyscalls for LinuxSyscallHandler {
 
     async fn rt_sigreturn(&mut self) -> Result<isize, Errno> {
         self.do_rt_sigreturn()
+    }
+
+    async fn rt_sigtimedwait(
+        &mut self,
+        set: LinuxUserspaceArg<*const sigset_t>,
+        info: LinuxUserspaceArg<Option<*mut u8>>,
+        timeout: LinuxUserspaceArg<Option<*const timespec>>,
+        sigsetsize: usize,
+    ) -> Result<isize, Errno> {
+        self.do_rt_sigtimedwait(set, info, timeout, sigsetsize)
+            .await
     }
 
     async fn sigaltstack(

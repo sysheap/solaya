@@ -56,6 +56,15 @@ impl PendingSignals {
         }
         Some(deliverable.trailing_zeros())
     }
+
+    /// Lowest-numbered pending signal that is in `set`.
+    pub fn first_in(&self, set: u64) -> Option<u32> {
+        let matched = self.0 & set;
+        if matched == 0 {
+            return None;
+        }
+        Some(matched.trailing_zeros())
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
