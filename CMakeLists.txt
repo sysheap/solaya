@@ -81,4 +81,4 @@ add_subdirectory(crates/kernel)
 # the kernel binary and the buildroot rootfs cpio that QEMU's -initrd
 # needs at runtime.  Without this dependency, first-time users had to
 # remember to run `--target buildroot-all` separately.
-add_custom_target(solaya ALL DEPENDS solaya-bin buildroot-all)
+add_custom_target(solaya ALL DEPENDS solaya-bin buildroot-all mcp-servers)

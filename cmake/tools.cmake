@@ -12,19 +12,24 @@ add_custom_target(mcp-server
 )
 
 # gdb-mcp-server — create project-local venv at ${CMAKE_SOURCE_DIR}/.venv
-# and install Python deps from requirements.txt. Idempotent: re-running is
-# a fast no-op when the venv exists and deps are up-to-date.
+# and install Python deps from requirements.txt. Re-runs only when
+# requirements.txt changes; a build-tree stamp file gates the work.
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
-add_custom_target(gdb-mcp-server
+set(_gdb_mcp_venv_stamp "${CMAKE_BINARY_DIR}/gdb-mcp-server.stamp")
+add_custom_command(
+    OUTPUT "${_gdb_mcp_venv_stamp}"
     COMMAND ${Python3_EXECUTABLE} -m venv ${CMAKE_SOURCE_DIR}/.venv
     COMMAND ${CMAKE_SOURCE_DIR}/.venv/bin/pip install --disable-pip-version-check
             -r ${CMAKE_SOURCE_DIR}/gdb_mcp_server/requirements.txt
+    COMMAND ${CMAKE_COMMAND} -E touch "${_gdb_mcp_venv_stamp}"
+    DEPENDS "${CMAKE_SOURCE_DIR}/gdb_mcp_server/requirements.txt"
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-    USES_TERMINAL
-    VERBATIM
     COMMENT "Preparing gdb_mcp_server venv + deps"
+    VERBATIM
 )
+
+add_custom_target(gdb-mcp-server DEPENDS "${_gdb_mcp_venv_stamp}")
 
 # mcp-servers — umbrella: build both MCP servers in one shot.
 add_custom_target(mcp-servers
