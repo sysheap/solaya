@@ -179,13 +179,15 @@ impl QemuInstance {
         stdout.assert_read_until("kernel_init done!").await?;
 
         // After kernel_init, async kernel tasks (like ext2 mount) run concurrently
-        // with the init process. Accumulate boot output to check if the ext2 init
-        // message was already seen before the prompt.
-        let mut boot_tail = stdout.assert_read_until("init process started").await?;
+        // with busybox init. Accumulate boot output to check if the ext2 init
+        // message was already seen before the prompt. Busybox init is now PID 1
+        // (see crates/kernel/src/processes/process_table.rs load_init_bytes);
+        // it does not emit Rust-init's old banner lines, so we sync on dhcpd
+        // (when networked) and the shell prompt from dash's `console::respawn`.
+        let mut boot_tail = Vec::new();
         if network_port.is_some() {
             boot_tail.extend(stdout.assert_read_until("dhcpd: configured ip").await?);
         }
-        boot_tail.extend(stdout.assert_read_until("starting shell").await?);
         boot_tail.extend(stdout.assert_read_until(PROMPT).await?);
 
         if has_block_device {
