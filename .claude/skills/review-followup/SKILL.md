@@ -105,13 +105,13 @@ the fixes as a whole rather than one at a time.
    - **Discuss** — park for later; keep `- [ ]`, append
      `— _discuss: <note>_`.
 
-   Tell the user they can add a free-text note on their selection
-   (the `AskUserQuestion` UI supports this) — use it to capture the
-   dismissal reason or discuss note in the same click, without a
-   separate follow-up prompt. If they pick **Dismiss** or **Discuss**
-   without a note, ask for the one-line reason/note in a plain text
-   prompt afterwards (batch those follow-ups too — ask once at the
-   end of triage, not per-item).
+   Tell the user they can add a free-text note on their selection —
+   `AskUserQuestion` returns these in its `annotations` map, keyed by
+   question text, under a `notes` field. After the call, for every
+   **Dismiss** / **Discuss** answer check `annotations[question].notes`:
+   if present and non-empty, use it as the reason/note. If missing or
+   empty, queue a plain-text follow-up prompt — and batch all such
+   follow-ups into one prompt at the end of triage, not per-item.
 
 3. **Record the decisions in a worklist**, keeping section + original
    line text per finding. You now have three buckets:
