@@ -55,13 +55,11 @@ pub fn init() {
 
 /// Source the PID-1 ELF image from the initramfs-populated rootfs.
 ///
-/// /bin/init is Solaya's Rust init (delivered via the buildroot overlay).
-/// /sbin/init would be busybox if we ever flipped back to it — keeping
-/// both paths means swapping busybox in is a one-line reorder plus the
-/// AF_UNIX socketpair + shebang execve kernel work that's currently on
-/// the follow-up list.
+/// /sbin/init is buildroot's busybox (symlink to /bin/busybox).  /bin/init
+/// is Solaya's Rust init, kept as a fallback during the busybox bring-up
+/// so reverting is a one-line reorder.
 fn load_init_bytes() -> Arc<[u8]> {
-    const INIT_PATHS: &[&str] = &["/bin/init", "/sbin/init", "/init"];
+    const INIT_PATHS: &[&str] = &["/sbin/init", "/bin/init", "/init"];
     for path in INIT_PATHS {
         let Ok(node) = fs::resolve_path(path) else {
             continue;
