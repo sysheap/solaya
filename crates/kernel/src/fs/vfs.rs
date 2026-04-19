@@ -5,7 +5,7 @@ use alloc::{
     vec::Vec,
 };
 use core::sync::atomic::{AtomicU64, Ordering};
-use driver_api::BlockDevice;
+use driver_api::{BlockDevice, CharDevice};
 use headers::errno::Errno;
 
 use hal::spinlock::Spinlock;
@@ -176,6 +176,14 @@ pub trait VfsNode: Send + Sync {
     /// If this node is backed by a block device, return an `Arc<dyn BlockDevice>`
     /// so callers can bypass in-memory caching and do direct I/O.
     fn block_device(&self) -> Option<Arc<dyn BlockDevice>> {
+        None
+    }
+
+    /// If this node is backed by a character device, return an
+    /// `Arc<dyn CharDevice>`. Used by `openat` to recognise `/dev/console`
+    /// and produce a blocking `FileDescriptor::Tty` instead of the default
+    /// non-blocking `VfsFile`.
+    fn char_device(&self) -> Option<Arc<dyn CharDevice>> {
         None
     }
 

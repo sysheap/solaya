@@ -96,6 +96,10 @@ impl VfsNode for CharNode {
     fn truncate(&self, _length: usize) -> Result<(), Errno> {
         Ok(())
     }
+
+    fn char_device(&self) -> Option<Arc<dyn CharDevice>> {
+        Some(self.device.clone())
+    }
 }
 
 struct DisplayNode {
