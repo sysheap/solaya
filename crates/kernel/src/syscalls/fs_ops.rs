@@ -65,7 +65,7 @@ impl LinuxSyscallHandler {
         }
 
         let descriptor = if let Some(dev) = node.char_device()
-            && crate::io::uart::is_console_char_device(&dev)
+            && dev.is_tty()
         {
             // Implicit-ctty stop-gap: grant the opener's pgid the console's
             // fg_pgid so dash's job-control startup doesn't self-stop via
