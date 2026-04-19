@@ -55,11 +55,11 @@ pub fn init() {
 
 /// Source the PID-1 ELF image from the initramfs-populated rootfs.
 ///
-/// /sbin/init is buildroot's busybox (symlink to /bin/busybox).  /bin/init
-/// is Solaya's Rust init, kept as a fallback during the busybox bring-up
-/// so reverting is a one-line reorder.
+/// `/sbin/init` is buildroot's busybox (symlink to `/bin/busybox`).
+/// `/init` stays in the search list as the conventional initramfs
+/// fallback.
 fn load_init_bytes() -> Arc<[u8]> {
-    const INIT_PATHS: &[&str] = &["/sbin/init", "/bin/init", "/init"];
+    const INIT_PATHS: &[&str] = &["/sbin/init", "/init"];
     for path in INIT_PATHS {
         let Ok(node) = fs::resolve_path(path) else {
             continue;
@@ -73,7 +73,7 @@ fn load_init_bytes() -> Arc<[u8]> {
         crate::info!("init: loaded PID 1 from {path} ({n} bytes)");
         return Arc::<[u8]>::from(buf);
     }
-    panic!("init: no /sbin/init, /bin/init, or /init in the root filesystem");
+    panic!("init: no /sbin/init or /init in the root filesystem");
 }
 
 pub struct ProcessTable {
