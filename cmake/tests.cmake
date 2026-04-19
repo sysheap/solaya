@@ -39,17 +39,20 @@ add_custom_target(clippy
 # -----------------------------------------------------------------------------
 # test-unit: kernel + klib + hal + driver-api unit tests.
 # klib/hal run on x86_64 host (hal test needs --no-default-features so
-# riscv-specific code doesn't compile).
+# riscv-specific code doesn't compile). The kernel test boots QEMU via
+# qemu_wrapper.sh, which now hard-errors without an initramfs — so feed
+# it SOLAYA_INITRD and depend on buildroot-all just like test-system.
 # -----------------------------------------------------------------------------
 add_custom_target(test-unit
-    COMMAND ${SOLAYA_CARGO} test --release -p solaya
+    COMMAND ${CMAKE_COMMAND} -E env SOLAYA_INITRD=${SOLAYA_BUILDROOT_CPIO}
+            ${SOLAYA_CARGO} test --release -p solaya
     COMMAND ${SOLAYA_CARGO} test --release -p klib --lib
             --target x86_64-unknown-linux-gnu
     COMMAND ${SOLAYA_CARGO} test --release -p hal --lib
             --target x86_64-unknown-linux-gnu --no-default-features
     COMMAND ${SOLAYA_CARGO} test --release -p driver-api
             --target x86_64-unknown-linux-gnu
-    DEPENDS userspace-all headers-generated
+    DEPENDS userspace-all headers-generated buildroot-all
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     USES_TERMINAL
     VERBATIM
