@@ -156,10 +156,8 @@ sync even if you abort mid-session:
      `review: fix scheduler race flagged in review`. The pre-commit
      hook runs fmt + clippy + shellcheck; if it blocks, fix and
      re-stage into a NEW commit (never `--amend`).
-   - If the user course-corrects mid-fix ("no, don't change that"),
-     revert the staged edits for this one item and move to the next.
-     Don't abort the whole session — the remaining decisions are
-     still valid.
+   - If the user course-corrects mid-fix, follow the safety rail
+     below (revert this item, keep going).
 
 2. **Dismissal / discuss flips next.** For each item in the
    `dismiss` / `discuss` buckets, apply the GH comment edit
