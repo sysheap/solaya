@@ -9,7 +9,7 @@
 add_custom_target(run
     COMMAND ${CMAKE_COMMAND} -E env SOLAYA_INITRD=${SOLAYA_BUILDROOT_CPIO}
             ${SOLAYA_CARGO} run --release
-    DEPENDS solaya-bin
+    DEPENDS solaya-bin buildroot-all
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     USES_TERMINAL
     VERBATIM
@@ -19,7 +19,7 @@ add_custom_target(run
 add_custom_target(run-fb
     COMMAND ${CMAKE_COMMAND} -E env SOLAYA_INITRD=${SOLAYA_BUILDROOT_CPIO}
             ${SOLAYA_CARGO} run --release -- --fb
-    DEPENDS solaya-bin
+    DEPENDS solaya-bin buildroot-all
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     USES_TERMINAL
     VERBATIM
@@ -28,7 +28,7 @@ add_custom_target(run-fb
 
 add_custom_target(debug
     COMMAND ${CMAKE_SOURCE_DIR}/scripts/debug.sh
-    DEPENDS solaya-bin
+    DEPENDS solaya-bin buildroot-all
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     USES_TERMINAL
     VERBATIM
