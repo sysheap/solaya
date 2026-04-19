@@ -1,5 +1,5 @@
 use alloc::{collections::BTreeMap, string::String, sync::Arc};
-use core::ffi::{c_int, c_ulong};
+use core::ffi::{c_int, c_uint, c_ulong};
 use hal::spinlock::Spinlock;
 use headers::{
     errno::Errno,
@@ -8,6 +8,7 @@ use headers::{
 
 use crate::{
     cpu::Cpu,
+    info,
     memory::VirtAddr,
     processes::{
         process::Process,
@@ -20,6 +21,15 @@ use crate::{
 use abi::{pid::Tid, syscalls::trap_frame::Register};
 
 use super::linux::LinuxSyscallHandler;
+
+const LINUX_REBOOT_MAGIC1: c_int = 0xfee1deadu32 as c_int;
+const LINUX_REBOOT_MAGIC2_SET: &[c_int] = &[0x28121969, 0x05121996, 0x16041998, 0x20112000];
+
+const LINUX_REBOOT_CMD_CAD_OFF: c_uint = 0x00000000;
+const LINUX_REBOOT_CMD_CAD_ON: c_uint = 0x89abcdef;
+const LINUX_REBOOT_CMD_HALT: c_uint = 0xcdef0123;
+const LINUX_REBOOT_CMD_POWER_OFF: c_uint = 0x4321fedc;
+const LINUX_REBOOT_CMD_RESTART: c_uint = 0x01234567;
 
 impl LinuxSyscallHandler {
     pub(super) async fn clone_fork(&mut self, stack: usize) -> Result<isize, Errno> {
@@ -203,5 +213,26 @@ impl LinuxSyscallHandler {
         Cpu::with_scheduler(|mut s| s.kill_current_process(exit_status));
         crate::debug!("Exit process with status: {status}\n");
         Ok(0)
+    }
+
+    // TODO: require CAP_SYS_BOOT once credentials gain capability bits
+    pub(super) fn do_reboot(
+        &self,
+        magic1: c_int,
+        magic2: c_int,
+        cmd: c_uint,
+    ) -> Result<isize, Errno> {
+        if magic1 != LINUX_REBOOT_MAGIC1 || !LINUX_REBOOT_MAGIC2_SET.contains(&magic2) {
+            return Err(Errno::EINVAL);
+        }
+        match cmd {
+            LINUX_REBOOT_CMD_CAD_OFF | LINUX_REBOOT_CMD_CAD_ON => Ok(0),
+            LINUX_REBOOT_CMD_HALT | LINUX_REBOOT_CMD_POWER_OFF => {
+                info!("No more processes to schedule, shutting down system");
+                crate::test::qemu_exit::exit_success();
+            }
+            LINUX_REBOOT_CMD_RESTART => crate::platform::reset::trigger_reset(),
+            _ => Err(Errno::EINVAL),
+        }
     }
 }
