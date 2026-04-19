@@ -245,3 +245,7 @@ Once the worklist is exhausted:
   planned fix. The other Step 4 decisions are still valid — don't
   re-triage.
 - Do not commit a half-baked fix.
+- If the session aborts between the fix-commits phase and the GH-flips
+  phase (Step 6 point 1 → point 2), tell the user which items have
+  local un-pushed commits. Otherwise those findings still look open
+  as `- [ ]` on next run and may get re-triaged.
