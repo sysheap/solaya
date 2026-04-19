@@ -27,7 +27,6 @@ use core::{
     fmt::Debug,
     ptr::null_mut,
     sync::atomic::{AtomicU64, Ordering},
-    task::Waker,
 };
 use headers::{
     errno::Errno,
@@ -109,7 +108,10 @@ pub struct Thread {
     pub stopped_notified: bool,
     pub stop_signal: u32,
     thread_name: Option<String>,
-    signal_waker: Option<Waker>,
+    /// Active `rt_sigtimedwait` set, if the thread is currently suspended
+    /// in that syscall.  `send_signal` consults this to wake the thread
+    /// even for signals that are blocked in `sigmask`.
+    sigtimedwait_mask: Option<u64>,
 }
 
 impl core::fmt::Display for Thread {
@@ -260,7 +262,7 @@ impl Thread {
             stopped_notified: false,
             stop_signal: 0,
             thread_name: None,
-            signal_waker: None,
+            sigtimedwait_mask: None,
         }))
     }
 
@@ -302,11 +304,12 @@ impl Thread {
             self.state = ThreadState::Runnable;
             return true;
         }
-        if self.has_pending_unblocked_signal() {
+        if self.has_pending_unblocked_signal() || self.sigtimedwait_pending() {
             // A signal arrived while the thread was Running (before the
             // syscall yielded). Same reasoning as the wakeup_pending branch:
             // drop to Runnable so the scheduler can re-pick us and deliver
-            // the signal via the normal path.
+            // the signal via the normal path.  sigtimedwait_pending covers
+            // blocked signals the thread is explicitly waiting for.
             self.state = ThreadState::Runnable;
             return true;
         }
@@ -529,16 +532,25 @@ impl Thread {
         self.signal_state.pending.clear(sig);
     }
 
-    pub fn register_signal_waker(&mut self, waker: Waker) {
-        self.signal_waker = Some(waker);
+    pub fn set_sigtimedwait_mask(&mut self, mask: u64) {
+        self.sigtimedwait_mask = Some(mask);
     }
 
-    /// Detach the registered signal waker, if any. The caller must invoke
-    /// `wake()` on the returned `Waker` AFTER releasing the thread lock —
-    /// `ThreadWaker::wake` re-locks the same thread, so calling it while
-    /// holding the thread lock deadlocks.
-    pub fn take_signal_waker(&mut self) -> Option<Waker> {
-        self.signal_waker.take()
+    pub fn clear_sigtimedwait_mask(&mut self) {
+        self.sigtimedwait_mask = None;
+    }
+
+    /// True when a raised signal should wake a thread parked in
+    /// `rt_sigtimedwait`, regardless of the thread's sigmask.
+    pub fn sigtimedwait_matches(&self, sig: u32) -> bool {
+        self.sigtimedwait_mask
+            .is_some_and(|m| m & (1u64 << sig) != 0)
+    }
+
+    /// True if any pending signal matches the active `rt_sigtimedwait` set.
+    pub fn sigtimedwait_pending(&self) -> bool {
+        self.sigtimedwait_mask
+            .is_some_and(|m| self.signal_state.pending.first_matching(m).is_some())
     }
 
     pub fn get_sigaction_raw(&self, sig: u32) -> &sigaction {

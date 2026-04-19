@@ -4,6 +4,7 @@ use core::{
     pin::Pin,
     task::{Context, Poll},
 };
+
 use headers::{
     errno::Errno,
     syscall_types::{
@@ -183,18 +184,23 @@ struct SigTimedWait {
 impl Future for SigTimedWait {
     type Output = Result<isize, Errno>;
 
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+    fn poll(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Self::Output> {
         self.thread.with_lock(|mut t| {
             if let Some(sig) = t.first_pending_in_set(self.wait_mask) {
                 t.clear_pending(sig);
                 return Poll::Ready(Ok(sig as isize));
             }
-            // If an unblocked signal not in set is pending, the scheduler's
-            // Interrupt path will deliver EINTR after we return Pending.
-            // Register our waker so send_signal wakes us for blocked signals
-            // in `set`.
-            t.register_signal_waker(cx.waker().clone());
+            // Arm the sigtimedwait mask so send_signal wakes us for a
+            // matching signal even when it's blocked in sigmask; the
+            // unblocked-signal path stays responsible for EINTR delivery.
+            t.set_sigtimedwait_mask(self.wait_mask);
             Poll::Pending
         })
+    }
+}
+
+impl Drop for SigTimedWait {
+    fn drop(&mut self) {
+        self.thread.lock().clear_sigtimedwait_mask();
     }
 }
