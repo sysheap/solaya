@@ -89,7 +89,7 @@ impl LinuxSyscallHandler {
 
         let elf = ElfFile::parse(&elf_arc).map_err(|_| Errno::ENOEXEC)?;
         let loaded =
-            loader::load_elf(&elf, name, &args_refs, &env_strs).expect("ELF loading must succeed");
+            loader::load_elf(&elf, name, &args_refs, &env_strs).map_err(|_| Errno::ENOEXEC)?;
 
         let process_name = Arc::new(String::from(name));
         let old_process = self.get_process();
@@ -213,14 +213,25 @@ fn resolve_shebang(
     // first).  On exit, innermost interpreter path is `current_path`.
     let mut layers: Vec<(Option<String>, String)> = Vec::new();
     let bytes = loop {
-        let bytes = try_read_from_vfs(&current_path, cwd)?;
-        if bytes.len() < 2 || &bytes[..2] != b"#!" {
-            break bytes;
+        let node = resolve_against_cwd(&current_path, cwd)?;
+        // Peek the shebang header first so a multi-MiB ELF isn't read
+        // into memory just to check its first two bytes.
+        let size = node.size();
+        let peek_len = size.min(SHEBANG_MAX_LINE);
+        let mut peek: Vec<u8> = alloc::vec![0u8; peek_len];
+        let n = node.read(0, &mut peek)?;
+        peek.truncate(n);
+        if peek.len() < 2 || &peek[..2] != b"#!" {
+            break if peek.len() == size {
+                peek
+            } else {
+                read_full_node(&node)?
+            };
         }
         if layers.len() >= MAX_SHEBANG_DEPTH {
             return Err(Errno::ELOOP);
         }
-        let (interpreter, optional_arg) = parse_shebang(&bytes)?;
+        let (interpreter, optional_arg) = parse_shebang(&peek)?;
         layers.push((optional_arg, current_path));
         current_path = interpreter;
     };
@@ -244,13 +255,9 @@ fn resolve_shebang(
     Ok((bytes, argv))
 }
 
-/// Read the whole file at `filename` into memory, preserving the VFS
-/// errno so userspace can distinguish ENOENT / EACCES / ELOOP / EIO.
-///
-/// Path resolution follows execve(2): absolute paths resolve against the
-/// VFS root, relative paths against `cwd`.  No PATH search — shells are
-/// expected to do that themselves (dash/busybox ash both do).
-fn try_read_from_vfs(filename: &str, cwd: &str) -> Result<Vec<u8>, Errno> {
+/// Resolve `filename` against the VFS root (absolute) or `cwd` (relative).
+/// execve(2) does no PATH search — shells handle that.
+fn resolve_against_cwd(filename: &str, cwd: &str) -> Result<fs::vfs::VfsNodeRef, Errno> {
     let absolute: String = if filename.starts_with('/') {
         filename.to_string()
     } else if cwd.ends_with('/') {
@@ -258,11 +265,13 @@ fn try_read_from_vfs(filename: &str, cwd: &str) -> Result<Vec<u8>, Errno> {
     } else {
         alloc::format!("{cwd}/{filename}")
     };
-    let node = fs::resolve_path(&absolute)?;
+    fs::resolve_path(&absolute)
+}
+
+/// Read an entire VFS node into memory. 64 MiB cap keeps a rogue or
+/// corrupt entry from exhausting the heap (~10× our largest binary).
+fn read_full_node(node: &fs::vfs::VfsNodeRef) -> Result<Vec<u8>, Errno> {
     let size = node.size();
-    // Refuse outlandish sizes to avoid a rogue or corrupt VFS entry
-    // allocating the whole heap; 64 MiB is ~10× the largest userspace
-    // binary we produce.
     if size > 64 * 1024 * 1024 {
         return Err(Errno::E2BIG);
     }
