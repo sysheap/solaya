@@ -51,7 +51,6 @@ impl LinuxSyscallHandler {
         })?;
         let mut buf = ConsumableBuffer::new(&filename_bytes);
         let filename_str = buf.consume_str().ok_or(Errno::EFAULT)?;
-        let name = filename_str.rsplit('/').next().unwrap_or(filename_str);
 
         let argv_buffers = self.read_string_array(argv)?;
         let mut args: Vec<&str> = Vec::new();
@@ -78,15 +77,25 @@ impl LinuxSyscallHandler {
 
         let old_cwd_str = self.get_process().with_lock(|p| String::from(p.cwd()));
 
-        // Resolve the filename against the VFS: absolute paths walk the
-        // mount tree, relative paths get rebased against cwd.  Errors
-        // (ENOENT, EACCES, ELOOP, EIO, E2BIG) propagate to userspace as-is.
-        let vfs_bytes = try_read_from_vfs(filename_str, &old_cwd_str)?;
+        // Resolve the filename (plus any shebang layers) against the VFS.
+        // Errors (ENOENT, EACCES, ELOOP, EIO, E2BIG, ENOEXEC) propagate to
+        // userspace as-is.
+        let (vfs_bytes, final_argv) = resolve_shebang(filename_str, &args, &old_cwd_str)?;
         let elf_arc: Arc<[u8]> = Arc::<[u8]>::from(vfs_bytes.as_slice());
 
-        let elf = ElfFile::parse(&elf_arc).expect("Cannot parse ELF file");
+        // After shebang resolution, argv[0] is the interpreter path (or the
+        // original filename if no shebang); the binary's basename becomes
+        // the process name.
+        let resolved_path = &final_argv[0];
+        let name = resolved_path
+            .rsplit('/')
+            .next()
+            .unwrap_or(resolved_path.as_str());
+        let args_refs: Vec<&str> = final_argv.iter().skip(1).map(String::as_str).collect();
+
+        let elf = ElfFile::parse(&elf_arc).map_err(|_| Errno::ENOEXEC)?;
         let loaded =
-            loader::load_elf(&elf, name, &args, &env_strs).expect("ELF loading must succeed");
+            loader::load_elf(&elf, name, &args_refs, &env_strs).expect("ELF loading must succeed");
 
         let process_name = Arc::new(String::from(name));
         let old_process = self.get_process();
@@ -135,6 +144,110 @@ impl LinuxSyscallHandler {
 
         Ok(0)
     }
+}
+
+/// Linux caps shebang recursion at 4 layers (`BINPRM_MAX_RECURSION`).
+const MAX_SHEBANG_DEPTH: usize = 4;
+
+/// Maximum bytes of the first line we inspect for a `#!` header.  Matches
+/// Linux's `BINPRM_BUF_SIZE` envelope: `#!` + 255 interpreter bytes + `\n`.
+const SHEBANG_MAX_LINE: usize = 257;
+
+/// Parse a `#!` line.  Returns `(interpreter, optional_arg)` where the
+/// optional arg is the remainder of the line after the interpreter token,
+/// treated as a single argument (matching Linux behavior — no splitting).
+///
+/// Returns `Err(Errno::ENOEXEC)` if the shebang header is malformed (no
+/// newline within the bound, empty interpreter, ...).
+fn parse_shebang(bytes: &[u8]) -> Result<(String, Option<String>), Errno> {
+    let scan_len = bytes.len().min(SHEBANG_MAX_LINE);
+    let line_end = bytes[..scan_len]
+        .iter()
+        .position(|&b| b == b'\n')
+        .ok_or(Errno::ENOEXEC)?;
+    // Skip the `#!` prefix then leading spaces/tabs.
+    let after_bang = &bytes[2..line_end];
+    let start = after_bang
+        .iter()
+        .position(|&b| b != b' ' && b != b'\t')
+        .ok_or(Errno::ENOEXEC)?;
+    let rest = &after_bang[start..];
+    let interp_end = rest
+        .iter()
+        .position(|&b| b == b' ' || b == b'\t')
+        .unwrap_or(rest.len());
+    if interp_end == 0 {
+        return Err(Errno::ENOEXEC);
+    }
+    let interpreter = core::str::from_utf8(&rest[..interp_end])
+        .map_err(|_| Errno::ENOEXEC)?
+        .to_string();
+    let arg_region = &rest[interp_end..];
+    let arg_start = arg_region
+        .iter()
+        .position(|&b| b != b' ' && b != b'\t')
+        .unwrap_or(arg_region.len());
+    let trimmed = &arg_region[arg_start..];
+    let trimmed_end = trimmed
+        .iter()
+        .rposition(|&b| b != b' ' && b != b'\t')
+        .map(|p| p + 1)
+        .unwrap_or(0);
+    let optional_arg = if trimmed_end == 0 {
+        None
+    } else {
+        Some(
+            core::str::from_utf8(&trimmed[..trimmed_end])
+                .map_err(|_| Errno::ENOEXEC)?
+                .to_string(),
+        )
+    };
+    Ok((interpreter, optional_arg))
+}
+
+/// Read the file at `filename`, following up to `MAX_SHEBANG_DEPTH` layers
+/// of `#!` indirection.  Returns the final binary bytes plus the full argv
+/// (argv[0] is the resolved interpreter or original filename, followed by
+/// any shebang-contributed args, then the caller's `trailing_args`).
+fn resolve_shebang(
+    filename: &str,
+    trailing_args: &[&str],
+    cwd: &str,
+) -> Result<(Vec<u8>, Vec<String>), Errno> {
+    let mut current_path = String::from(filename);
+    // Per-layer (optional_arg, script_path) in discovery order (outermost
+    // first).  On exit, innermost interpreter path is `current_path`.
+    let mut layers: Vec<(Option<String>, String)> = Vec::new();
+    let bytes = loop {
+        let bytes = try_read_from_vfs(&current_path, cwd)?;
+        if bytes.len() < 2 || &bytes[..2] != b"#!" {
+            break bytes;
+        }
+        if layers.len() >= MAX_SHEBANG_DEPTH {
+            return Err(Errno::ELOOP);
+        }
+        let (interpreter, optional_arg) = parse_shebang(&bytes)?;
+        layers.push((optional_arg, current_path));
+        current_path = interpreter;
+    };
+    // Assemble argv.  Linux semantics:
+    //   argv[0] = innermost interpreter (the actual binary)
+    //   then, unwinding innermost-layer first:
+    //       if that layer had an optional arg: push it
+    //       push that layer's script path
+    //   then trailing_args (argv[1..] from the original execve call)
+    let mut argv: Vec<String> = Vec::with_capacity(1 + layers.len() * 2 + trailing_args.len());
+    argv.push(current_path);
+    for (opt_arg, script) in layers.into_iter().rev() {
+        if let Some(a) = opt_arg {
+            argv.push(a);
+        }
+        argv.push(script);
+    }
+    for a in trailing_args {
+        argv.push(String::from(*a));
+    }
+    Ok((bytes, argv))
 }
 
 /// Read the whole file at `filename` into memory, preserving the VFS
