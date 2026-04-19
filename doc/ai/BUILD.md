@@ -64,20 +64,22 @@ just build
 Userspace is a buildroot-produced **cpio initramfs**, not a compile-time
 embedding:
 
-1. `userspace-rust` builds Solaya's Rust binaries (init, dhcpd, tests)
-   into `build/userspace/artifacts/`.
+1. `userspace-rust` builds Solaya's Rust binaries (dhcpd, tests) into
+   `build/userspace/artifacts/`.
 2. `buildroot-overlay` copies those into `.buildroot/overlay/bin/`.
-3. `buildroot-all` runs buildroot, which cross-builds dash + GNU
-   coreutils using the Bootlin prebuilt musl GCC toolchain
+3. `buildroot-all` runs buildroot, which cross-builds busybox, dash,
+   and GNU coreutils using the Bootlin prebuilt musl GCC toolchain
    (`BR2_TOOLCHAIN_EXTERNAL_BOOTLIN`), then layers our overlay on top
    and emits `.buildroot/output/images/rootfs.cpio`.
 4. `qemu_wrapper.sh` passes the cpio via `-initrd`; kernel reads
    `/chosen/linux,initrd-{start,end}` from the DTB, reserves the
    range in the page allocator, and
    `initramfs::extract()` unpacks it into the tmpfs-backed root.
-5. `process_table::init` reads `/bin/init` from the VFS and runs it as
-   PID 1.  That's Solaya's Rust `init`, which execs `/bin/dhcpd` and
-   `/bin/dash` by absolute path (both live in the cpio).
+5. `process_table::init` reads `/sbin/init` from the VFS (buildroot
+   symlinks it to `/bin/busybox`) and runs busybox as PID 1. Busybox
+   reads `/etc/inittab` (shipped via overlay), runs `/etc/init.d/rcS`,
+   waits on `/bin/dhcpd` to configure the network, then respawns
+   `/bin/dash -i` on the console.
 
 Kernel unit tests no longer embed userspace fixtures; all userspace
 coverage lives in `system-tests/`, which boot the full image in QEMU.
