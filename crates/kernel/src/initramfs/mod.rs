@@ -11,7 +11,7 @@ use headers::{
     errno::Errno,
     fs::{S_IFBLK, S_IFCHR, S_IFDIR, S_IFIFO, S_IFLNK, S_IFMT, S_IFREG, S_IFSOCK},
 };
-use klib::big_endian::BigEndian;
+use klib::{big_endian::BigEndian, parser::ConsumableBuffer};
 
 use crate::{
     device_tree, fs,
@@ -21,20 +21,26 @@ use crate::{
 
 mod cpio;
 
+// `linux,initrd-{start,end}` can be either 4 or 8 bytes wide: QEMU < 9.0
+// writes one FDT cell (u32), QEMU >= 9.0 writes a u64. Accept both rather
+// than assuming one width — otherwise boot fails on older distro QEMUs
+// with "no initrd in DTB /chosen" even though -initrd was passed.
+fn read_initrd_addr(mut buf: ConsumableBuffer<'_>) -> Option<u64> {
+    match buf.size_left() {
+        4 => Some(u64::from(buf.consume_sized_type::<BigEndian<u32>>()?.get())),
+        8 => Some(buf.consume_sized_type::<BigEndian<u64>>()?.get()),
+        _ => None,
+    }
+}
+
 /// Physical range of the initrd reported by the bootloader via DTB
 /// `/chosen/linux,initrd-{start,end}`. Returns `None` if no initrd is
 /// advertised. Must be reserved in the page allocator (the bytes live in
 /// free RAM until we copy them into tmpfs).
 pub fn find_initrd_range() -> Option<Range<*const u8>> {
     let chosen = device_tree::THE.root_node().find_node("chosen")?;
-    let start = chosen
-        .get_property("linux,initrd-start")?
-        .consume_sized_type::<BigEndian<u64>>()?
-        .get();
-    let end = chosen
-        .get_property("linux,initrd-end")?
-        .consume_sized_type::<BigEndian<u64>>()?
-        .get();
+    let start = read_initrd_addr(chosen.get_property("linux,initrd-start")?)?;
+    let end = read_initrd_addr(chosen.get_property("linux,initrd-end")?)?;
     if end <= start {
         return None;
     }
