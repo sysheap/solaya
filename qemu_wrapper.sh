@@ -132,7 +132,7 @@ fi
 # Fall back to SOLAYA_INITRD env var if --initrd wasn't passed — lets the
 # CMake run/test targets inject the buildroot cpio without every caller
 # having to know the flag. Booting without a rootfs is not a supported
-# mode (kernel panics on missing /bin/init), so require one of --initrd
+# mode (kernel panics on missing /sbin/init), so require one of --initrd
 # or SOLAYA_INITRD and fail hard if the referenced file is missing —
 # silent fallback used to mask an unbuilt buildroot tree.
 if [[ -z "$INITRD_PATH" ]]; then

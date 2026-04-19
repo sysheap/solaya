@@ -77,15 +77,9 @@ impl LinuxSyscallHandler {
 
         let old_cwd_str = self.get_process().with_lock(|p| String::from(p.cwd()));
 
-        // Resolve the filename (plus any shebang layers) against the VFS.
-        // Errors (ENOENT, EACCES, ELOOP, EIO, E2BIG, ENOEXEC) propagate to
-        // userspace as-is.
         let (vfs_bytes, final_argv) = resolve_shebang(filename_str, &args, &old_cwd_str)?;
         let elf_arc: Arc<[u8]> = Arc::<[u8]>::from(vfs_bytes.as_slice());
 
-        // After shebang resolution, argv[0] is the interpreter path (or the
-        // original filename if no shebang); the binary's basename becomes
-        // the process name.
         let resolved_path = &final_argv[0];
         let name = resolved_path
             .rsplit('/')

@@ -67,11 +67,9 @@ impl LinuxSyscallHandler {
         let descriptor = if let Some(dev) = node.char_device()
             && crate::io::uart::is_console_char_device(&dev)
         {
-            // Implicit-ctty: give the opener's pgid the TTY's foreground
-            // group. busybox init's child calls setsid() before opening the
-            // console; without this, dash's job-control startup sees
-            // fg_pgid != getpgrp() and self-stops via SIGTTIN. Proper
-            // TIOCSCTTY on-open is #250 — this keeps things unblocked.
+            // Implicit-ctty stop-gap: grant the opener's pgid the console's
+            // fg_pgid so dash's job-control startup doesn't self-stop via
+            // SIGTTIN. Proper TIOCSCTTY-on-open is tracked in issue #262.
             let caller_pgid = self.current_process.with_lock(|p| p.pgid());
             crate::io::tty_device::console_tty()
                 .lock()
