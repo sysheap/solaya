@@ -1,6 +1,6 @@
 ---
 name: review-followup
-description: Triage the AI Architectural Review comment on the current PR — fix, dismiss, or defer-for-discussion each open finding interactively, commit per fix, push at end.
+description: Triage the AI Architectural Review comment on the current PR — collect fix/dismiss/discuss decisions for every open finding upfront, then plan and execute the accepted fixes, commit per fix, push at end.
 ---
 
 # Review-Followup
@@ -78,47 +78,96 @@ Build a worklist of all `- [ ]` items (including ones with a
 may be now). If the worklist is empty, tell the user "nothing to
 triage on PR #$PR" and stop — do not push, do not commit.
 
-## Step 4 — Triage loop
+## Step 4 — Triage upfront (collect all decisions before acting)
 
-For each open item, one at a time in section order (Must-fix first):
+The goal of this step is to get a disposition for **every** open
+finding *before* you write any code or edit the GH comment. Deciding
+upfront lets the user see the full slate at once, and lets you plan
+the fixes as a whole rather than one at a time.
 
-1. Show the finding to the user along with the relevant code context.
-   If the finding cites `path/to/file.rs:LINE`, Read a window around
-   that line (roughly ±20 lines) so the user sees the code before
-   deciding. If the line already has a `— _discuss: ..._` suffix,
-   surface that note explicitly ("previously parked: <note>").
-2. Ask the user: **fix**, **dismiss**, or **discuss**?
-3. On **fix**:
-   - Plan the change, apply it with normal tools (Edit/Grep/etc.).
-   - Run any obviously-relevant check (e.g. `just clippy` for a lint
-     finding, `just test-unit` for a logic finding). Don't run the
-     full `just ci` per item — that's overkill.
-   - Create one commit for this fix. Commit message should be short
-     and reference the finding — e.g.
+1. **Load code context for every finding.** For each open item, if it
+   cites `path/to/file.rs:LINE`, Read a window around that line
+   (roughly ±20 lines). Batch these reads — they're independent, so
+   issue them in parallel.
+
+2. **Present the findings in batches of up to 4 via the
+   `AskUserQuestion` tool.** `AskUserQuestion` accepts 1–4 questions
+   per call, so if there are more than 4 open items, make multiple
+   calls — but do all of them *before* moving on to Step 5.
+
+   For each finding, one question. Put the finding text (and any
+   `— _discuss: ..._` note from a prior run, surfaced as
+   "previously parked: <note>") in the question body. Use these three
+   options, in this order:
+
+   - **Fix** — apply the change now, commit it.
+   - **Dismiss** — permanent won't-fix; flip to `- [x] ... — _dismissed: <reason>_`.
+   - **Discuss** — park for later; keep `- [ ]`, append
+     `— _discuss: <note>_`.
+
+   Tell the user they can add a free-text note on their selection
+   (the `AskUserQuestion` UI supports this) — use it to capture the
+   dismissal reason or discuss note in the same click, without a
+   separate follow-up prompt. If they pick **Dismiss** or **Discuss**
+   without a note, ask for the one-line reason/note in a plain text
+   prompt afterwards (batch those follow-ups too — ask once at the
+   end of triage, not per-item).
+
+3. **Record the decisions in a worklist**, keeping section + original
+   line text per finding. You now have three buckets:
+   - `fix`: list of findings + file/line references.
+   - `dismiss`: findings + reasons.
+   - `discuss`: findings + notes.
+
+   If every finding landed in `dismiss` / `discuss`, skip Step 5
+   (nothing to plan) and go straight to Step 6 to apply the GH
+   comment edits.
+
+## Step 5 — Plan the fixes
+
+With the full `fix` bucket in hand, produce a short plan before
+editing any code:
+
+1. Group related findings if they touch the same file/subsystem —
+   fixing them together avoids churn and lets one test run cover
+   multiple items. Still commit one logical fix per commit (per
+   `CLAUDE.md`'s incremental-commit rule), but ordering matters:
+   land prerequisite fixes before dependent ones.
+2. For each fix, name the file(s) you expect to touch and the check
+   you'll run (e.g. `just clippy` for a lint finding,
+   `just test-unit` for a logic finding — not the full `just ci`
+   per item).
+3. Show the plan to the user as a terse bullet list and proceed —
+   you don't need per-item approval here, they already decided at
+   Step 4. Only pause if something in the plan surprises you (e.g.
+   two findings contradict each other) and the user needs to
+   arbitrate.
+
+## Step 6 — Apply fixes, then comment edits
+
+Execute in this order so the git history and the GH comment stay in
+sync even if you abort mid-session:
+
+1. **Fixes first.** For each item in the `fix` bucket, in plan order:
+   - Apply the change with normal tools (Edit/Grep/etc.).
+   - Run the check named in the plan.
+   - Create one commit per fix. Commit message should be short and
+     reference the finding — e.g.
      `review: fix scheduler race flagged in review`. The pre-commit
      hook runs fmt + clippy + shellcheck; if it blocks, fix and
      re-stage into a NEW commit (never `--amend`).
-4. On **dismiss**:
-   - Ask the user for a one-line reason.
-   - Flip this line from `- [ ]` to `- [x]` and append
-     ` — _dismissed: <reason>_`. The `[x]` signals "final" to the
-     review bot; the suffix records *why* it's final (won't-fix vs
-     implemented).
-   - Update the comment body on GitHub (see Step 5).
-5. On **discuss**:
-   - Ask the user for a one-line note ("what do you want to discuss
-     about this?").
-   - Leave the marker as `- [ ]` and append ` — _discuss: <note>_`.
-     If the line already has a `— _discuss: ..._` suffix from a
-     prior run, replace that suffix with the new note (don't stack
-     them).
-   - Update the comment body on GitHub (see Step 5).
+   - If the user course-corrects mid-fix ("no, don't change that"),
+     revert the staged edits for this one item and move to the next.
+     Don't abort the whole session — the remaining decisions are
+     still valid.
 
-Do **not** batch comment-body edits — apply each dismissal/discuss
-flip to the GH comment as it happens, so a mid-session abort still
-leaves consistent state.
+2. **Dismissal / discuss flips next.** For each item in the
+   `dismiss` / `discuss` buckets, apply the GH comment edit
+   individually (see Step 7) — do **not** pack multiple flips into
+   one PATCH. Per-flip PATCHes mean a mid-session abort still leaves
+   the comment in a consistent state.
 
-## Step 5 — Editing the GH comment
+## Step 7 — Editing the GH comment
 
 Applies to both **dismiss** (flip `[ ]` → `[x]`, append
 `— _dismissed: <reason>_`) and **discuss** (keep `[ ]`, append or
@@ -167,7 +216,7 @@ replace `— _discuss: <note>_`).
 5. Verify success by re-reading the comment body and confirming the
    new line is present with the correct marker and suffix.
 
-## Step 6 — Session end
+## Step 8 — Session end
 
 Once the worklist is exhausted:
 
@@ -194,5 +243,7 @@ Once the worklist is exhausted:
   was dismissed before — the bot didn't honor it") rather than
   silently re-dismissing. That's a review-prompt bug worth surfacing.
 - If the user course-corrects mid-fix ("no, don't change that"),
-  revert the staged edits and return to triage of the next item.
-  Don't commit a half-baked fix.
+  revert the staged edits for that one item and move to the next
+  planned fix. The other Step 4 decisions are still valid — don't
+  re-triage.
+- Do not commit a half-baked fix.
