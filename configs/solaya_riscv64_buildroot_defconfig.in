@@ -36,16 +36,15 @@ BR2_TOOLCHAIN_EXTERNAL_BOOTLIN_RISCV64_LP64D_MUSL_STABLE=y
 BR2_STATIC_LIBS=y
 
 # --- Init system: busybox init as PID 1 ----------------------------------
-# BR2_INIT_BUSYBOX installs /sbin/init as a symlink to /bin/busybox, and
-# busybox reads /etc/inittab (provided via the overlay at
-# configs/overlay/etc/inittab).  The kernel's load_init_bytes tries
-# /sbin/init first, so busybox wins; /bin/init (our Rust fallback) stays
-# in the overlay for one-line rollback during the initial bring-up.
+# BR2_INIT_BUSYBOX installs /sbin/init as a symlink to /bin/busybox.
+# Busybox reads /etc/inittab from the overlay at
+# configs/overlay/etc/inittab.  The kernel's load_init_bytes finds
+# /sbin/init first.
 BR2_INIT_BUSYBOX=y
 BR2_PACKAGE_BUSYBOX=y
 # Rely on the default buildroot busybox config (includes init + sh + the
 # usual applets).  Ship a BR2_PACKAGE_BUSYBOX_CONFIG_FRAGMENT_FILES only
-# if the bring-up loop proves we need a specific applet toggled.
+# if a specific applet needs to be toggled.
 
 # --- Shell + coreutils ---------------------------------------------------
 BR2_PACKAGE_DASH=y
