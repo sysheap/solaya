@@ -102,9 +102,9 @@ Reads from stdout until finding the needle string.
 QemuInstance::start() automatically waits for:
 1. "Hello World from Solaya!"
 2. "kernel_init done!"
-3. "init process started"
-4. "starting shell"
-5. Shell prompt ("$ ")
+3. "dhcpd: configured ip" (only when the test enables networking)
+4. Shell prompt ("$ ") — emitted by dash once busybox init's
+   `console::respawn` entry has spawned the interactive shell.
 
 ### Example Tests
 

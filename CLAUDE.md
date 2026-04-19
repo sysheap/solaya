@@ -187,14 +187,18 @@ Userspace is a buildroot-produced rootfs cpio, loaded at boot via QEMU
 `-initrd` (path from DTB `/chosen/linux,initrd-{start,end}`) and
 extracted into a tmpfs-backed `/` in `initramfs::extract()`:
 
-- **dash** + **GNU coreutils** come from the buildroot package set
-  (`cmake/buildroot.cmake`, `configs/solaya_riscv64_buildroot_defconfig.in`).
-- Solaya's Rust binaries (init, dhcpd, tcp_echo, webserver, test
+- **busybox** (init + sh + applets) and **dash** + **GNU coreutils** come
+  from the buildroot package set (`cmake/buildroot.cmake`,
+  `configs/solaya_riscv64_buildroot_defconfig.in`).
+- Solaya's Rust userspace binaries (dhcpd, tcp_echo, webserver, test
   fixtures like `prog1`/`*-test`) are built by `userspace-rust` and
   layered on top via `BR2_ROOTFS_OVERLAY` — they end up at `/bin/<name>`.
-- PID 1 is Solaya's Rust `init` (read from `/bin/init` by
-  `process_table::load_init_bytes`), which execs `/bin/dhcpd` once then
-  spawns `/bin/dash`.
+- PID 1 is busybox (read from `/sbin/init` by
+  `process_table::load_init_bytes`, which resolves the buildroot symlink
+  to `/bin/busybox`). Busybox reads `/etc/inittab`
+  (`configs/overlay/etc/inittab`): runs `/etc/init.d/rcS`, waits on
+  `/bin/dhcpd` to configure the network, then respawns
+  `/bin/dash -i` on the serial console.
 
 ### Adding a userspace program
 
