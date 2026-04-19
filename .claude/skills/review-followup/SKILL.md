@@ -61,9 +61,12 @@ job run yet?" Do **not** create one.
 
 ## Step 3 — Parse the body
 
-Split the body into sections by the headings (`### Must-fix`,
-`### Consider`, `### Noted`, `### Skipped`). Within each triaged
-section, extract every `- [ ]` / `- [x]` line and capture:
+Split the body into sections by **prefix-matching** the headings
+`### Must-fix`, `### Consider`, `### Noted`, `### Skipped`. The bot's
+template appends a parenthetical to each (e.g.
+`### Must-fix (correctness / safety / policy violations)`), so match
+on `startswith` rather than equality. Within each triaged section,
+extract every `- [ ]` / `- [x]` line and capture:
 
 - state marker (` ` or `x`)
 - the full line text (verbatim, no rephrasing), including any
@@ -122,37 +125,46 @@ Applies to both **dismiss** (flip `[ ]` → `[x]`, append
 replace `— _discuss: <note>_`).
 
 1. **Re-fetch the current body** by comment id — it may have changed
-   since step 2 if the bot re-ran. Use `mktemp` so concurrent
-   sessions don't clobber each other:
+   since step 2 if the bot re-ran. Capture the repo nwo once and
+   reuse it; use `mktemp` so concurrent sessions don't clobber each
+   other:
 
    ```bash
+   REPO_NWO=$(gh repo view --json nameWithOwner --jq .nameWithOwner)
    BODY_FILE=$(mktemp --suffix=.md)
    trap 'rm -f "$BODY_FILE"' EXIT
-   gh api "/repos/$(gh repo view --json nameWithOwner --jq .nameWithOwner)/issues/comments/<id>" \
-     --jq .body > "$BODY_FILE"
+   gh api "/repos/$REPO_NWO/issues/comments/<id>" --jq .body > "$BODY_FILE"
    ```
 
-2. Do an exact-text line replacement on the file — match the full
-   original line verbatim and replace with the new line:
+2. **Re-parse the freshly-fetched body** to find the line you're
+   about to flip. Do not reuse the line text captured at Step 3 — a
+   benign cosmetic edit by the bot would invalidate it. Locate the
+   item by its position in the parsed worklist (section + index, or
+   by a stable substring like the cited `path:LINE`) and use the
+   *current* line text as the match target.
+
+3. Do an exact-text line replacement on the file — match the full
+   current line verbatim and replace with the new line:
    - dismiss: `- [ ] <text>` → `- [x] <text> — _dismissed: <reason>_`
    - discuss (first time): `- [ ] <text>` → `- [ ] <text> — _discuss: <note>_`
    - discuss (replacing a prior discuss note):
      `- [ ] <text> — _discuss: <old>_` → `- [ ] <text> — _discuss: <new>_`
 
-   If the line can't be found verbatim (bot rewrote it on a
-   concurrent run), abort this flip and tell the user — do not guess.
+   If the line still can't be found (the finding itself was rewritten
+   or removed on a concurrent run), abort this flip and tell the user
+   — do not guess.
 
-3. PATCH the comment:
+4. PATCH the comment, reusing `$REPO_NWO`:
 
    ```bash
-   gh api -X PATCH "/repos/$(gh repo view --json nameWithOwner --jq .nameWithOwner)/issues/comments/<id>" \
+   gh api -X PATCH "/repos/$REPO_NWO/issues/comments/<id>" \
      -F body=@"$BODY_FILE"
    ```
 
    (`-F body=@file` reads the file as the body field — safer than
    `-f body="$(cat ...)"` which can blow up on shell-special chars.)
 
-4. Verify success by re-reading the comment body and confirming the
+5. Verify success by re-reading the comment body and confirming the
    new line is present with the correct marker and suffix.
 
 ## Step 6 — Session end
