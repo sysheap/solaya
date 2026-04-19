@@ -183,6 +183,7 @@ fn generate_syscall_types(args: &Args) -> Result<(), Box<dyn std::error::Error>>
         .header(linux_h(args, "linux/uio.h"))
         .header(linux_h(args, "linux/wait.h"))
         .header(linux_h(args, "linux/prctl.h"))
+        .header(linux_h(args, "linux/reboot.h"))
         .generate()?;
     bindings.write_to_file(args.out_dir.join("syscall_types.rs"))?;
     Ok(())
