@@ -59,9 +59,6 @@ set(SOLAYA_USERSPACE_ARTIFACT_DIR "${CMAKE_BINARY_DIR}/userspace/artifacts"
 )
 
 include(bindgen)
-include(tests)
-include(qemu)
-include(tools)
 
 add_subdirectory(toolchain)
 # doom depends on compiler-rt-builtins from toolchain/, so include it
@@ -69,9 +66,15 @@ add_subdirectory(toolchain)
 # now (see cmake/buildroot.cmake).
 include(doom)
 add_subdirectory(userspace)
-# buildroot consumes the SOLAYA_USERSPACE_ARTIFACT_DIR overlay, so it must
-# come after the userspace subdir where the artifact target is declared.
+# buildroot must come before tests/qemu/tools: those reference
+# ${SOLAYA_BUILDROOT_CPIO} at parse time (baked into their COMMAND
+# strings), so the variable has to be defined first. It also consumes
+# SOLAYA_USERSPACE_ARTIFACT_DIR, which add_subdirectory(userspace)
+# finalises.
 include(buildroot)
+include(tests)
+include(qemu)
+include(tools)
 add_subdirectory(crates/kernel)
 
 # `solaya` (default target) — bare `cmake --build build` produces both
