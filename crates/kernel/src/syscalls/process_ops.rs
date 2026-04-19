@@ -3,7 +3,12 @@ use core::ffi::{c_int, c_uint, c_ulong};
 use hal::spinlock::Spinlock;
 use headers::{
     errno::Errno,
-    syscall_types::{CLONE_CHILD_CLEARTID, CLONE_PARENT_SETTID, CLONE_SETTLS},
+    syscall_types::{
+        CLONE_CHILD_CLEARTID, CLONE_PARENT_SETTID, CLONE_SETTLS, LINUX_REBOOT_CMD_CAD_OFF,
+        LINUX_REBOOT_CMD_CAD_ON, LINUX_REBOOT_CMD_HALT, LINUX_REBOOT_CMD_POWER_OFF,
+        LINUX_REBOOT_CMD_RESTART, LINUX_REBOOT_MAGIC1, LINUX_REBOOT_MAGIC2, LINUX_REBOOT_MAGIC2A,
+        LINUX_REBOOT_MAGIC2B, LINUX_REBOOT_MAGIC2C,
+    },
 };
 
 use crate::{
@@ -22,14 +27,12 @@ use abi::{pid::Tid, syscalls::trap_frame::Register};
 
 use super::linux::LinuxSyscallHandler;
 
-const LINUX_REBOOT_MAGIC1: c_int = 0xfee1deadu32 as c_int;
-const LINUX_REBOOT_MAGIC2_SET: &[c_int] = &[0x28121969, 0x05121996, 0x16041998, 0x20112000];
-
-const LINUX_REBOOT_CMD_CAD_OFF: c_uint = 0x00000000;
-const LINUX_REBOOT_CMD_CAD_ON: c_uint = 0x89abcdef;
-const LINUX_REBOOT_CMD_HALT: c_uint = 0xcdef0123;
-const LINUX_REBOOT_CMD_POWER_OFF: c_uint = 0x4321fedc;
-const LINUX_REBOOT_CMD_RESTART: c_uint = 0x01234567;
+const LINUX_REBOOT_MAGIC2_SET: &[u32] = &[
+    LINUX_REBOOT_MAGIC2,
+    LINUX_REBOOT_MAGIC2A,
+    LINUX_REBOOT_MAGIC2B,
+    LINUX_REBOOT_MAGIC2C,
+];
 
 impl LinuxSyscallHandler {
     pub(super) async fn clone_fork(&mut self, stack: usize) -> Result<isize, Errno> {
@@ -222,7 +225,9 @@ impl LinuxSyscallHandler {
         magic2: c_int,
         cmd: c_uint,
     ) -> Result<isize, Errno> {
-        if magic1 != LINUX_REBOOT_MAGIC1 || !LINUX_REBOOT_MAGIC2_SET.contains(&magic2) {
+        if magic1.cast_unsigned() != LINUX_REBOOT_MAGIC1
+            || !LINUX_REBOOT_MAGIC2_SET.contains(&magic2.cast_unsigned())
+        {
             return Err(Errno::EINVAL);
         }
         match cmd {
