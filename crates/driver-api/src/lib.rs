@@ -162,6 +162,12 @@ pub trait CharDevice: Send + Sync {
     /// Write `data`. Returns the number of bytes written (typically
     /// `data.len()` for synchronous console-style devices).
     fn write(&self, data: &[u8]) -> Result<usize, IoError>;
+
+    /// True if this device is a terminal. `openat` uses this to wrap the
+    /// fd in `FileDescriptor::Tty` instead of the default VfsFile.
+    fn is_tty(&self) -> bool {
+        false
+    }
 }
 
 /// Static framebuffer description, returned by `DisplayDevice::framebuffer`.
