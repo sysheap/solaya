@@ -133,6 +133,7 @@ linux_syscalls! {
     SYSCALL_NR_STATFS => statfs(pathname: *const u8, buf: *mut u8);
     SYSCALL_NR_STATX => statx(dirfd: c_int, pathname: *const u8, flags: c_int, mask: c_uint, statxbuf: *mut u8);
     SYSCALL_NR_SYMLINKAT => symlinkat(target: *const u8, newdirfd: c_int, linkpath: *const u8);
+    SYSCALL_NR_SYNC => sync();
     SYSCALL_NR_SYSINFO => sysinfo(info: *mut u8);
     SYSCALL_NR_TGKILL => tgkill(tgid: c_int, tid: c_int, sig: c_int);
     SYSCALL_NR_TKILL => tkill(tid: c_int, sig: c_int);
@@ -765,6 +766,11 @@ impl LinuxSyscalls for LinuxSyscallHandler {
 
     async fn sysinfo(&mut self, info: LinuxUserspaceArg<*mut u8>) -> Result<isize, Errno> {
         self.do_sysinfo(info)
+    }
+
+    // No-op: Solaya has no writeback caches, so there's nothing to flush.
+    async fn sync(&mut self) -> Result<isize, Errno> {
+        Ok(0)
     }
 
     async fn getrlimit(
