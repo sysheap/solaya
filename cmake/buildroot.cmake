@@ -166,11 +166,15 @@ add_custom_target(buildroot-savedefconfig
 
 # Force a full buildroot rebuild without discarding the tarball cache.
 # Useful after editing configs/overlay/* or the post-build script when
-# buildroot's own dependency tracking doesn't notice.
+# buildroot's own dependency tracking doesn't notice. The nested
+# `cmake --build` re-invokes the generator in a portable way —
+# ${CMAKE_BUILD_TOOL} is undefined in script contexts (we hit it: the
+# empty expansion meant ninja ran `buildroot-all` as a shell command
+# and died with "command not found").
 add_custom_target(buildroot-rebuild
     COMMAND ${CMAKE_COMMAND} -E rm -rf "${_br_out}"
     COMMAND ${CMAKE_COMMAND} -E make_directory "${_br_out}"
-    COMMAND ${CMAKE_BUILD_TOOL} buildroot-all
+    COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target buildroot-all
     DEPENDS buildroot-src
     USES_TERMINAL
     COMMENT "Wiping .buildroot/output and rebuilding from scratch (keeps .buildroot/_dl)"
