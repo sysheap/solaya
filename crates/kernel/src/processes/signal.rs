@@ -49,17 +49,11 @@ impl PendingSignals {
         self.0 &= !(1u64 << sig);
     }
 
-    pub fn first_unblocked(&self, mask: u64) -> Option<u32> {
-        let deliverable = self.0 & !mask;
-        if deliverable == 0 {
-            return None;
-        }
-        Some(deliverable.trailing_zeros())
-    }
-
-    /// Lowest-numbered pending signal that is in `set`.
-    pub fn first_in(&self, set: u64) -> Option<u32> {
-        let matched = self.0 & set;
+    /// Lowest-numbered pending signal that intersects `allowed`.
+    /// Callers pass `!sigmask` for delivery or the sigtimedwait set
+    /// directly to wait for blocked signals.
+    pub fn first_matching(&self, allowed: u64) -> Option<u32> {
+        let matched = self.0 & allowed;
         if matched == 0 {
             return None;
         }

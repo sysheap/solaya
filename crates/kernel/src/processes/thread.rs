@@ -505,30 +505,24 @@ impl Thread {
     }
 
     pub fn has_pending_unblocked_signal(&self) -> bool {
-        self.signal_state
-            .pending
-            .first_unblocked(self.signal_state.sigmask.sig[0])
-            .is_some()
+        self.peek_first_unblocked_signal().is_some()
     }
 
     pub fn peek_first_unblocked_signal(&self) -> Option<u32> {
         self.signal_state
             .pending
-            .first_unblocked(self.signal_state.sigmask.sig[0])
+            .first_matching(!self.signal_state.sigmask.sig[0])
     }
 
     pub fn take_next_pending_signal(&mut self) -> Option<u32> {
-        let sig = self
-            .signal_state
-            .pending
-            .first_unblocked(self.signal_state.sigmask.sig[0])?;
+        let sig = self.peek_first_unblocked_signal()?;
         self.signal_state.pending.clear(sig);
         Some(sig)
     }
 
     /// Lowest-numbered pending signal that is in `set`, regardless of sigmask.
     pub fn first_pending_in_set(&self, set: u64) -> Option<u32> {
-        self.signal_state.pending.first_in(set)
+        self.signal_state.pending.first_matching(set)
     }
 
     pub fn clear_pending(&mut self, sig: u32) {
