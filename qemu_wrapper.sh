@@ -131,13 +131,23 @@ fi
 
 # Fall back to SOLAYA_INITRD env var if --initrd wasn't passed — lets the
 # CMake run/test targets inject the buildroot cpio without every caller
-# having to know the flag.
-if [[ -z "$INITRD_PATH" && -n "${SOLAYA_INITRD:-}" ]]; then
-    if [[ -f "$SOLAYA_INITRD" ]]; then
-        QEMU_CMD+=" -initrd $SOLAYA_INITRD"
-    else
-        echo "Warning: SOLAYA_INITRD=$SOLAYA_INITRD not found; booting without initramfs" >&2
+# having to know the flag. Booting without a rootfs is not a supported
+# mode (kernel panics on missing /bin/init), so require one of --initrd
+# or SOLAYA_INITRD and fail hard if the referenced file is missing —
+# silent fallback used to mask an unbuilt buildroot tree.
+if [[ -z "$INITRD_PATH" ]]; then
+    if [[ -z "${SOLAYA_INITRD:-}" ]]; then
+        echo "Error: no initramfs supplied. Pass --initrd PATH or set SOLAYA_INITRD." >&2
+        echo "  (the CMake run/test targets set SOLAYA_INITRD to the buildroot cpio;" >&2
+        echo "   build it via \`cmake --build build --target buildroot-all\`.)" >&2
+        exit 1
     fi
+    if [[ ! -f "$SOLAYA_INITRD" ]]; then
+        echo "Error: SOLAYA_INITRD=$SOLAYA_INITRD not found." >&2
+        echo "  Build it via \`cmake --build build --target buildroot-all\`." >&2
+        exit 1
+    fi
+    QEMU_CMD+=" -initrd $SOLAYA_INITRD"
 fi
 
 # Add the kernel option
