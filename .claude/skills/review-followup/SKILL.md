@@ -93,7 +93,10 @@ the fixes as a whole rather than one at a time.
 2. **Present the findings in batches of up to 4 via the
    `AskUserQuestion` tool.** `AskUserQuestion` accepts 1–4 questions
    per call, so if there are more than 4 open items, make multiple
-   calls — but do all of them *before* moving on to Step 5.
+   calls — but do all of them *before* moving on to Step 5. (With
+   >4 findings the user sees sequential popups instead of one slate,
+   which softens the "decide upfront" motivation — accepted as the
+   API cap.)
 
    For each finding, one question. Put the finding text (and any
    `— _discuss: ..._` note from a prior run, surfaced as
