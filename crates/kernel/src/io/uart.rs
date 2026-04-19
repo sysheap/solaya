@@ -10,8 +10,25 @@ use core::sync::atomic::{AtomicU8, Ordering};
 use alloc::sync::Arc;
 use driver_api::{CharDevice, IoError, IrqHandler};
 use headers::errno::Errno;
+use klib::runtime_initialized::RuntimeInitializedData;
 
 pub use console::uart::CONSOLE_UART;
+
+/// The console `CharDevice` Arc registered in devfs as `/dev/console`.
+/// Set by [`register_console_char_device`]; used by [`is_console_char_device`]
+/// to recognise reopened console FDs in `openat` so they become
+/// `FileDescriptor::Tty` (which blocks correctly) instead of the default
+/// `FileDescriptor::VfsFile` path (which drains the TTY buffer synchronously
+/// and returns EAGAIN, so blocking reads never unblock).
+static CONSOLE_CHAR_DEVICE: RuntimeInitializedData<Arc<dyn CharDevice>> =
+    RuntimeInitializedData::new();
+
+/// Returns true if `dev` is the same `Arc` as the one registered for
+/// `/dev/console`. Arc-identity comparison — safe against future aliasing
+/// (e.g. if we ever expose the same CharDevice under multiple devfs names).
+pub fn is_console_char_device(dev: &Arc<dyn CharDevice>) -> bool {
+    CONSOLE_CHAR_DEVICE.is_initialized() && Arc::ptr_eq(dev, &CONSOLE_CHAR_DEVICE)
+}
 
 /// `CharDevice` adapter for the console UART.
 ///
@@ -53,6 +70,7 @@ impl CharDevice for ConsoleCharDevice {
 /// devfs. Called once during kernel init.
 pub fn register_console_char_device() {
     let device: Arc<dyn CharDevice> = Arc::new(ConsoleCharDevice);
+    CONSOLE_CHAR_DEVICE.initialize(device.clone());
     crate::drivers::registry::<dyn CharDevice>().register(device.clone());
     crate::fs::devfs::register_char_device("console", device);
 }

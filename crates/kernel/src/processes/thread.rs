@@ -539,10 +539,12 @@ impl Thread {
         self.signal_waker = Some(waker);
     }
 
-    pub fn wake_signal_waker(&mut self) {
-        if let Some(w) = self.signal_waker.take() {
-            w.wake();
-        }
+    /// Detach the registered signal waker, if any. The caller must invoke
+    /// `wake()` on the returned `Waker` AFTER releasing the thread lock —
+    /// `ThreadWaker::wake` re-locks the same thread, so calling it while
+    /// holding the thread lock deadlocks.
+    pub fn take_signal_waker(&mut self) -> Option<Waker> {
+        self.signal_waker.take()
     }
 
     pub fn get_sigaction_raw(&self, sig: u32) -> &sigaction {

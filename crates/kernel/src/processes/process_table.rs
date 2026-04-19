@@ -240,25 +240,30 @@ impl ProcessTable {
 
     pub fn send_signal(&mut self, tid: Tid, sig: u32) {
         if let Some(thread) = self.threads.get(&tid).cloned() {
-            let should_enqueue = thread.with_lock(|mut t| {
+            // Collect the signal waker while we hold the thread lock, but
+            // call wake() only after releasing it — ThreadWaker::wake re-locks
+            // the same thread, which would deadlock on the same CPU.
+            let (should_enqueue, signal_waker) = thread.with_lock(|mut t| {
                 if matches!(t.get_state(), ThreadState::Zombie(_)) {
-                    return false;
+                    return (false, None);
                 }
                 t.raise_signal(sig);
-                // Wake any waiter (e.g. rt_sigtimedwait) regardless of sigmask.
-                t.wake_signal_waker();
+                let waker = t.take_signal_waker();
                 // SIGCONT resumes stopped threads
                 if sig == headers::syscall_types::SIGCONT && t.get_state() == ThreadState::Stopped {
                     t.clear_pending_stop_signals();
                     t.set_state(ThreadState::Runnable);
-                    return true;
+                    return (true, waker);
                 }
                 if t.has_pending_unblocked_signal() && t.get_state() == ThreadState::Waiting {
                     t.set_state(ThreadState::Runnable);
-                    return true;
+                    return (true, waker);
                 }
-                false
+                (false, waker)
             });
+            if let Some(w) = signal_waker {
+                w.wake();
+            }
             if should_enqueue {
                 RUN_QUEUE.lock().push_back(thread);
             }

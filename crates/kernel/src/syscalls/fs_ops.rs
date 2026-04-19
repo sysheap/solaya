@@ -64,11 +64,26 @@ impl LinuxSyscallHandler {
             return Err(Errno::ENOTDIR);
         }
 
-        let fd_abs = compose_abs(&base_abs, &raw_path);
-        let open_file = fs::open_file::open(node, flags, fd_abs);
+        let descriptor = if let Some(dev) = node.char_device()
+            && crate::io::uart::is_console_char_device(&dev)
+        {
+            // Implicit-ctty: give the opener's pgid the TTY's foreground
+            // group. busybox init's child calls setsid() before opening the
+            // console; without this, dash's job-control startup sees
+            // fg_pgid != getpgrp() and self-stops via SIGTTIN. Proper
+            // TIOCSCTTY on-open is #250 — this keeps things unblocked.
+            let caller_pgid = self.current_process.with_lock(|p| p.pgid());
+            crate::io::tty_device::console_tty()
+                .lock()
+                .set_fg_pgid(caller_pgid);
+            FileDescriptor::Tty(crate::io::tty_device::console_tty().clone())
+        } else {
+            let fd_abs = compose_abs(&base_abs, &raw_path);
+            FileDescriptor::VfsFile(fs::open_file::open(node, flags, fd_abs))
+        };
         let fd = self
             .current_process
-            .with_lock(|p| p.fd_table().allocate(FileDescriptor::VfsFile(open_file)))?;
+            .with_lock(|p| p.fd_table().allocate(descriptor))?;
         Ok(fd as isize)
     }
 
