@@ -91,7 +91,7 @@ jobs:
       # every failed CI retry.
       - name: Restore cross-toolchain cache
         id: cache-toolchain
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: ${{ github.workspace }}/.toolchain
           # Include every CMake file whose contents affect the toolchain
@@ -108,7 +108,7 @@ jobs:
       # the overlay moved.
       - name: Restore buildroot cache
         id: cache-buildroot
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: |
             ${{ github.workspace }}/.buildroot/_dl
@@ -131,7 +131,7 @@ jobs:
       # fails. Skipped on cache hit (outcome == 'skipped').
       - name: Save cross-toolchain cache
         if: always() && steps.build-toolchain.outcome == 'success'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: ${{ github.workspace }}/.toolchain
           key: toolchain-${{ runner.os }}-${{ hashFiles('cmake/checksums.cmake', 'cmake/toolchain_bootstrap.cmake', 'cmake/build_compiler_rt_builtins.sh', 'cmake/fetch_file.cmake', 'cmake/dash.cmake', 'cmake/doom.cmake', 'cmake/clang_wrapper.cmake', 'toolchain/pins.cmake') }}
@@ -163,7 +163,7 @@ jobs:
       # step were to fail.
       - name: Save buildroot cache
         if: always() && steps.cache-buildroot.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: |
             ${{ github.workspace }}/.buildroot/_dl
